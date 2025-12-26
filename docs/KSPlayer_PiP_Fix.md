@@ -13,7 +13,7 @@ macOS 上画中画(PiP)功能存在以下问题：
 
 **文件**: `KSPlayer/Sources/KSPlayer/AVPlayer/KSPlayerLayer.swift`
 
-**位置**: `KSComplexPlayerLayer` 的 `AVPictureInPictureControllerDelegate` 扩展
+**位置**: `KSComplexPlayerLayer` 的 `AVPictureInPictureControllerDelegate` 扩展（第 710-713 行）
 
 **原代码**:
 ```swift
