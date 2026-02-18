@@ -1,6 +1,23 @@
 # Cookie/Session 迁移 M0 基线盘点（AngelLive + LiveParse）
 
-更新时间：2026-02-17
+更新时间：2026-02-18
+
+## 0. 后续进展（2026-02-18）
+
+说明：本文件主体是 M0 基线快照，以下为基线之后的落地状态更新。
+
+### 已完成
+
+1. 修复“退出登录未清 iCloud”问题，`clearCookie` 现在可正确清理 iCloud 残留。  
+2. 新增 `PlatformSessionManager` 与 `SessionStore`，会话路径收敛到统一入口。  
+3. 新增 `BilibiliAccountService`，登录校验路径收敛到 Core 单一路径。  
+4. iOS/macOS/tvOS 登录相关写入已统一走 `BilibiliCookieSyncService`，UI 层并行写入已清理。  
+5. 抖音插件新增 cookie 入口（`setCookie/clearCookie`），并由宿主在会话写入/清理时同步调用，插件调用路径不再依赖 Swift 侧 `ensureCookie` 注入。  
+
+### 尚未完成
+
+1. `BilibiliCookieSyncService` 仍保留对 legacy key 的兼容读写（用于迁移阶段回填），待后续逐步降级。  
+2. 其余涉及登录态的平台插件 cookie 入口化（与抖音同模式）尚未落地，至少包括 `bilibili`、`ks`。  
 
 ## 范围
 
@@ -135,4 +152,3 @@ AngelLive 命中 15 处，LiveParse(Bilibili.swift) 命中 4 处。
 2. 先在兼容层保留旧 key 只读迁移，新增写入走新 SessionStore。  
 3. 优先修复“登出未清 iCloud”问题，再推进 Keychain 化。  
 4. 统一 `validateCookie` 到 Core，iOS/macOS/tvOS 仅消费结果枚举。
-
