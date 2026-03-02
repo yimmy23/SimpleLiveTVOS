@@ -37,7 +37,7 @@ if useVLC {
 }
 
 packageDependencies += [
-    .package(path: "../../../../Git/LiveParse"),
+    .package(url: "https://github.com/pcccccc/LiveParse", from: "2.1.0"),
     .package(url: "https://github.com/EmergeTools/Pow", from: "1.0.5"),
     .package(url: "https://github.com/sanzaru/SimpleToast", from: "0.11.0"),
     .package(url: "https://github.com/daltoniam/Starscream", from: "4.0.8"),
