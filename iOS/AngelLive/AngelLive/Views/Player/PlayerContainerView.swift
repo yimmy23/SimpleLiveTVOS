@@ -85,6 +85,10 @@ struct PlayerContentView: View {
     @State private var showVLCUnsupportedHint = false
     @StateObject private var vlcPlaybackController = VLCPlaybackController()
     @State private var hasVLCStartedPlayback = false
+    /// VLC 模式下的控制层显示/隐藏状态
+    @State private var vlcMaskShow: Bool = true
+    /// VLC 模式下的锁定状态
+    @State private var vlcIsLocked: Bool = false
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
 
@@ -221,11 +225,24 @@ struct PlayerContentView: View {
                             .tint(.white)
                     }
 
+                    // 竖屏直播模式使用专用控制层，普通模式使用统一控制层
+                    #if canImport(KSPlayer)
+                    if isVerticalLiveMode && useKSPlayer {
+                        VerticalLiveControllerView(model: playerModel)
+                    } else {
+                        UnifiedPlayerControlOverlay(
+                            bridge: controlBridge,
+                            showVideoSetting: $showVideoSetting,
+                            showDanmakuSettings: $showDanmakuSettings
+                        )
+                    }
+                    #else
                     UnifiedPlayerControlOverlay(
                         bridge: controlBridge,
                         showVideoSetting: $showVideoSetting,
                         showDanmakuSettings: $showDanmakuSettings
                     )
+                    #endif
 
                     #if canImport(KSPlayer)
                     if useKSPlayer && showVideoSetting {
@@ -275,7 +292,7 @@ struct PlayerContentView: View {
                                 } else if !hasDetectedSize {
                                     let ratio = naturalSize.width / naturalSize.height
                                     let isPortrait = ratio < 1.0
-                                    let isVerticalLive = isPortrait && naturalSize.height >= 1280
+                                    let isVerticalLive = isPortrait && naturalSize.height >= 960
 
                                     print("📺 视频尺寸: \(naturalSize.width) x \(naturalSize.height)")
                                     print("📐 视频比例: \(ratio)")
@@ -420,6 +437,11 @@ struct PlayerContentView: View {
             hasVLCStartedPlayback = false
             vlcState = .stopped
         }
+        // VLC 模式下的单击手势，切换控制层显示/隐藏
+        .contentShape(Rectangle())
+        .onTapGesture {
+            vlcMaskShow.toggle()
+        }
         .frame(maxWidth: .infinity, maxHeight: isVerticalLiveMode ? .infinity : nil)
         .clipped()
     }
@@ -456,7 +478,15 @@ struct PlayerContentView: View {
                             playerLayer.pipStart()
                         }
                     }
-                }
+                },
+                isMaskShow: Binding(
+                    get: { playerModel.config.isMaskShow },
+                    set: { playerModel.config.isMaskShow = $0 }
+                ),
+                isLocked: Binding(
+                    get: { playerModel.isLocked },
+                    set: { playerModel.isLocked = $0 }
+                )
             )
         }
 
@@ -472,7 +502,9 @@ struct PlayerContentView: View {
             },
             togglePictureInPicture: {
                 vlcPlaybackController.togglePictureInPicture()
-            }
+            },
+            isMaskShow: $vlcMaskShow,
+            isLocked: $vlcIsLocked
         )
     }
 

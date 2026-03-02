@@ -162,7 +162,9 @@ public struct KSVideoPlayerView: View {
                 }
             }
         } else {
-            controllerView
+            if showsControlLayer {
+                controllerView
+            }
         }
     }
 
