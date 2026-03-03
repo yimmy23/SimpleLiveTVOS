@@ -34,6 +34,10 @@ public enum PlatformSessionLiveParseBridge {
     // MARK: - Internal
 
     private static func syncCookie(_ session: PlatformSession) async {
+        guard SandboxPluginCatalog.isInstalled(pluginId: session.platformId.rawValue) else {
+            return
+        }
+
         let normalized = session.cookie?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         guard session.state == .authenticated, !normalized.isEmpty else {
             await clearCookie(platformId: session.platformId)
@@ -53,6 +57,9 @@ public enum PlatformSessionLiveParseBridge {
     }
 
     private static func clearCookie(platformId: PlatformSessionID) async {
+        guard SandboxPluginCatalog.isInstalled(pluginId: platformId.rawValue) else {
+            return
+        }
         _ = try? await LiveParsePlugins.shared.call(
             pluginId: platformId.rawValue,
             function: "clearCookie",

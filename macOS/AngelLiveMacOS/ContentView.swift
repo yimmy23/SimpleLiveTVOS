@@ -13,6 +13,7 @@ import LiveParse
 // 定义 Tab 选择类型
 enum TabSelection: Hashable {
     case favorite
+    case allPlatforms
     case platform(Platformdescription)
     case settings
     case search
@@ -26,6 +27,10 @@ struct ContentView: View {
     @Environment(AppFavoriteModel.self) private var favoriteViewModel
     @Environment(ToastManager.self) private var toastManager
     @Environment(FullscreenPlayerManager.self) private var fullscreenPlayerManager
+    // 插件与壳 UI 服务
+    @State private var pluginAvailability = PluginAvailabilityService()
+    @State private var bookmarkService = StreamBookmarkService()
+    @State private var pluginSourceManager = PluginSourceManager()
     // 创建局部 ViewModels
     @State private var platformViewModel = PlatformViewModel()
     @State private var searchViewModel = SearchViewModel()
@@ -44,36 +49,50 @@ struct ContentView: View {
                 NavigationStack {
                     TabView(selection: $selectedTab) {
                         Tab(value: TabSelection.favorite) {
-                            FavoriteView()
+                            if pluginAvailability.hasAvailablePlugins {
+                                FavoriteView()
+                            } else {
+                                MacShellFavoriteView()
+                            }
                         } label: {
                             Label("收藏", systemImage: "heart.fill")
                         }
 
                         TabSection("平台") {
-                            ForEach(platformViewModel.platformInfo, id: \.liveType) { platform in
-                                Tab(value: TabSelection.platform(platform)) {
-                                    PlatformDetailTab(platform: platform)
-                                } label: {
-                                    Label {
-                                        Text(platform.title)
-                                    } icon: {
-                                        Image(getImage(platform: platform))
-                                            .frame(width: 25, height: 25)
+                            Tab(value: TabSelection.allPlatforms) {
+                                MacShellConfigView()
+                            } label: {
+                                Label("配置", systemImage: "square.grid.2x2.fill")
+                            }
+
+                            if pluginAvailability.hasAvailablePlugins {
+                                ForEach(platformViewModel.platformInfo, id: \.liveType) { platform in
+                                    Tab(value: TabSelection.platform(platform)) {
+                                        PlatformDetailTab(platform: platform)
+                                    } label: {
+                                        Label {
+                                            Text(platform.title)
+                                        } icon: {
+                                            Image(getImage(platform: platform))
+                                                .frame(width: 25, height: 25)
+                                        }
                                     }
                                 }
                             }
                         }
 
-                        // macOS 26+ 支持 search role，macOS 15 需要普通 Tab
-                        if #available(macOS 26.0, *) {
-                            Tab("搜索", systemImage: "magnifyingglass", value: TabSelection.search, role: .search) {
-                                SearchView()
-                            }
-                        } else {
-                            Tab(value: TabSelection.search) {
-                                SearchView()
-                            } label: {
-                                Label("搜索", systemImage: "magnifyingglass")
+                        if pluginAvailability.hasAvailablePlugins {
+                            // macOS 26+ 支持 search role，macOS 15 需要普通 Tab
+                            if #available(macOS 26.0, *) {
+                                Tab("搜索", systemImage: "magnifyingglass", value: TabSelection.search, role: .search) {
+                                    SearchView()
+                                }
+                            } else {
+                                Tab(value: TabSelection.search) {
+                                    SearchView()
+                                } label: {
+                                    Label("搜索", systemImage: "magnifyingglass")
+                                }
                             }
                         }
 
@@ -97,8 +116,25 @@ struct ContentView: View {
         .environment(platformViewModel)
         .environment(favoriteViewModel)
         .environment(searchViewModel)
+        .environment(pluginAvailability)
+        .environment(bookmarkService)
+        .environment(pluginSourceManager)
         .environment(toastManager)
         .environment(fullscreenPlayerManager)
+        .task {
+            await pluginAvailability.checkAvailability()
+            platformViewModel.refreshPlatforms(installedPluginIds: pluginAvailability.installedPluginIds)
+        }
+        .onChange(of: pluginAvailability.installedPluginIds) { _, installedPluginIds in
+            platformViewModel.refreshPlatforms(installedPluginIds: installedPluginIds)
+            if installedPluginIds.isEmpty {
+                if case .platform = selectedTab {
+                    selectedTab = .allPlatforms
+                } else if selectedTab == .search {
+                    selectedTab = .favorite
+                }
+            }
+        }
         .overlay(alignment: .top) {
             if let toast = toastManager.currentToast, !fullscreenPlayerManager.showFullscreenPlayer {
                 ToastView(toast: toast)

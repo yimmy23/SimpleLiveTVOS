@@ -282,7 +282,7 @@ final class RoomInfoViewModel {
         isLoading = true
         Task {
             do {
-                guard let platform = LiveParseJSPlatformManager.platform(for: currentRoom.liveType) else {
+                guard let platform = SandboxPluginCatalog.platform(for: currentRoom.liveType) else {
                     throw LiveParseError.liveParseError("不支持的平台", "\(currentRoom.liveType)")
                 }
                 let playArgs = try await LiveParseJSPlatformManager.getPlayArgs(platform: platform, roomId: currentRoom.roomId, userId: currentRoom.userId)
@@ -413,7 +413,7 @@ final class RoomInfoViewModel {
         Task {
             do {
                 let danmuArgs: ([String : String], [String : String]?)
-                guard let platform = LiveParseJSPlatformManager.platform(for: liveType) else {
+                guard let platform = SandboxPluginCatalog.platform(for: liveType) else {
                     throw NSError(
                         domain: "danmu.platform",
                         code: -1,

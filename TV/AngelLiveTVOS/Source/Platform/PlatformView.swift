@@ -9,17 +9,50 @@ import SwiftUI
 import AngelLiveDependencies
 
 struct PlatformView: View {
-
     let column = Array(repeating: GridItem(.fixed(380), spacing: 50), count: 4)
-    let platformViewModel = PlatformViewModel()
-    @FocusState var focusIndex: Int?
-    @Environment(AppState.self) var appViewModel
-    @State var show = false
-    @State var selectedIndex = 0
-
+    @State private var platformViewModel = PlatformViewModel()
+    @FocusState private var focusIndex: Int?
+    @Environment(AppState.self) private var appViewModel
+    @State private var show = false
+    @State private var showAddSheet = false
+    @State private var selectedIndex = 0
 
     var body: some View {
+        Group {
+            if appViewModel.pluginAvailability.hasAvailablePlugins {
+                platformGridView
+            } else {
+                TVShellConfigView()
+                    .environment(appViewModel)
+            }
+        }
+        .task {
+            await appViewModel.pluginAvailability.checkAvailability()
+            platformViewModel.refreshPlatforms(installedPluginIds: appViewModel.pluginAvailability.installedPluginIds)
+        }
+        .onChange(of: appViewModel.pluginAvailability.installedPluginIds) { _, installedPluginIds in
+            platformViewModel.refreshPlatforms(installedPluginIds: installedPluginIds)
+            if installedPluginIds.isEmpty {
+                show = false
+                showAddSheet = false
+            }
+        }
+    }
+
+    private var platformGridView: some View {
         VStack {
+            HStack {
+                Spacer()
+                Button {
+                    showAddSheet = true
+                } label: {
+                    Label("添加视频或订阅", systemImage: "plus")
+                }
+                .buttonStyle(.bordered)
+                .padding(.top, 24)
+                .padding(.trailing, 60)
+            }
+
             ScrollView {
                 LazyVGrid(columns: column, alignment: .center, spacing: 50) {
                     ForEach(platformViewModel.platformInfo.indices, id: \.self) { index in
@@ -52,7 +85,7 @@ struct PlatformView: View {
                                     .background(Color("sl-background", bundle: nil))
                                     .opacity(focusIndex == index ? 1 : 0)
                                     .animation(.easeInOut(duration: 0.25), value: focusIndex == index)
-                                }else {
+                                } else {
                                     ZStack {
                                         Image(platformViewModel.platformInfo[index].smallPic)
                                             .resizable()
@@ -75,33 +108,41 @@ struct PlatformView: View {
                         .background(.clear)
                         .focused($focusIndex, equals: index)
                         .transition(.moveAndOpacity)
-                        .animation(.easeInOut(duration: 0.25) ,value: true)
+                        .animation(.easeInOut(duration: 0.25), value: true)
                         .frame(width: 380, height: 230)
                     }
 
                 }
                 .frame(maxWidth: .infinity, alignment: .center)
-                .padding(.top, 125)
+                .padding(.top, 40)
             }
             .fullScreenCover(isPresented: $show, content: {
-                if appViewModel.generalSettingsViewModel.generalDisableMaterialBackground {
-                    ListMainView(liveType: platformViewModel.platformInfo[selectedIndex].liveType, appViewModel: appViewModel)
-                        .background(
-                            Color("sl-background", bundle: nil)
-                        )
-                        .safeAreaPadding(.all)
-                        .id(platformViewModel.platformInfo[selectedIndex].liveType)
+                if platformViewModel.platformInfo.indices.contains(selectedIndex) {
+                    if appViewModel.generalSettingsViewModel.generalDisableMaterialBackground {
+                        ListMainView(liveType: platformViewModel.platformInfo[selectedIndex].liveType, appViewModel: appViewModel)
+                            .background(
+                                Color("sl-background", bundle: nil)
+                            )
+                            .safeAreaPadding(.all)
+                            .id(platformViewModel.platformInfo[selectedIndex].liveType)
 
-                }else {
-                    ListMainView(liveType: platformViewModel.platformInfo[selectedIndex].liveType, appViewModel: appViewModel)
-                        .id(platformViewModel.platformInfo[selectedIndex].liveType)
+                    } else {
+                        ListMainView(liveType: platformViewModel.platformInfo[selectedIndex].liveType, appViewModel: appViewModel)
+                            .id(platformViewModel.platformInfo[selectedIndex].liveType)
+                    }
+                } else {
+                    EmptyView()
                 }
             })
-            
+
             Text("敬请期待更多平台...")
                 .foregroundStyle(.separator)
+                .padding(.bottom, 24)
         }
-
+        .sheet(isPresented: $showAddSheet) {
+            TVShellConfigView()
+                .environment(appViewModel)
+        }
     }
 }
 

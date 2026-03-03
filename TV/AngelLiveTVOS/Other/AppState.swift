@@ -15,6 +15,9 @@ import LiveParse
 class AppState {
     var selection = 0
     var favoriteViewModel = AppFavoriteModel()
+    var pluginAvailability = PluginAvailabilityService()
+    var pluginSourceManager = PluginSourceManager()
+    var bookmarkService = StreamBookmarkService()
     var danmuSettingsViewModel = DanmuSettingModel()
     var searchViewModel = SearchViewModel()
     var historyViewModel = HistoryModel()

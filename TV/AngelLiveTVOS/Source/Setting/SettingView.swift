@@ -70,6 +70,15 @@ struct SettingView: View {
         .fullScreenCover(item: $fullScreenIndex) { index in
             fullScreenContentView(for: index)
         }
+        .onChange(of: appViewModel.pluginAvailability.hasAvailablePlugins) { _, hasPlugins in
+            guard !hasPlugins else { return }
+            if selectedIndex == 0 {
+                selectedIndex = nil
+            }
+            if fullScreenIndex == 3 {
+                fullScreenIndex = nil
+            }
+        }
     }
 
     // MARK: - 菜单列表
@@ -77,33 +86,43 @@ struct SettingView: View {
         VStack(spacing: 15) {
             Spacer()
             ForEach(titles.indices, id: \.self) { index in
-                Button {
-                    if halfScreenIndices.contains(index) {
-                        selectedIndex = index
-                    } else {
-                        fullScreenIndex = index
-                    }
-                } label: {
-                    HStack {
-                        Text(titles[index])
-                        Spacer()
-                        if index == 0 {
-                            Text(syncService.loginStatusDescription)
-                                .font(.system(size: 30))
-                                .foregroundStyle(.gray)
-                        } else if index == 3 {
-                            Text(appViewModel.favoriteViewModel.cloudKitReady ? "iCloud就绪" : "iCloud状态异常")
-                                .font(.system(size: 30))
-                                .foregroundStyle(.gray)
+                if shouldShowMenuItem(index) {
+                    Button {
+                        if halfScreenIndices.contains(index) {
+                            selectedIndex = index
+                        } else {
+                            fullScreenIndex = index
                         }
-                        Image(systemName: "chevron.right")
-                            .foregroundStyle(.secondary)
+                    } label: {
+                        HStack {
+                            Text(titles[index])
+                            Spacer()
+                            if index == 0 {
+                                Text(syncService.loginStatusDescription)
+                                    .font(.system(size: 30))
+                                    .foregroundStyle(.gray)
+                            } else if index == 3 {
+                                Text(appViewModel.favoriteViewModel.cloudKitReady ? "iCloud就绪" : "iCloud状态异常")
+                                    .font(.system(size: 30))
+                                    .foregroundStyle(.gray)
+                            }
+                            Image(systemName: "chevron.right")
+                                .foregroundStyle(.secondary)
+                        }
                     }
+                    .focused($focusedIndex, equals: index)
                 }
-                .focused($focusedIndex, equals: index)
             }
             Spacer(minLength: 200)
         }
+    }
+
+    private func shouldShowMenuItem(_ index: Int) -> Bool {
+        if appViewModel.pluginAvailability.hasAvailablePlugins {
+            return true
+        }
+        // 无插件时对齐 iOS：隐藏账号管理、数据同步
+        return index != 0 && index != 3
     }
 
     // MARK: - 半屏内容视图（账号管理、通用设置、弹幕设置）

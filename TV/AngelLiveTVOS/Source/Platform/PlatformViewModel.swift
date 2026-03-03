@@ -9,17 +9,32 @@ import Foundation
 import Observation
 import SwiftUI
 import AngelLiveDependencies
+import AngelLiveCore
 
 @Observable
 class PlatformViewModel {
-    var platformInfo: [Platformdescription] = {
-        var temp = [Platformdescription]()
-        for index in LiveParseTools.getAllSupportPlatform().indices {
-            let item = LiveParseTools.getAllSupportPlatform()[index]
-            temp.append(.init(title: item.livePlatformName, bigPic: "\(item.livePlatformName)-big", smallPic: "\(item.livePlatformName)-small", descripiton: item.description, liveType: item.liveType))
+    var platformInfo: [Platformdescription] = []
+
+    init() {}
+
+    func refreshPlatforms(installedPluginIds: [String]) {
+        let pluginMap = SandboxPluginCatalog.installedPluginMap()
+        let installedPlatforms = SandboxPluginCatalog.availablePlatforms(installedPluginIds: installedPluginIds)
+
+        platformInfo = installedPlatforms.map { platform in
+            let manifestName = pluginMap[platform.pluginId]?.displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let title = (manifestName?.isEmpty == false) ? manifestName! : platform.pluginId
+            let description = "由沙盒插件提供"
+
+            return Platformdescription(
+                title: title,
+                bigPic: "\(platform.pluginId)-big",
+                smallPic: "\(platform.pluginId)-small",
+                descripiton: description,
+                liveType: platform.liveType
+            )
         }
-        return temp
-    }()
+    }
 }
 
 

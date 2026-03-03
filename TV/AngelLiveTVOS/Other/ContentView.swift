@@ -30,23 +30,32 @@ struct ContentView: View {
         
         NavigationView {
             TabView(selection:$contentVM.selection) {
-                FavoriteMainView()
-                    .tabItem {
-                        if appViewModel.favoriteViewModel.isLoading == true || appViewModel.favoriteViewModel.cloudKitReady == false {
-                            Label(
-                                title: {  },
-                                icon: {
-                                    Image(systemName: appViewModel.favoriteViewModel.isLoading == true ? "arrow.triangle.2.circlepath.icloud" : appViewModel.favoriteViewModel.cloudKitReady == true ? "checkmark.icloud" : "exclamationmark.icloud" )
-                                }
-                            )
-                            .contentTransition(.symbolEffect(.replace))
-                        }else {
+                if appViewModel.pluginAvailability.hasAvailablePlugins {
+                    FavoriteMainView()
+                        .tabItem {
+                            if appViewModel.favoriteViewModel.isLoading == true || appViewModel.favoriteViewModel.cloudKitReady == false {
+                                Label(
+                                    title: {  },
+                                    icon: {
+                                        Image(systemName: appViewModel.favoriteViewModel.isLoading == true ? "arrow.triangle.2.circlepath.icloud" : appViewModel.favoriteViewModel.cloudKitReady == true ? "checkmark.icloud" : "exclamationmark.icloud" )
+                                    }
+                                )
+                                .contentTransition(.symbolEffect(.replace))
+                            } else {
+                                Text("收藏")
+                            }
+                        }
+                        .tag(0)
+                        .environment(favoriteLiveViewModel)
+                        .environment(appViewModel)
+                } else {
+                    TVShellFavoriteView()
+                        .tabItem {
                             Text("收藏")
                         }
-                    }
-                    .tag(0)
-                    .environment(favoriteLiveViewModel)
-                    .environment(appViewModel)
+                        .tag(0)
+                        .environment(appViewModel)
+                }
                 
                 PlatformView()
                     .tabItem {
@@ -56,13 +65,15 @@ struct ContentView: View {
                     .environment(appViewModel)
 
                 
-                SearchRoomView()
-                    .tabItem {
-                        Text("搜索")
-                    }
-                    .tag(2)
-                    .environment(searchLiveViewModel)
-                    .environment(appViewModel)
+                if appViewModel.pluginAvailability.hasAvailablePlugins {
+                    SearchRoomView()
+                        .tabItem {
+                            Text("搜索")
+                        }
+                        .tag(2)
+                        .environment(searchLiveViewModel)
+                        .environment(appViewModel)
+                }
 
                 
                 SettingView()
@@ -75,20 +86,20 @@ struct ContentView: View {
             }
         }
         .onAppear {
-//            Task {
-//                do {
-//                    try await Douyin.getRequestHeaders()
-//                } catch {
-//                    print("获取抖音请求头失败: \(error)")
-//                    // 抖音headers获取失败不应该阻止APP运行
-//                }
-//            }
+            Task {
+                await appViewModel.pluginAvailability.checkAvailability()
+            }
         }
         .onPlayPauseCommand(perform: {
             if contentVM.selection == 0 {
                 NotificationCenter.default.post(name: SimpleLiveNotificationNames.favoriteRefresh, object: nil)
             }
         })
+        .onChange(of: appViewModel.pluginAvailability.installedPluginIds) { _, installedIds in
+            if installedIds.isEmpty, contentVM.selection == 2 {
+                contentVM.selection = 1
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: SimpleLiveNotificationNames.navigateToSettings)) { _ in
             contentVM.selection = 3
         }
@@ -106,4 +117,3 @@ struct ContentView: View {
 //        }
     }
 }
-

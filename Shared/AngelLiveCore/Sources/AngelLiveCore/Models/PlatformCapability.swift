@@ -80,7 +80,7 @@ public enum PlatformCapability {
     ]
 
     public static func features(for liveType: LiveType) -> [(PlatformFeature, FeatureStatus)] {
-        guard let platform = LiveParseJSPlatformManager.platform(for: liveType) else {
+        guard let platform = SandboxPluginCatalog.platform(for: liveType) else {
             return featureFunctionNames.map { ($0.0, .unavailable) }
         }
 
@@ -101,17 +101,11 @@ public enum PlatformCapability {
     }
 
     private static func loadPluginCapabilities(pluginId: String) -> [PlatformFeature: FeatureStatus]? {
-        if let capabilities = loadSandboxPluginCapabilities(pluginId: pluginId) {
-            return capabilities
-        }
-        return loadBuiltInPluginCapabilities(pluginId: pluginId)
+        loadSandboxPluginCapabilities(pluginId: pluginId)
     }
 
     private static func loadPluginEntryScript(pluginId: String) -> String? {
-        if let sandboxScript = loadSandboxPluginEntryScript(pluginId: pluginId) {
-            return sandboxScript
-        }
-        return loadBuiltInPluginEntryScript(pluginId: pluginId)
+        loadSandboxPluginEntryScript(pluginId: pluginId)
     }
 
     private static func loadSandboxPluginEntryScript(pluginId: String) -> String? {
@@ -146,136 +140,6 @@ public enum PlatformCapability {
                   let capabilities = parseCapabilities(from: manifestURL) else {
                 continue
             }
-            candidates.append(PluginCapabilityCandidate(version: manifest.version, capabilities: capabilities))
-        }
-
-        guard let candidate = candidates.max(by: { semverCompare($0.version, $1.version) < 0 }) else {
-            return nil
-        }
-        return candidate.capabilities
-    }
-
-    private static func loadBuiltInPluginEntryScript(pluginId: String) -> String? {
-        guard let resourceURL = LiveParsePlugins.shared.bundle.resourceURL else { return nil }
-
-        let pluginsRoot = resourceURL.appendingPathComponent("Plugins", isDirectory: true)
-        if FileManager.default.fileExists(atPath: pluginsRoot.path) {
-            return loadBuiltInPluginEntryScriptFolderMode(pluginId: pluginId, pluginsRoot: pluginsRoot)
-        }
-        return loadBuiltInPluginEntryScriptFlatMode(pluginId: pluginId, resourceURL: resourceURL)
-    }
-
-    private static func loadBuiltInPluginEntryScriptFolderMode(pluginId: String, pluginsRoot: URL) -> String? {
-        guard let enumerator = FileManager.default.enumerator(
-            at: pluginsRoot,
-            includingPropertiesForKeys: nil,
-            options: [.skipsHiddenFiles]
-        ) else {
-            return nil
-        }
-
-        var candidates: [PluginEntryCandidate] = []
-        for case let url as URL in enumerator {
-            guard url.lastPathComponent == "manifest.json",
-                  let manifest = loadManifest(from: url),
-                  manifest.pluginId == pluginId else { continue }
-
-            let entryURL = url.deletingLastPathComponent().appendingPathComponent(manifest.entry, isDirectory: false)
-            guard FileManager.default.fileExists(atPath: entryURL.path) else { continue }
-            candidates.append(PluginEntryCandidate(version: manifest.version, entryURL: entryURL))
-        }
-
-        guard let candidate = candidates.max(by: { semverCompare($0.version, $1.version) < 0 }) else {
-            return nil
-        }
-        return try? String(contentsOf: candidate.entryURL, encoding: .utf8)
-    }
-
-    private static func loadBuiltInPluginCapabilities(pluginId: String) -> [PlatformFeature: FeatureStatus]? {
-        guard let resourceURL = LiveParsePlugins.shared.bundle.resourceURL else { return nil }
-
-        let pluginsRoot = resourceURL.appendingPathComponent("Plugins", isDirectory: true)
-        if FileManager.default.fileExists(atPath: pluginsRoot.path) {
-            return loadBuiltInPluginCapabilitiesFolderMode(pluginId: pluginId, pluginsRoot: pluginsRoot)
-        }
-        return loadBuiltInPluginCapabilitiesFlatMode(pluginId: pluginId, resourceURL: resourceURL)
-    }
-
-    private static func loadBuiltInPluginCapabilitiesFolderMode(
-        pluginId: String,
-        pluginsRoot: URL
-    ) -> [PlatformFeature: FeatureStatus]? {
-        guard let enumerator = FileManager.default.enumerator(
-            at: pluginsRoot,
-            includingPropertiesForKeys: nil,
-            options: [.skipsHiddenFiles]
-        ) else {
-            return nil
-        }
-
-        var candidates: [PluginCapabilityCandidate] = []
-        for case let url as URL in enumerator {
-            guard url.lastPathComponent == "manifest.json",
-                  let manifest = loadManifest(from: url),
-                  manifest.pluginId == pluginId,
-                  let capabilities = parseCapabilities(from: url) else { continue }
-            candidates.append(PluginCapabilityCandidate(version: manifest.version, capabilities: capabilities))
-        }
-
-        guard let candidate = candidates.max(by: { semverCompare($0.version, $1.version) < 0 }) else {
-            return nil
-        }
-        return candidate.capabilities
-    }
-
-    private static func loadBuiltInPluginEntryScriptFlatMode(pluginId: String, resourceURL: URL) -> String? {
-        guard let enumerator = FileManager.default.enumerator(
-            at: resourceURL,
-            includingPropertiesForKeys: nil,
-            options: [.skipsHiddenFiles]
-        ) else {
-            return nil
-        }
-
-        var candidates: [PluginEntryCandidate] = []
-        for case let url as URL in enumerator {
-            let name = url.lastPathComponent
-            guard name.hasPrefix("lp_plugin_"),
-                  name.hasSuffix("_manifest.json"),
-                  let manifest = loadManifest(from: url),
-                  manifest.pluginId == pluginId else { continue }
-
-            let entryURL = resourceURL.appendingPathComponent(manifest.entry, isDirectory: false)
-            guard FileManager.default.fileExists(atPath: entryURL.path) else { continue }
-            candidates.append(PluginEntryCandidate(version: manifest.version, entryURL: entryURL))
-        }
-
-        guard let candidate = candidates.max(by: { semverCompare($0.version, $1.version) < 0 }) else {
-            return nil
-        }
-        return try? String(contentsOf: candidate.entryURL, encoding: .utf8)
-    }
-
-    private static func loadBuiltInPluginCapabilitiesFlatMode(
-        pluginId: String,
-        resourceURL: URL
-    ) -> [PlatformFeature: FeatureStatus]? {
-        guard let enumerator = FileManager.default.enumerator(
-            at: resourceURL,
-            includingPropertiesForKeys: nil,
-            options: [.skipsHiddenFiles]
-        ) else {
-            return nil
-        }
-
-        var candidates: [PluginCapabilityCandidate] = []
-        for case let url as URL in enumerator {
-            let name = url.lastPathComponent
-            guard name.hasPrefix("lp_plugin_"),
-                  name.hasSuffix("_manifest.json"),
-                  let manifest = loadManifest(from: url),
-                  manifest.pluginId == pluginId,
-                  let capabilities = parseCapabilities(from: url) else { continue }
             candidates.append(PluginCapabilityCandidate(version: manifest.version, capabilities: capabilities))
         }
 

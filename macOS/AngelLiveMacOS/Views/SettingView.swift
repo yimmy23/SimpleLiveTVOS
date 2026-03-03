@@ -12,6 +12,7 @@ import AngelLiveCore
 struct SettingView: View {
     @StateObject private var syncService = BilibiliCookieSyncService.shared
     @EnvironmentObject private var updaterViewModel: UpdaterViewModel
+    @Environment(PluginAvailabilityService.self) private var pluginAvailability
     @State private var danmuModel = DanmuSettingModel()
     @State private var showBilibiliLogin = false
     @State private var showOpenSourceList = false
@@ -20,36 +21,38 @@ struct SettingView: View {
 
     var body: some View {
         Form {
-            Section("账号管理") {
-                bilibiliAccountRow
+            if pluginAvailability.hasAvailablePlugins {
+                Section("账号管理") {
+                    bilibiliAccountRow
 
-                ForEach(MacOSPlatformAccountItem.allCases) { platform in
-                    Button {
-                        selectedCookiePlatform = platform
-                    } label: {
-                        HStack {
-                            Image(systemName: platform.iconSystemName)
-                                .foregroundStyle(platform.iconTint.gradient)
-                                .frame(width: 24, height: 24)
+                    ForEach(MacOSPlatformAccountItem.allCases) { platform in
+                        Button {
+                            selectedCookiePlatform = platform
+                        } label: {
+                            HStack {
+                                Image(systemName: platform.iconSystemName)
+                                    .foregroundStyle(platform.iconTint.gradient)
+                                    .frame(width: 24, height: 24)
 
-                            Text(platform.title)
+                                Text(platform.title)
 
-                            Spacer()
+                                Spacer()
 
-                            if platformLoginStatus[platform.sessionID] == true {
-                                Text("已登录")
-                                    .foregroundStyle(AppConstants.Colors.success)
-                            } else {
-                                Text("未登录")
+                                if platformLoginStatus[platform.sessionID] == true {
+                                    Text("已登录")
+                                        .foregroundStyle(AppConstants.Colors.success)
+                                } else {
+                                    Text("未登录")
+                                        .foregroundStyle(AppConstants.Colors.secondaryText)
+                                }
+
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
                                     .foregroundStyle(AppConstants.Colors.secondaryText)
                             }
-
-                            Image(systemName: "chevron.right")
-                                .font(.caption)
-                                .foregroundStyle(AppConstants.Colors.secondaryText)
                         }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
             }
 

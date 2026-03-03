@@ -49,7 +49,7 @@ public enum LiveService {
     /// 并行搜索所有平台的直播间
     public static func searchRooms(keyword: String, page: Int) async throws -> [LiveModel] {
         await withTaskGroup(of: [LiveModel].self) { group in
-            for platform in LiveParseJSPlatformManager.availablePlatforms {
+            for platform in SandboxPluginCatalog.availablePlatforms() {
                 group.addTask {
                     do {
                         return try await LiveParseJSPlatformManager.searchRooms(platform: platform, keyword: keyword, page: page)

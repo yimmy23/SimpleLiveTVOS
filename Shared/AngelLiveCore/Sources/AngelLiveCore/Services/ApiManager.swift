@@ -12,17 +12,17 @@ public enum ApiManager {
     /**
      获取当前房间直播状态。
 
-     - Returns: 直播状态
+    - Returns: 直播状态
     */
     public static func getCurrentRoomLiveState(roomId: String, userId: String?, liveType: LiveType) async throws -> LiveState {
-        guard let platform = LiveParseJSPlatformManager.platform(for: liveType) else {
+        guard let platform = SandboxPluginCatalog.platform(for: liveType) else {
             return .unknow
         }
         return try await LiveParseJSPlatformManager.getLiveState(platform: platform, roomId: roomId, userId: userId)
     }
 
     public static func fetchRoomList(liveCategory: LiveCategoryModel, page: Int, liveType: LiveType) async throws -> [LiveModel] {
-        guard let platform = LiveParseJSPlatformManager.platform(for: liveType) else {
+        guard let platform = SandboxPluginCatalog.platform(for: liveType) else {
             return []
         }
         if liveType == .bilibili {
@@ -51,14 +51,14 @@ public enum ApiManager {
     }
 
     public static func fetchCategoryList(liveType: LiveType) async throws -> [LiveMainListModel] {
-        guard let platform = LiveParseJSPlatformManager.platform(for: liveType) else {
+        guard let platform = SandboxPluginCatalog.platform(for: liveType) else {
             return []
         }
         return try await LiveParseJSPlatformManager.getCategoryList(platform: platform)
     }
 
     public static func fetchLastestLiveInfo(liveModel: LiveModel) async throws -> LiveModel {
-        guard let platform = LiveParseJSPlatformManager.platform(for: liveModel.liveType) else {
+        guard let platform = SandboxPluginCatalog.platform(for: liveModel.liveType) else {
             throw LiveParseError.liveParseError("不支持的平台", "\(liveModel.liveType)")
         }
         return try await LiveParseJSPlatformManager.getLiveLastestInfo(platform: platform, roomId: liveModel.roomId, userId: liveModel.userId)
@@ -93,7 +93,7 @@ public enum ApiManager {
     }
 
     private static func handlePlatformSearch(_ text: String, liveType: LiveType) async throws -> LiveModel? {
-        guard let platform = LiveParseJSPlatformManager.platform(for: liveType) else {
+        guard let platform = SandboxPluginCatalog.platform(for: liveType) else {
             return nil
         }
         return try await LiveParseJSPlatformManager.getRoomInfoFromShareCode(platform: platform, shareCode: text)

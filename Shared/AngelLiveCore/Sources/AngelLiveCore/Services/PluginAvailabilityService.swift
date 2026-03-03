@@ -31,31 +31,10 @@ public final class PluginAvailabilityService {
         isChecking = true
         defer { isChecking = false }
 
-        let storage = LiveParsePlugins.shared.storage
-        let pluginsRoot = storage.pluginsRootDirectory
-
-        // 直接检查 sandbox 插件目录是否有内容
-        do {
-            let contents = try FileManager.default.contentsOfDirectory(
-                at: pluginsRoot,
-                includingPropertiesForKeys: [.isDirectoryKey],
-                options: [.skipsHiddenFiles]
-            )
-            // 收集子目录名（即 pluginId）
-            var pluginIds: [String] = []
-            for url in contents {
-                let resourceValues = try? url.resourceValues(forKeys: [.isDirectoryKey])
-                if resourceValues?.isDirectory == true {
-                    pluginIds.append(url.lastPathComponent)
-                }
-            }
-            installedPluginIds = pluginIds
-            hasAvailablePlugins = !pluginIds.isEmpty
-        } catch {
-            // 目录不存在或无法读取，说明没有安装过任何插件
-            installedPluginIds = []
-            hasAvailablePlugins = false
-        }
+        // 仅认定“可被正确解析的沙盒插件 manifest”，不把空目录/损坏目录算作可用插件。
+        let pluginIds = SandboxPluginCatalog.installedPluginIds()
+        installedPluginIds = pluginIds
+        hasAvailablePlugins = !pluginIds.isEmpty
     }
 
     /// 刷新状态（插件安装成功后调用）

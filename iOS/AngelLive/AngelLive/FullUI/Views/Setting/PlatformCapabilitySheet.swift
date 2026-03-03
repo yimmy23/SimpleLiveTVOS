@@ -122,7 +122,7 @@ struct PlatformCapabilitySheet: View {
     }
 
     private var pluginId: String? {
-        LiveParseJSPlatformManager.platform(for: liveType)?.pluginId
+        SandboxPluginCatalog.platform(for: liveType)?.pluginId
     }
 
     private var installedVersion: String? {

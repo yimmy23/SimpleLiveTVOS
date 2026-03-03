@@ -2,20 +2,19 @@
 //  PlatformIconProvider.swift
 //  AngelLive
 //
-//  统一解析平台图标：优先读取已安装插件 assets，其次读取 LiveParse 内置资源。
+//  统一解析平台图标：只读取沙盒已安装插件 assets，不读取 LiveParse 内置资源。
 //
 
 import UIKit
+import AngelLiveCore
 import LiveParse
 
 enum PlatformIconProvider {
     private static let installedCardIconPrefix = "assets/tv_"
     private static let installedTabIconPrefix = "assets/mini_live_card_"
-    private static let builtInCardIconPrefix = "tv_"
-    private static let builtInTabIconPrefix = "mini_live_card_"
 
     static func tabImage(for liveType: LiveType) -> UIImage? {
-        guard let platform = LiveParseJSPlatformManager.platform(for: liveType) else {
+        guard let platform = SandboxPluginCatalog.platform(for: liveType) else {
             return nil
         }
         let pluginId = platform.pluginId
@@ -24,15 +23,11 @@ enum PlatformIconProvider {
             return installedImage
         }
 
-        if let builtInImage = loadBuiltInIcon(pluginId: pluginId, fileName: builtInTabIconPrefix + pluginId) {
-            return builtInImage
-        }
-
         return legacyTabImage(liveType: liveType)
     }
 
     static func configCardImage(for liveType: LiveType, isDarkMode: Bool) -> UIImage? {
-        guard let platform = LiveParseJSPlatformManager.platform(for: liveType) else {
+        guard let platform = SandboxPluginCatalog.platform(for: liveType) else {
             return nil
         }
         let pluginId = platform.pluginId
@@ -42,13 +37,6 @@ enum PlatformIconProvider {
         if let installedImage = loadInstalledIcon(pluginId: pluginId, fileName: primaryName)
             ?? loadInstalledIcon(pluginId: pluginId, fileName: fallbackName) {
             return installedImage
-        }
-
-        let builtInPrimary = builtInCardIconPrefix + pluginId + (isDarkMode ? "_big_dark" : "_big")
-        let builtInFallback = builtInCardIconPrefix + pluginId + (isDarkMode ? "_big" : "_big_dark")
-        if let builtInImage = loadBuiltInIcon(pluginId: pluginId, fileName: builtInPrimary)
-            ?? loadBuiltInIcon(pluginId: pluginId, fileName: builtInFallback) {
-            return builtInImage
         }
 
         return legacyCardImage(liveType: liveType, isDarkMode: isDarkMode)
@@ -70,25 +58,6 @@ enum PlatformIconProvider {
             }
         }
 
-        return nil
-    }
-
-    private static func loadBuiltInIcon(pluginId: String, fileName: String) -> UIImage? {
-        let resourceBundle = LiveParsePlugins.shared.bundle
-        let iconURL =
-            resourceBundle.url(
-                forResource: fileName,
-                withExtension: "png",
-                subdirectory: "plugin_assets/\(pluginId)"
-            ) ??
-            resourceBundle.url(
-                forResource: fileName,
-                withExtension: "png"
-            )
-
-        if let iconURL {
-            return UIImage(contentsOfFile: iconURL.path)
-        }
         return nil
     }
 

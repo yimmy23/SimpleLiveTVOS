@@ -16,6 +16,10 @@ import AngelLiveDependencies
 public class PlayerOptions: KSOptions, @unchecked Sendable {
     public var syncSystemRate: Bool = false
 
+    nonisolated required public init() {
+        super.init()
+    }
+
     override public func updateVideo(refreshRate: Float, isDovi: Bool, formatDescription: CMFormatDescription) {
         guard syncSystemRate else { return }
         super.updateVideo(refreshRate: refreshRate, isDovi: isDovi, formatDescription: formatDescription)
@@ -82,7 +86,7 @@ final class RoomInfoViewModel {
     func getPlayArgs() async {
         isLoading = true
         do {
-            guard let platform = LiveParseJSPlatformManager.platform(for: currentRoom.liveType) else {
+            guard let platform = SandboxPluginCatalog.platform(for: currentRoom.liveType) else {
                 throw LiveParseError.liveParseError("不支持的平台", "\(currentRoom.liveType)")
             }
             let playArgs = try await LiveParseJSPlatformManager.getPlayArgs(platform: platform, roomId: currentRoom.roomId, userId: currentRoom.userId)
@@ -374,7 +378,7 @@ final class RoomInfoViewModel {
 
     /// 检查平台是否支持弹幕
     func platformSupportsDanmu() -> Bool {
-        LiveParseJSPlatformManager.platform(for: currentRoom.liveType) != nil
+        SandboxPluginCatalog.platform(for: currentRoom.liveType) != nil
     }
 
     /// 添加系统消息到聊天列表
@@ -417,7 +421,7 @@ final class RoomInfoViewModel {
 
             var danmuArgs: ([String : String], [String : String]?) = ([:],[:])
             do {
-                guard let platform = LiveParseJSPlatformManager.platform(for: currentRoom.liveType) else {
+                guard let platform = SandboxPluginCatalog.platform(for: currentRoom.liveType) else {
                     throw NSError(
                         domain: "danmu.platform",
                         code: -1,

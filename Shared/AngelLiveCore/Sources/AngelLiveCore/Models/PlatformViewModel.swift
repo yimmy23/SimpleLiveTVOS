@@ -18,26 +18,22 @@ public final class PlatformViewModel {
 
     /// 根据已安装插件 ID 刷新平台列表
     public func refreshPlatforms(installedPluginIds: [String]) {
-        let allPlatforms = LiveParseTools.getAllSupportPlatform()
+        let pluginMap = SandboxPluginCatalog.installedPluginMap()
+        let installedPlatforms = SandboxPluginCatalog.availablePlatforms(installedPluginIds: installedPluginIds)
 
-        // 使用插件动态映射，不依赖固定平台枚举。
-        let installedLiveTypes = Set(
-            LiveParseJSPlatformManager.availablePlatforms
-                .filter { installedPluginIds.contains($0.pluginId) }
-                .map(\.liveType)
-        )
+        platformInfo = installedPlatforms.map { platform in
+            let manifestName = pluginMap[platform.pluginId]?.displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let title = (manifestName?.isEmpty == false) ? manifestName! : platform.pluginId
+            let description = "由沙盒插件提供"
 
-        platformInfo = allPlatforms
-            .filter { installedLiveTypes.contains($0.liveType) }
-            .map { item in
-                Platformdescription(
-                    title: item.livePlatformName,
-                    bigPic: "\(item.livePlatformName)-big",
-                    smallPic: "\(item.livePlatformName)-small",
-                    descripiton: item.description,
-                    liveType: item.liveType
-                )
-            }
+            return Platformdescription(
+                title: title,
+                bigPic: "\(platform.pluginId)-big",
+                smallPic: "\(platform.pluginId)-small",
+                descripiton: description,
+                liveType: platform.liveType
+            )
+        }
     }
 }
 
