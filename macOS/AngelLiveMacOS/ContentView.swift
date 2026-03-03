@@ -109,26 +109,18 @@ struct ContentView: View {
     }
     
     func getImage(platform: Platformdescription) -> String {
-        switch platform.liveType {
-            case .bilibili:
-                return "mini_live_card_bili"
-            case .douyu:
-                return "mini_live_card_douyu"
-            case .huya:
-                return "mini_live_card_huya"
-            case .douyin:
-                return "mini_live_card_douyin"
-            case .yy:
-                return "mini_live_card_yy"
-            case .cc:
-                return "mini_live_card_cc"
-            case .ks:
-                return "mini_live_card_ks"
-            case .soop:
-                return "mini_live_card_soop"
-            case .youtube:
-                return "mini_live_card_yy"
-        }
+        let imageByType: [String: String] = [
+            LiveType.bilibili.rawValue: "mini_live_card_bili",
+            LiveType.douyu.rawValue: "mini_live_card_douyu",
+            LiveType.huya.rawValue: "mini_live_card_huya",
+            LiveType.douyin.rawValue: "mini_live_card_douyin",
+            LiveType.yy.rawValue: "mini_live_card_yy",
+            LiveType.cc.rawValue: "mini_live_card_cc",
+            LiveType.ks.rawValue: "mini_live_card_ks",
+            LiveType.soop.rawValue: "mini_live_card_soop",
+            LiveType.youtube.rawValue: "mini_live_card_yy"
+        ]
+        return imageByType[platform.liveType.rawValue] ?? "mini_live_card_yy"
     }
 }
 

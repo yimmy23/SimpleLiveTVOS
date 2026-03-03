@@ -197,56 +197,48 @@ struct StreamerInfoSheet: View {
 extension LiveType {
     /// 平台名称
     var platformName: String {
-        switch self {
-        case .bilibili: return "哔哩哔哩"
-        case .huya: return "虎牙"
-        case .douyin: return "抖音"
-        case .douyu: return "斗鱼"
-        case .cc: return "网易CC"
-        case .ks: return "快手"
-        case .yy: return "YY"
-        case .soop: return "SOOP"
-        case .youtube: return "YouTube"
-        }
+        LiveParseTools.getLivePlatformName(self)
     }
 
     /// 平台主题色
     var platformColor: Color {
-        switch self {
-        case .bilibili: return Color(red: 0.98, green: 0.45, blue: 0.55) // 粉色
-        case .huya: return Color(red: 1.0, green: 0.6, blue: 0.0) // 橙色
-        case .douyin: return Color(red: 0.0, green: 0.0, blue: 0.0) // 黑色
-        case .douyu: return Color(red: 1.0, green: 0.5, blue: 0.0) // 橙色
-        case .cc: return Color(red: 0.98, green: 0.75, blue: 0.18) // 黄色
-        case .ks: return Color(red: 1.0, green: 0.35, blue: 0.0) // 橙红
-        case .yy: return Color(red: 1.0, green: 0.8, blue: 0.0) // 黄色
-        case .soop: return Color(red: 0.0, green: 0.47, blue: 0.95) // 蓝色
-        case .youtube: return Color(red: 1.0, green: 0.0, blue: 0.0) // 红色
-        }
+        let colorByType: [String: Color] = [
+            LiveType.bilibili.rawValue: Color(red: 0.98, green: 0.45, blue: 0.55),
+            LiveType.huya.rawValue: Color(red: 1.0, green: 0.6, blue: 0.0),
+            LiveType.douyin.rawValue: Color(red: 0.0, green: 0.0, blue: 0.0),
+            LiveType.douyu.rawValue: Color(red: 1.0, green: 0.5, blue: 0.0),
+            LiveType.cc.rawValue: Color(red: 0.98, green: 0.75, blue: 0.18),
+            LiveType.ks.rawValue: Color(red: 1.0, green: 0.35, blue: 0.0),
+            LiveType.yy.rawValue: Color(red: 1.0, green: 0.8, blue: 0.0),
+            LiveType.soop.rawValue: Color(red: 0.0, green: 0.47, blue: 0.95),
+            LiveType.youtube.rawValue: Color(red: 1.0, green: 0.0, blue: 0.0)
+        ]
+        return colorByType[self.rawValue] ?? .secondary
     }
 
     /// 获取原平台直播间链接
     func getRoomURL(roomId: String, userId: String) -> String {
-        switch self {
-        case .bilibili:
+        switch self.rawValue {
+        case LiveType.bilibili.rawValue:
             return "https://live.bilibili.com/\(roomId)"
-        case .huya:
+        case LiveType.huya.rawValue:
             return "https://www.huya.com/\(roomId)"
-        case .douyin:
+        case LiveType.douyin.rawValue:
             return "https://live.douyin.com/\(roomId)"
-        case .douyu:
+        case LiveType.douyu.rawValue:
             return "https://www.douyu.com/\(roomId)"
-        case .cc:
+        case LiveType.cc.rawValue:
             return "https://cc.163.com/\(roomId)"
-        case .ks:
-            // 快手使用 userId
+        case LiveType.ks.rawValue:
             return "https://live.kuaishou.com/u/\(userId)"
-        case .yy:
+        case LiveType.yy.rawValue:
             return "https://www.yy.com/\(roomId)"
-        case .soop:
+        case LiveType.soop.rawValue:
             return "https://play.sooplive.co.kr/\(userId)"
-        case .youtube:
+        case LiveType.youtube.rawValue:
             return "https://www.youtube.com/watch?v=\(roomId)"
+        default:
+            return ""
         }
     }
 }

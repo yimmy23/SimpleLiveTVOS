@@ -374,10 +374,7 @@ final class RoomInfoViewModel {
 
     /// 检查平台是否支持弹幕
     func platformSupportsDanmu() -> Bool {
-        switch currentRoom.liveType {
-        case .bilibili, .huya, .douyin, .douyu, .soop, .cc, .ks, .yy, .youtube:
-            return true
-        }
+        LiveParseJSPlatformManager.platform(for: currentRoom.liveType) != nil
     }
 
     /// 添加系统消息到聊天列表
@@ -420,44 +417,18 @@ final class RoomInfoViewModel {
 
             var danmuArgs: ([String : String], [String : String]?) = ([:],[:])
             do {
-                switch currentRoom.liveType {
-                case .bilibili, .huya, .douyin, .douyu, .soop:
-                    guard let platform = LiveParseJSPlatformManager.platform(for: currentRoom.liveType) else {
-                        throw NSError(
-                            domain: "danmu.platform",
-                            code: -1,
-                            userInfo: [NSLocalizedDescriptionKey: "未找到平台映射：\(currentRoom.liveType.rawValue)"]
-                        )
-                    }
-                    danmuArgs = try await LiveParseJSPlatformManager.getDanmukuArgs(platform: platform, roomId: currentRoom.roomId, userId: currentRoom.userId)
-                case .ks, .cc:  // 快手、网易CC平台弹幕
-                    guard let platform = LiveParseJSPlatformManager.platform(for: currentRoom.liveType) else {
-                        throw NSError(
-                            domain: "danmu.platform",
-                            code: -1,
-                            userInfo: [NSLocalizedDescriptionKey: "未找到平台映射：\(currentRoom.liveType.rawValue)"]
-                        )
-                    }
-                    danmuArgs = try await LiveParseJSPlatformManager.getDanmukuArgs(platform: platform, roomId: currentRoom.roomId, userId: currentRoom.userId)
-                case .yy:
-                    guard let platform = LiveParseJSPlatformManager.platform(for: currentRoom.liveType) else {
-                        throw NSError(
-                            domain: "danmu.platform",
-                            code: -1,
-                            userInfo: [NSLocalizedDescriptionKey: "未找到平台映射：\(currentRoom.liveType.rawValue)"]
-                        )
-                    }
-                    danmuArgs = try await LiveParseJSPlatformManager.getDanmukuArgs(platform: platform, roomId: currentRoom.roomId, userId: currentRoom.userId)
-                case .youtube:
-                    guard let platform = LiveParseJSPlatformManager.platform(for: currentRoom.liveType) else {
-                        throw NSError(
-                            domain: "danmu.platform",
-                            code: -1,
-                            userInfo: [NSLocalizedDescriptionKey: "未找到平台映射：\(currentRoom.liveType.rawValue)"]
-                        )
-                    }
-                    danmuArgs = try await LiveParseJSPlatformManager.getDanmukuArgs(platform: platform, roomId: currentRoom.roomId, userId: currentRoom.userId)
+                guard let platform = LiveParseJSPlatformManager.platform(for: currentRoom.liveType) else {
+                    throw NSError(
+                        domain: "danmu.platform",
+                        code: -1,
+                        userInfo: [NSLocalizedDescriptionKey: "未找到平台映射：\(currentRoom.liveType.rawValue)"]
+                    )
                 }
+                danmuArgs = try await LiveParseJSPlatformManager.getDanmukuArgs(
+                    platform: platform,
+                    roomId: currentRoom.roomId,
+                    userId: currentRoom.userId
+                )
 
                 await MainActor.run {
                     // 判断弹幕类型

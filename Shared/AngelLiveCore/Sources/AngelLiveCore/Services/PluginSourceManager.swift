@@ -55,6 +55,9 @@ public final class PluginSourceManager {
     /// 错误信息
     public var errorMessage: String?
 
+    /// 每个订阅源对应的插件 ID 集合（用于删除订阅源时联动删除插件）
+    private var sourcePluginIds: [String: Set<String>] = [:]
+
     /// 是否有插件正在安装
     public var isInstalling: Bool {
         remotePlugins.contains { $0.installState == .installing }
@@ -88,18 +91,44 @@ public final class PluginSourceManager {
         let trimmed = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !sourceURLs.contains(trimmed) else { return }
         sourceURLs.append(trimmed)
+        sourcePluginIds[trimmed] = sourcePluginIds[trimmed] ?? Set<String>()
         saveSourceURLs()
     }
 
     public func removeSource(_ urlString: String) {
-        sourceURLs.removeAll { $0 == urlString }
+        let trimmed = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
+        sourceURLs.removeAll { $0 == trimmed }
+        sourcePluginIds.removeValue(forKey: trimmed)
         saveSourceURLs()
+    }
+
+    /// 删除订阅源并移除该源对应的已安装插件
+    public func removeSourceAndAssociatedPlugins(_ urlString: String) async {
+        let trimmed = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        var pluginIds = sourcePluginIds[trimmed] ?? Set<String>()
+        if pluginIds.isEmpty, let url = URL(string: trimmed) {
+            do {
+                let index = try await updater.fetchIndex(url: url)
+                pluginIds = Set(index.plugins.map(\.pluginId))
+            } catch {
+                // 删除订阅源时仍然继续，避免卡住 UI
+            }
+        }
+
+        removeSource(trimmed)
+
+        for pluginId in pluginIds {
+            _ = uninstallPlugin(pluginId: pluginId)
+        }
     }
 
     // MARK: - 拉取远程索引
 
     public func fetchIndex(from urlString: String) async {
-        guard let url = URL(string: urlString) else {
+        let trimmed = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: trimmed) else {
             errorMessage = "无效的 URL"
             return
         }
@@ -110,7 +139,14 @@ public final class PluginSourceManager {
 
         do {
             let index = try await updater.fetchIndex(url: url)
-            remotePlugins = index.plugins.map { RemotePluginDisplayItem(item: $0) }
+            sourcePluginIds[trimmed] = Set(index.plugins.map(\.pluginId))
+            remotePlugins = index.plugins.map { item in
+                let displayItem = RemotePluginDisplayItem(item: item)
+                if installedVersion(for: item.pluginId) != nil {
+                    displayItem.installState = .installed
+                }
+                return displayItem
+            }
             mergeLatestRemoteItems(index.plugins)
         } catch {
             errorMessage = "拉取插件索引失败: \(error.localizedDescription)"
@@ -121,6 +157,7 @@ public final class PluginSourceManager {
     public func refreshAvailableUpdates() async {
         guard !sourceURLs.isEmpty else {
             latestRemoteItemsByPluginId = [:]
+            sourcePluginIds = [:]
             return
         }
 
@@ -129,11 +166,13 @@ public final class PluginSourceManager {
         defer { isCheckingUpdates = false }
 
         var latest: [String: LiveParseRemotePluginItem] = [:]
+        var pluginIdsBySource = sourcePluginIds.filter { sourceURLs.contains($0.key) }
 
         for source in sourceURLs {
             guard let url = URL(string: source) else { continue }
             do {
                 let index = try await updater.fetchIndex(url: url)
+                pluginIdsBySource[source] = Set(index.plugins.map(\.pluginId))
                 for item in index.plugins {
                     guard let existing = latest[item.pluginId] else {
                         latest[item.pluginId] = item
@@ -150,6 +189,7 @@ public final class PluginSourceManager {
         }
 
         latestRemoteItemsByPluginId = latest
+        sourcePluginIds = pluginIdsBySource
     }
 
     // MARK: - 安装插件
@@ -165,6 +205,11 @@ public final class PluginSourceManager {
             displayItem.installState = .installed
             return true
         } catch {
+            Logger.error(
+                error,
+                message: "安装插件失败: \(displayItem.id)@\(displayItem.item.version)",
+                category: .general
+            )
             displayItem.installState = .failed(error.localizedDescription)
             return false
         }
@@ -214,6 +259,9 @@ public final class PluginSourceManager {
 
         do {
             try await updater.installAndActivate(item: item, manager: LiveParsePlugins.shared)
+            if let remoteItem = remotePlugins.first(where: { $0.id == pluginId }) {
+                remoteItem.installState = .installed
+            }
             return true
         } catch {
             errorMessage = "更新插件失败: \(error.localizedDescription)"
@@ -233,6 +281,32 @@ public final class PluginSourceManager {
             }
         }
         latestRemoteItemsByPluginId = merged
+    }
+
+    private func uninstallPlugin(pluginId: String) -> Bool {
+        let storage = LiveParsePlugins.shared.storage
+        let pluginDirectory = storage.pluginDirectory(pluginId: pluginId)
+
+        do {
+            if FileManager.default.fileExists(atPath: pluginDirectory.path) {
+                try FileManager.default.removeItem(at: pluginDirectory)
+            }
+
+            var state = storage.loadState()
+            state.plugins.removeValue(forKey: pluginId)
+            try storage.saveState(state)
+
+            LiveParsePlugins.shared.evict(pluginId: pluginId)
+            try? LiveParsePlugins.shared.reload()
+
+            if let item = remotePlugins.first(where: { $0.id == pluginId }) {
+                item.installState = .notInstalled
+            }
+            return true
+        } catch {
+            errorMessage = "删除插件失败: \(error.localizedDescription)"
+            return false
+        }
     }
 
     private func semverCompare(_ lhs: String, _ rhs: String) -> Int {

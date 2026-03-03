@@ -10,9 +10,9 @@ import LiveParse
 
 enum PlatformIconProvider {
     private static let installedCardIconPrefix = "assets/tv_"
-    private static let installedTabIconPrefix = "assets/pad_live_card_"
+    private static let installedTabIconPrefix = "assets/mini_live_card_"
     private static let builtInCardIconPrefix = "tv_"
-    private static let builtInTabIconPrefix = "pad_live_card_"
+    private static let builtInTabIconPrefix = "mini_live_card_"
 
     static func tabImage(for liveType: LiveType) -> UIImage? {
         guard let platform = LiveParseJSPlatformManager.platform(for: liveType) else {
@@ -93,34 +93,36 @@ enum PlatformIconProvider {
     }
 
     private static func legacyTabImage(liveType: LiveType) -> UIImage? {
-        let legacyName: String = switch liveType {
-        case .bilibili: "pad_live_card_bili"
-        case .douyu: "pad_live_card_douyu"
-        case .huya: "pad_live_card_huya"
-        case .douyin: "pad_live_card_douyin"
-        case .yy: "pad_live_card_yy"
-        case .cc: "pad_live_card_cc"
-        case .ks: "pad_live_card_ks"
-        case .soop: "pad_live_card_soop"
-        case .youtube: "pad_live_card_youtube"
-        }
+        let legacyNameByType: [String: String] = [
+            LiveType.bilibili.rawValue: "pad_live_card_bili",
+            LiveType.douyu.rawValue: "pad_live_card_douyu",
+            LiveType.huya.rawValue: "pad_live_card_huya",
+            LiveType.douyin.rawValue: "pad_live_card_douyin",
+            LiveType.yy.rawValue: "pad_live_card_yy",
+            LiveType.cc.rawValue: "pad_live_card_cc",
+            LiveType.ks.rawValue: "pad_live_card_ks",
+            LiveType.soop.rawValue: "pad_live_card_soop",
+            LiveType.youtube.rawValue: "pad_live_card_youtube"
+        ]
+        let legacyName = legacyNameByType[liveType.rawValue] ?? "pad_live_card_bili"
 
         return UIImage(named: legacyName)
     }
 
     private static func legacyCardImage(liveType: LiveType, isDarkMode: Bool) -> UIImage? {
         let darkSuffix = isDarkMode ? "_dark" : ""
-        let legacyName: String = switch liveType {
-        case .bilibili: "tv_bilibili_big\(darkSuffix)"
-        case .douyu: "tv_douyu_big\(darkSuffix)"
-        case .huya: "tv_huya_big\(darkSuffix)"
-        case .douyin: "tv_douyin_big\(darkSuffix)"
-        case .yy: "tv_yy_big\(darkSuffix)"
-        case .cc: "tv_cc_big\(darkSuffix)"
-        case .ks: "tv_ks_big\(darkSuffix)"
-        case .soop: "tv_soop_big\(darkSuffix)"
-        case .youtube: "tv_youtube_big\(darkSuffix)"
-        }
+        let legacyNameByType: [String: String] = [
+            LiveType.bilibili.rawValue: "tv_bilibili_big\(darkSuffix)",
+            LiveType.douyu.rawValue: "tv_douyu_big\(darkSuffix)",
+            LiveType.huya.rawValue: "tv_huya_big\(darkSuffix)",
+            LiveType.douyin.rawValue: "tv_douyin_big\(darkSuffix)",
+            LiveType.yy.rawValue: "tv_yy_big\(darkSuffix)",
+            LiveType.cc.rawValue: "tv_cc_big\(darkSuffix)",
+            LiveType.ks.rawValue: "tv_ks_big\(darkSuffix)",
+            LiveType.soop.rawValue: "tv_soop_big\(darkSuffix)",
+            LiveType.youtube.rawValue: "tv_youtube_big\(darkSuffix)"
+        ]
+        let legacyName = legacyNameByType[liveType.rawValue] ?? "tv_bilibili_big\(darkSuffix)"
 
         return UIImage(named: legacyName)
     }

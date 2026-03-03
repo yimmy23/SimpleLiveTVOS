@@ -412,23 +412,25 @@ struct LiveCardView: View {
         }
 
         switch currentLiveModel.liveType {
-            case .bilibili:
+            case LiveType.bilibili:
                 return "live_card_bili"
-            case .douyu:
+            case LiveType.douyu:
                 return "live_card_douyu"
-            case .huya:
+            case LiveType.huya:
                 return "live_card_huya"
-            case .douyin:
+            case LiveType.douyin:
                 return "live_card_douyin"
-            case .yy:
+            case LiveType.yy:
                 return "live_card_yy"
-            case .cc:
+            case LiveType.cc:
                 return "live_card_cc"
-            case .ks:
+            case LiveType.ks:
                 return "live_card_ks"
-            case .soop:
+            case LiveType.soop:
                 return "live_card_soop"
-            case .youtube:
+            case LiveType.youtube:
+                return "live_card_yy"
+            default:
                 return "live_card_yy"
         }
     }

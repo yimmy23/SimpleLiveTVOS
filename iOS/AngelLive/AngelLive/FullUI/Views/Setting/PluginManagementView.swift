@@ -15,7 +15,6 @@ struct PluginManagementView: View {
 
     @State private var inputURL = ""
     @State private var isProcessing = false
-    @State private var showPluginList = false
 
     var body: some View {
         List {
@@ -31,14 +30,6 @@ struct PluginManagementView: View {
         .listStyle(.insetGrouped)
         .navigationTitle("插件管理")
         .navigationBarTitleDisplayMode(.large)
-        .sheet(isPresented: $showPluginList) {
-            SubscriptionContentSheet(
-                pluginSourceManager: pluginSourceManager,
-                pluginAvailability: pluginAvailability
-            )
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
-        }
         .task {
             await pluginSourceManager.refreshAvailableUpdates()
         }
@@ -61,7 +52,7 @@ struct PluginManagementView: View {
                 ForEach(pluginAvailability.installedPluginIds, id: \.self) { pluginId in
                     HStack {
                         // 优先显示插件内置 iOS 图标
-                        if let platform = LiveParseJSPlatform(rawValue: pluginId) {
+                        if let platform = platformForPluginId(pluginId) {
                             if let image = PlatformIconProvider.tabImage(for: platform.liveType) {
                                 Image(uiImage: image)
                                     .resizable()
@@ -81,9 +72,7 @@ struct PluginManagementView: View {
                                 .font(.body)
                                 .foregroundStyle(AppConstants.Colors.primaryText)
 
-                            Text(versionSubtitle(for: pluginId))
-                                .font(.caption)
-                                .foregroundStyle(AppConstants.Colors.secondaryText)
+                            versionSubtitleView(for: pluginId)
                         }
 
                         Spacer()
@@ -116,27 +105,12 @@ struct PluginManagementView: View {
                             .lineLimit(1)
 
                         Spacer()
-
-                        Button {
-                            Task {
-                                showPluginList = true
-                                await pluginSourceManager.fetchIndex(from: url)
-                            }
-                        } label: {
-                            if pluginSourceManager.isFetchingIndex {
-                                ProgressView()
-                                    .scaleEffect(0.7)
-                            } else {
-                                Image(systemName: "arrow.clockwise")
-                                    .foregroundStyle(AppConstants.Colors.link)
-                            }
-                        }
-                        .disabled(pluginSourceManager.isFetchingIndex)
                     }
                     .swipeActions(edge: .trailing) {
                         Button(role: .destructive) {
-                            pluginSourceManager.removeSource(url)
                             Task {
+                                await pluginSourceManager.removeSourceAndAssociatedPlugins(url)
+                                await pluginAvailability.refresh()
                                 await pluginSourceManager.refreshAvailableUpdates()
                             }
                         } label: {
@@ -183,7 +157,7 @@ struct PluginManagementView: View {
         } header: {
             Text("添加订阅源")
         } footer: {
-            Text("输入包含插件索引的 JSON 地址，添加后可浏览并安装可用插件")
+            Text("输入包含插件索引的 JSON 地址，添加后将自动检查插件更新")
         }
     }
 
@@ -196,9 +170,8 @@ struct PluginManagementView: View {
         pluginSourceManager.addSource(url)
         inputURL = ""
         isProcessing = true
-        showPluginList = true
         Task {
-            await pluginSourceManager.fetchIndex(from: url)
+            await pluginSourceManager.refreshAvailableUpdates()
             isProcessing = false
         }
     }
@@ -206,19 +179,32 @@ struct PluginManagementView: View {
     // MARK: - Helpers
 
     private func pluginDisplayName(for pluginId: String) -> String {
-        guard let platform = LiveParseJSPlatform(rawValue: pluginId) else {
+        guard let platform = platformForPluginId(pluginId) else {
             return pluginId
         }
         return LiveParseTools.getLivePlatformName(platform.liveType)
     }
 
-    private func versionSubtitle(for pluginId: String) -> String {
+    private func platformForPluginId(_ pluginId: String) -> LiveParseJSPlatform? {
+        LiveParseJSPlatformManager.availablePlatforms.first { $0.pluginId == pluginId }
+    }
+
+    @ViewBuilder
+    private func versionSubtitleView(for pluginId: String) -> some View {
         let installed = pluginSourceManager.installedVersion(for: pluginId) ?? "未知"
         if let latest = pluginSourceManager.latestVersion(for: pluginId),
            pluginSourceManager.hasUpdate(for: pluginId) {
-            return "版本 \(installed) → \(latest)"
+            (
+                Text(installed).foregroundStyle(Color.red) +
+                Text(" → ").foregroundStyle(AppConstants.Colors.secondaryText) +
+                Text(latest).foregroundStyle(Color.green)
+            )
+            .font(.caption)
+        } else {
+            Text("版本 \(installed)")
+                .font(.caption)
+                .foregroundStyle(AppConstants.Colors.secondaryText)
         }
-        return "版本 \(installed)"
     }
 
     @ViewBuilder

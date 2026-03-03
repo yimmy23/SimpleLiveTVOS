@@ -89,26 +89,18 @@ class CategoryGridViewController: UIViewController, JXSegmentedListContainerView
     /// 获取平台默认图标
     private func getPlatformIcon() -> String {
         guard let viewModel = viewModel else { return "" }
-        switch viewModel.platform.liveType {
-        case .bilibili:
-            return "live_card_bili"
-        case .douyu:
-            return "live_card_douyu"
-        case .huya:
-            return "live_card_huya"
-        case .douyin:
-            return "live_card_douyin"
-        case .yy:
-            return "live_card_yy"
-        case .cc:
-            return "live_card_cc"
-        case .ks:
-            return "live_card_ks"
-        case .soop:
-            return "live_card_soop"
-        case .youtube:
-            return "live_card_youtube"
-        }
+        let iconByType: [String: String] = [
+            LiveType.bilibili.rawValue: "live_card_bili",
+            LiveType.douyu.rawValue: "live_card_douyu",
+            LiveType.huya.rawValue: "live_card_huya",
+            LiveType.douyin.rawValue: "live_card_douyin",
+            LiveType.yy.rawValue: "live_card_yy",
+            LiveType.cc.rawValue: "live_card_cc",
+            LiveType.ks.rawValue: "live_card_ks",
+            LiveType.soop.rawValue: "live_card_soop",
+            LiveType.youtube.rawValue: "live_card_youtube"
+        ]
+        return iconByType[viewModel.platform.liveType.rawValue] ?? "live_card_bili"
     }
 }
 

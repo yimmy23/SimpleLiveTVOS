@@ -23,7 +23,6 @@ struct ShellConfigView: View {
         NavigationStack {
             List {
                 addSection
-                subscriptionListSection
             }
             .listStyle(.insetGrouped)
             .navigationTitle("配置")
@@ -115,49 +114,6 @@ struct ShellConfigView: View {
         }
     }
 
-    // MARK: - 已添加的订阅
-
-    @ViewBuilder
-    private var subscriptionListSection: some View {
-        if !pluginSourceManager.sourceURLs.isEmpty {
-            Section {
-                ForEach(pluginSourceManager.sourceURLs, id: \.self) { url in
-                    HStack {
-                        Text(url)
-                            .font(.caption)
-                            .foregroundStyle(AppConstants.Colors.primaryText)
-                            .lineLimit(1)
-
-                        Spacer()
-
-                    Button {
-                        Task {
-                            showContentList = true
-                            await pluginSourceManager.fetchIndex(from: url)
-                        }
-                    } label: {
-                        if pluginSourceManager.isFetchingIndex {
-                            ProgressView()
-                            } else {
-                                Image(systemName: "arrow.clockwise")
-                                    .foregroundStyle(AppConstants.Colors.link)
-                            }
-                        }
-                        .disabled(pluginSourceManager.isFetchingIndex)
-                    }
-                    .swipeActions(edge: .trailing) {
-                        Button(role: .destructive) {
-                            pluginSourceManager.removeSource(url)
-                        } label: {
-                            Label("删除", systemImage: "trash")
-                        }
-                    }
-                }
-            } header: {
-                Text("已添加的订阅")
-            }
-        }
-    }
 }
 
 // MARK: - 订阅内容列表
@@ -187,33 +143,21 @@ struct SubscriptionContentSheet: View {
                     ForEach(pluginSourceManager.remotePlugins) { item in
                         contentRow(item)
                     }
-
-                    Section {
-                        Button {
-                            Task {
-                                let count = await pluginSourceManager.installAll()
-                                if count > 0 {
-                                    await pluginAvailability.refresh()
-                                }
-                            }
-                        } label: {
-                            HStack {
-                                Image(systemName: "arrow.down.circle.fill")
-                                    .foregroundStyle(AppConstants.Colors.success.gradient)
-                                Text("全部添加")
-                            }
-                        }
-                        .disabled(pluginSourceManager.isInstalling ||
-                                  !pluginSourceManager.remotePlugins.contains { $0.installState == .notInstalled })
-                    }
                 }
             }
             .listStyle(.insetGrouped)
             .navigationTitle("订阅内容")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
+                ToolbarItem(placement: .cancellationAction) {
                     Button("完成") { dismiss() }
+                }
+
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("全部安装") {
+                        installAllPlugins()
+                    }
+                    .disabled(!canInstallAll)
                 }
             }
         }
@@ -241,32 +185,6 @@ struct SubscriptionContentSheet: View {
     @ViewBuilder
     private func itemStateView(_ item: RemotePluginDisplayItem) -> some View {
         switch item.installState {
-        case .notInstalled:
-            Button {
-                Task {
-                    let success = await pluginSourceManager.installPlugin(item)
-                    if success {
-                        await pluginAvailability.refresh()
-                    }
-                }
-            } label: {
-                Text("添加")
-                    .font(.caption)
-                    .padding(.horizontal, AppConstants.Spacing.sm)
-                    .padding(.vertical, AppConstants.Spacing.xs)
-                    .background(AppConstants.Colors.link)
-                    .foregroundStyle(.white)
-                    .clipShape(Capsule())
-            }
-
-        case .installing:
-            ProgressView()
-                .scaleEffect(0.8)
-
-        case .installed:
-            Image(systemName: "checkmark.circle.fill")
-                .foregroundStyle(AppConstants.Colors.success)
-
         case .failed(let error):
             VStack(alignment: .trailing) {
                 Image(systemName: "exclamationmark.triangle.fill")
@@ -275,6 +193,98 @@ struct SubscriptionContentSheet: View {
                     .font(.caption2)
                     .foregroundStyle(AppConstants.Colors.error)
                     .lineLimit(2)
+            }
+
+        case .notInstalled:
+            if pluginSourceManager.updatingPluginIds.contains(item.id) {
+                ProgressView()
+                    .scaleEffect(0.8)
+            } else if pluginSourceManager.hasUpdate(for: item.id) {
+                Button {
+                    Task {
+                        let success = await pluginSourceManager.updatePlugin(pluginId: item.id)
+                        if success {
+                            await pluginAvailability.refresh()
+                            await pluginSourceManager.refreshAvailableUpdates()
+                        }
+                    }
+                } label: {
+                    Text("更新")
+                        .font(.caption)
+                        .padding(.horizontal, AppConstants.Spacing.sm)
+                        .padding(.vertical, AppConstants.Spacing.xs)
+                        .background(AppConstants.Colors.link)
+                        .foregroundStyle(.white)
+                        .clipShape(Capsule())
+                }
+                .accessibilityLabel("更新插件")
+            } else if pluginSourceManager.installedVersion(for: item.id) != nil {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(AppConstants.Colors.success)
+            } else {
+                Button {
+                    Task {
+                        let success = await pluginSourceManager.installPlugin(item)
+                        if success {
+                            await pluginAvailability.refresh()
+                        }
+                    }
+                } label: {
+                    Text("安装")
+                        .font(.caption)
+                        .padding(.horizontal, AppConstants.Spacing.sm)
+                        .padding(.vertical, AppConstants.Spacing.xs)
+                        .background(AppConstants.Colors.link)
+                        .foregroundStyle(.white)
+                        .clipShape(Capsule())
+                }
+            }
+
+        case .installing:
+            ProgressView()
+                .scaleEffect(0.8)
+
+        case .installed:
+            if pluginSourceManager.updatingPluginIds.contains(item.id) {
+                ProgressView()
+                    .scaleEffect(0.8)
+            } else if pluginSourceManager.hasUpdate(for: item.id) {
+                Button {
+                    Task {
+                        let success = await pluginSourceManager.updatePlugin(pluginId: item.id)
+                        if success {
+                            await pluginAvailability.refresh()
+                            await pluginSourceManager.refreshAvailableUpdates()
+                        }
+                    }
+                } label: {
+                    Text("更新")
+                        .font(.caption)
+                        .padding(.horizontal, AppConstants.Spacing.sm)
+                        .padding(.vertical, AppConstants.Spacing.xs)
+                        .background(AppConstants.Colors.link)
+                        .foregroundStyle(.white)
+                        .clipShape(Capsule())
+                }
+                .accessibilityLabel("更新插件")
+            } else {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(AppConstants.Colors.success)
+            }
+        }
+    }
+
+    private var canInstallAll: Bool {
+        !pluginSourceManager.isInstalling &&
+        pluginSourceManager.remotePlugins.contains { $0.installState == .notInstalled }
+    }
+
+    private func installAllPlugins() {
+        guard canInstallAll else { return }
+        Task {
+            let count = await pluginSourceManager.installAll()
+            if count > 0 {
+                await pluginAvailability.refresh()
             }
         }
     }

@@ -12,7 +12,7 @@ import AngelLiveDependencies
 public class PlayerOptions: KSOptions, @unchecked Sendable {
     public var syncSystemRate: Bool = false
 
-    nonisolated override public init() {
+    nonisolated required public init() {
         super.init()
     }
 

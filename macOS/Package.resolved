@@ -132,8 +132,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/TracyPlayer/KSPlayer",
       "state" : {
-        "revision" : "62998ba783dca4d9a9643ef5dd717652a30b9dc5",
-        "version" : "2.6.2"
+        "branch" : "lgpl",
+        "revision" : "33138cdb65271698ba5b6436e318c0533fa751ce"
       }
     },
     {

@@ -130,10 +130,7 @@ struct ContentView: View {
 
                 ForEach(platformViewModel.platformInfo) { platform in
                     Tab(value: TabSelection.platform(platform)) {
-                        NavigationStack {
-                            PlatformDetailViewControllerWrapper()
-                                .environment(PlatformDetailViewModel(platform: platform))
-                        }
+                        PlatformDetailTabContainer(platform: platform)
                     } label: {
                         Label {
                             Text(platform.title)
@@ -311,6 +308,32 @@ struct ContentView: View {
         }
     }
 
+}
+
+private struct PlatformDetailTabContainer: View {
+    let platform: Platformdescription
+    @State private var showCapabilitySheet = false
+
+    var body: some View {
+        NavigationStack {
+            PlatformDetailViewControllerWrapper()
+                .environment(PlatformDetailViewModel(platform: platform))
+                .navigationBarTitleDisplayMode(.inline)
+                .navigationTitle(platform.title)
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button {
+                            showCapabilitySheet = true
+                        } label: {
+                            Image(systemName: "info.circle")
+                        }
+                    }
+                }
+        }
+        .sheet(isPresented: $showCapabilitySheet) {
+            PlatformCapabilitySheet(liveType: platform.liveType)
+        }
+    }
 }
 
 #Preview {

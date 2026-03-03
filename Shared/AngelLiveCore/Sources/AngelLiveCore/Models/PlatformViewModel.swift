@@ -20,9 +20,11 @@ public final class PlatformViewModel {
     public func refreshPlatforms(installedPluginIds: [String]) {
         let allPlatforms = LiveParseTools.getAllSupportPlatform()
 
-        // 将 pluginId 转为 LiveType 集合用于过滤
+        // 使用插件动态映射，不依赖固定平台枚举。
         let installedLiveTypes = Set(
-            installedPluginIds.compactMap { LiveParseJSPlatform(rawValue: $0)?.liveType }
+            LiveParseJSPlatformManager.availablePlatforms
+                .filter { installedPluginIds.contains($0.pluginId) }
+                .map(\.liveType)
         )
 
         platformInfo = allPlatforms
