@@ -1,0 +1,303 @@
+//
+//  DirectURLPlayerView.swift
+//  AngelLive
+//
+//  独立 URL 播放器：直接接收 URL 播放，不依赖 LiveParse 平台。
+//  用于壳 UI 中的网络视频链接播放。
+//
+
+import SwiftUI
+import AngelLiveCore
+import AngelLiveDependencies
+
+/// 独立 URL 播放器视图，以 fullScreenCover 形式呈现
+struct DirectURLPlayerView: View {
+    let url: URL
+    let title: String
+
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+
+    // KS 播放器
+    @StateObject private var playerCoordinator: KSVideoPlayer.Coordinator
+    @StateObject private var playerModel: KSVideoPlayerModel
+
+    // VLC 播放器
+    @StateObject private var vlcPlaybackController = VLCPlaybackController()
+    @State private var vlcState: VLCPlaybackBridgeState = .buffering
+    @State private var hasVLCStartedPlayback = false
+
+    // 控制层状态
+    @State private var isMaskShow = true
+    @State private var isLocked = false
+    @State private var isPlaying = false
+
+    private var useKSPlayer: Bool {
+        let kernel = PlayerKernelSupport.resolvedKernel(for: PlayerSettingModel().playerKernel)
+        return kernel == .ksplayer && PlayerKernelSupport.isKSPlayerAvailable
+    }
+
+    private var isLandscape: Bool {
+        horizontalSizeClass == .compact && verticalSizeClass == .compact ||
+        horizontalSizeClass == .regular && verticalSizeClass == .compact
+    }
+
+    init(url: URL, title: String) {
+        self.url = url
+        self.title = title
+
+        // 初始化 KSPlayer 选项
+        let options = PlayerOptions()
+        options.userAgent = "libmpv"
+        options.canStartPictureInPictureAutomaticallyFromInline = PlayerSettingModel().enableAutoPiPOnBackground
+
+        KSOptions.isAutoPlay = true
+        KSOptions.isSecondOpen = false
+        KSOptions.firstPlayerType = KSMEPlayer.self
+        KSOptions.secondPlayerType = KSMEPlayer.self
+        KSOptions.canBackgroundPlay = PlayerSettingModel().enableBackgroundAudio
+
+        // 根据 URL 扩展名判断是否使用 HLS
+        let urlString = url.absoluteString.lowercased()
+        if urlString.contains(".m3u8") || urlString.contains("m3u8") {
+            KSOptions.firstPlayerType = KSAVPlayer.self
+            KSOptions.secondPlayerType = KSMEPlayer.self
+        }
+
+        let coordinator = KSVideoPlayer.Coordinator()
+        let model = KSVideoPlayerModel(
+            title: title,
+            config: coordinator,
+            options: options,
+            url: url
+        )
+        _playerCoordinator = StateObject(wrappedValue: coordinator)
+        _playerModel = StateObject(wrappedValue: model)
+    }
+
+    var body: some View {
+        ZStack {
+            Color.black.edgesIgnoringSafeArea(.all)
+
+            // 播放器层
+            playerSurface
+
+            // 缓冲指示器
+            if shouldShowBuffering {
+                ProgressView()
+                    .scaleEffect(1.5)
+                    .tint(.white)
+            }
+
+            // 手势层（亮度/音量/双击全屏）
+            #if canImport(KSPlayer)
+            PlayerGestureView(
+                onSingleTap: {
+                    isMaskShow.toggle()
+                },
+                isLocked: $isLocked
+            )
+            #else
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    isMaskShow.toggle()
+                }
+            #endif
+
+            // 控制层
+            DirectPlayerControlOverlay(
+                bridge: controlBridge,
+                onRefresh: {
+                    refreshPlayback()
+                }
+            )
+        }
+        .statusBar(hidden: true)
+        .persistentSystemOverlays(.hidden)
+        .onAppear {
+            // iPhone 支持横屏旋转
+            if !AppConstants.Device.isIPad {
+                KSOptions.supportedInterfaceOrientations = .allButUpsideDown
+            }
+        }
+        .onDisappear {
+            // iPhone 返回时强制竖屏
+            if !AppConstants.Device.isIPad {
+                KSOptions.supportedInterfaceOrientations = .portrait
+                guard let windowScene = UIApplication.shared.connectedScenes
+                    .compactMap({ $0 as? UIWindowScene })
+                    .first else { return }
+                let prefs = UIWindowScene.GeometryPreferences.iOS(interfaceOrientations: .portrait)
+                windowScene.requestGeometryUpdate(prefs) { _ in }
+                if let rootVC = windowScene.windows.first(where: { $0.isKeyWindow })?.rootViewController {
+                    rootVC.setNeedsUpdateOfSupportedInterfaceOrientations()
+                }
+            }
+        }
+        .onChange(of: playerCoordinator.state) {
+            guard useKSPlayer else { return }
+            switch playerCoordinator.state {
+            case .readyToPlay:
+                isPlaying = true
+            case .paused, .playedToTheEnd, .error:
+                isPlaying = false
+            default:
+                break
+            }
+        }
+        // 后台自动 PiP
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
+            if useKSPlayer {
+                if PlayerSettingModel().enableAutoPiPOnBackground {
+                    #if canImport(KSPlayer)
+                    if let playerLayer = playerCoordinator.playerLayer as? KSComplexPlayerLayer,
+                       !playerLayer.isPictureInPictureActive {
+                        playerLayer.pipStart()
+                    }
+                    #endif
+                }
+            } else {
+                vlcPlaybackController.enterBackground()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            if useKSPlayer {
+                #if canImport(KSPlayer)
+                if let playerLayer = playerCoordinator.playerLayer as? KSComplexPlayerLayer,
+                   playerLayer.isPictureInPictureActive {
+                    playerLayer.pipStop(restoreUserInterface: true)
+                }
+                #endif
+            } else {
+                vlcPlaybackController.becomeActive()
+            }
+        }
+    }
+
+    // MARK: - Player Surface
+
+    @ViewBuilder
+    private var playerSurface: some View {
+        if useKSPlayer {
+            #if canImport(KSPlayer)
+            KSCorePlayerView(
+                config: playerCoordinator,
+                url: url,
+                options: playerModel.options,
+                title: .constant(title),
+                subtitleDataSource: nil
+            )
+            #else
+            vlcPlayerSurface
+            #endif
+        } else {
+            vlcPlayerSurface
+        }
+    }
+
+    private var vlcPlayerSurface: some View {
+        VLCVideoPlayerView(
+            url: url,
+            options: playerModel.options,
+            controller: vlcPlaybackController
+        ) { state in
+            vlcState = state
+            switch state {
+            case .playing:
+                isPlaying = true
+                hasVLCStartedPlayback = true
+            case .paused, .stopped, .error:
+                isPlaying = false
+            case .buffering:
+                break
+            }
+        }
+        .onAppear {
+            vlcPlaybackController.activateSession()
+        }
+        .onDisappear {
+            vlcPlaybackController.deactivateSession()
+            vlcPlaybackController.stop()
+            hasVLCStartedPlayback = false
+            vlcState = .stopped
+        }
+    }
+
+    private var shouldShowBuffering: Bool {
+        if useKSPlayer {
+            return playerCoordinator.state == .buffering
+        }
+        return vlcState.isBuffering && !hasVLCStartedPlayback
+    }
+
+    // MARK: - Control Bridge
+
+    private var controlBridge: PlayerControlBridge {
+        if useKSPlayer {
+            return PlayerControlBridge(
+                isPlaying: isPlaying || playerCoordinator.state.isPlaying,
+                isBuffering: playerCoordinator.state == .buffering,
+                supportsPictureInPicture: playerCoordinator.playerLayer is KSComplexPlayerLayer,
+                togglePlayPause: {
+                    if isPlaying || playerCoordinator.state.isPlaying {
+                        playerCoordinator.playerLayer?.pause()
+                    } else {
+                        playerCoordinator.playerLayer?.play()
+                    }
+                },
+                refreshPlayback: {
+                    refreshPlayback()
+                },
+                togglePictureInPicture: {
+                    #if canImport(KSPlayer)
+                    if let playerLayer = playerCoordinator.playerLayer as? KSComplexPlayerLayer {
+                        if playerLayer.isPictureInPictureActive {
+                            playerLayer.pipStop(restoreUserInterface: true)
+                        } else {
+                            playerLayer.pipStart()
+                        }
+                    }
+                    #endif
+                },
+                isMaskShow: $isMaskShow,
+                isLocked: $isLocked
+            )
+        }
+
+        return PlayerControlBridge(
+            isPlaying: isPlaying,
+            isBuffering: vlcState.isBuffering,
+            supportsPictureInPicture: vlcPlaybackController.isPictureInPictureSupported,
+            togglePlayPause: {
+                vlcPlaybackController.togglePlayPause()
+            },
+            refreshPlayback: {
+                refreshPlayback()
+            },
+            togglePictureInPicture: {
+                vlcPlaybackController.togglePictureInPicture()
+            },
+            isMaskShow: $isMaskShow,
+            isLocked: $isLocked
+        )
+    }
+
+    // MARK: - Actions
+
+    private func refreshPlayback() {
+        // 重新设置 URL 触发播放器重载
+        if useKSPlayer {
+            playerModel.url = url
+        } else {
+            // VLC: 停止后重新激活
+            vlcPlaybackController.stop()
+            hasVLCStartedPlayback = false
+            vlcState = .buffering
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                vlcPlaybackController.activateSession()
+            }
+        }
+    }
+}

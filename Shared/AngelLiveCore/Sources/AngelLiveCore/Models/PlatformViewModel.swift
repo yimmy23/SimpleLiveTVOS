@@ -12,16 +12,31 @@ import LiveParse
 
 @Observable
 public final class PlatformViewModel {
-    public var platformInfo: [Platformdescription] = {
-        var temp = [Platformdescription]()
-        for index in LiveParseTools.getAllSupportPlatform().indices {
-            let item = LiveParseTools.getAllSupportPlatform()[index]
-            temp.append(.init(title: item.livePlatformName, bigPic: "\(item.livePlatformName)-big", smallPic: "\(item.livePlatformName)-small", descripiton: item.description, liveType: item.liveType))
-        }
-        return temp
-    }()
+    public var platformInfo: [Platformdescription] = []
 
     public init() {}
+
+    /// 根据已安装插件 ID 刷新平台列表
+    public func refreshPlatforms(installedPluginIds: [String]) {
+        let allPlatforms = LiveParseTools.getAllSupportPlatform()
+
+        // 将 pluginId 转为 LiveType 集合用于过滤
+        let installedLiveTypes = Set(
+            installedPluginIds.compactMap { LiveParseJSPlatform(rawValue: $0)?.liveType }
+        )
+
+        platformInfo = allPlatforms
+            .filter { installedLiveTypes.contains($0.liveType) }
+            .map { item in
+                Platformdescription(
+                    title: item.livePlatformName,
+                    bigPic: "\(item.livePlatformName)-big",
+                    smallPic: "\(item.livePlatformName)-small",
+                    descripiton: item.description,
+                    liveType: item.liveType
+                )
+            }
+    }
 }
 
 

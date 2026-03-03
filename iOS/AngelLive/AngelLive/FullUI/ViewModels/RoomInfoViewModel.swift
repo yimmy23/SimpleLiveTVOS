@@ -8,22 +8,8 @@
 import Foundation
 import SwiftUI
 import Observation
-import CoreMedia
 import AngelLiveCore
 import AngelLiveDependencies
-
-public class PlayerOptions: KSOptions, @unchecked Sendable {
-    public var syncSystemRate: Bool = false
-
-    nonisolated override public init() {
-        super.init()
-    }
-
-    override public func updateVideo(refreshRate: Float, isDovi: Bool, formatDescription: CMFormatDescription) {
-        guard syncSystemRate else { return }
-        super.updateVideo(refreshRate: refreshRate, isDovi: isDovi, formatDescription: formatDescription)
-    }
-}
 
 /// 播放器显示状态
 enum PlayerDisplayState {

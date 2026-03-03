@@ -8,14 +8,6 @@
 
 [常见问题](./docs/FAQ.md) | [Telegram](https://t.me/angelliveapp) | [提交issue](https://github.com/pcccccc/AngelLive/issues/new/choose)
 
-## 截图：
-
-  <img src="./ScreenShot/iOS.png" alt="iOS" width="150" />
-
-  <img src="./ScreenShot/macOS.png" alt="macOS" width="500" />
-
-  <img src="./ScreenShot/tvOS.png" alt="tvOS" width="600" />
-
 ## 背景：
 
 遇到一个非常好的项目:  [dart_simple_live](https://github.com/xiaoyaocz/dart_simple_live/) 基于项目，进行了适配。
@@ -28,12 +20,12 @@ iOS 17+
 
 macOS 15+
 
-tvOS 17+ 
+tvOS 17+
 
 
 ## 开发环境配置：
 
-> ⚠️ **重要提示**：本项目依赖 [KSPlayer](https://github.com/kingslay/KSPlayer) 的 LGPL 版本。如没有 LGPL 仓库权限，请联系 KSPlayer 作者获取权限，或使用 GPL 版本并修改部分代码。
+> ⚠️ **重要提示**：本项目默认使用 [KSPlayer](https://github.com/TracyPlayer/KSPlayer) LGPL分支 播放器内核。可通过环境变量 `USE_VLC=1` 切换为 VLCKit 内核（两者互斥，不能同时引入，否则内嵌的 FFmpeg 符号会冲突）。
 
 1. **克隆项目**：
    ```bash
@@ -50,32 +42,7 @@ tvOS 17+
 4. **运行项目**：
    选择模拟器或真机设备运行
 
-## 各平台功能概览：
-
-|  平台   | 分类列表 | 房间列表 | 地址解析 | 搜索 | 分享码/链接 | 观看弹幕（评论） |
-| :-----: | :------: | :------: | :------: | :--: | :---------: | :--------------: |
-| B站直播 |    ✅     |    ✅     |    ✅     |  ✅   |      ✅      |        ✅         |
-|  斗鱼   |    ✅     |    ✅     |    ✅     |  ✅   |      ✅      |        ✅         |
-|  虎牙   |    ✅     |    ✅     |    ✅     |  ✅   |      ✅      |        ✅         |
-|  抖音   |    ✅     |    ✅     |    ✅     |  ✅   |      ✅      |        ✅         |
-|  快手   |    ✅     |    ✅     |    ✅     |  ❌   |      ✅      |        ❌         |
-|   YY    |    ✅     |    ✅     |    ✅     |  ✅   |      ✅      |        ❌         |
-| 网易CC  |    ✅     |    ✅     |    ✅     |  ✅   |      ✅      |        ❌         |
-| Youtube |    ❌     |    ❌     |    ✅     |  ❌   |      ✅      |        ❌         |
-
-
-
 ## 感谢开源项目：
-
-##解析参考：
-
-[dart_simple_live](https://github.com/xiaoyaocz/dart_simple_live/) `原项目`  [AllLive](https://github.com/xiaoyaocz/AllLive) `原作者开发的C#版本`
-
-[iceking2nd/real-url](https://github.com/iceking2nd/real-url) `虎牙解析参考`
-
-[DouyinLiveRecorder](https://github.com/ihmily/DouyinLiveRecorder)
-
-[wbt5/real-url](https://github.com/wbt5/real-url)
 
 ##引用开源项目：
 
@@ -89,7 +56,7 @@ tvOS 17+
 
 [Kingfisher](https://github.com/onevcat/Kingfisher)
 
-[KSPlayer](https://github.com/kingslay/KSPlayer) `FLV源播放` (目前使用LGPL版本，fork代码请联系作者授权或退回GPL版本)
+[KSPlayer](https://github.com/TracyPlayer/KSPlayer) `FLV源播放`
 
 [FFMPEG](https://github.com/FFmpeg/FFmpeg)
 
@@ -102,8 +69,6 @@ tvOS 17+
 [SWCompression](https://github.com/tsolomko/SWCompression)
 
 [AcknowList](https://github.com/vtourraine/AcknowList)
-
-[YouTubeKit](https://github.com/alexeichhorn/YouTubeKit)
 
 [swiftui-toasts](https://github.com/sunghyun-k/swiftui-toasts)
 

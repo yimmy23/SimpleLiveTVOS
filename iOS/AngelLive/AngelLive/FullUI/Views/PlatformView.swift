@@ -42,7 +42,7 @@ struct PlatformView: View {
                         .padding(.bottom, gridSpacing)
                 }
                 .scrollBounceBehavior(.basedOnSize) // iOS 26: 智能弹性滚动
-                .navigationTitle("平台")
+                .navigationTitle("配置")
                 .navigationBarTitleDisplayMode(.large)
             }
             .navigationDestination(for: Platformdescription.self) { platform in
@@ -114,6 +114,7 @@ private struct GridMetrics {
 // MARK: - Platform Card Component
 struct PlatformCard: View {
     let platform: Platformdescription
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         ZStack {
@@ -124,7 +125,10 @@ struct PlatformCard: View {
                 .clipped()
 
             VStack(spacing: AppConstants.Spacing.md) {
-                if let image = UIImage(named: platform.bigPic) {
+                if let image = PlatformIconProvider.configCardImage(
+                    for: platform.liveType,
+                    isDarkMode: colorScheme == .dark
+                ) {
                     Image(uiImage: image)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
