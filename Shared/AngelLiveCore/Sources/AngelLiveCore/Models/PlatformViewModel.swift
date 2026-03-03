@@ -18,18 +18,20 @@ public final class PlatformViewModel {
 
     /// 根据已安装插件 ID 刷新平台列表
     public func refreshPlatforms(installedPluginIds: [String]) {
-        let pluginMap = SandboxPluginCatalog.installedPluginMap()
+        let platformBaseByType = Dictionary(
+            uniqueKeysWithValues: LiveParseTools.getAllSupportPlatform().map { ($0.liveType, $0) }
+        )
         let installedPlatforms = SandboxPluginCatalog.availablePlatforms(installedPluginIds: installedPluginIds)
 
         platformInfo = installedPlatforms.map { platform in
-            let manifestName = pluginMap[platform.pluginId]?.displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
-            let title = (manifestName?.isEmpty == false) ? manifestName! : platform.pluginId
-            let description = "由沙盒插件提供"
+            let fallbackTitle = LiveParseTools.getLivePlatformName(platform.liveType)
+            let title = platformBaseByType[platform.liveType]?.livePlatformName ?? fallbackTitle
+            let description = platformBaseByType[platform.liveType]?.description ?? "由沙盒插件提供"
 
             return Platformdescription(
                 title: title,
-                bigPic: "\(platform.pluginId)-big",
-                smallPic: "\(platform.pluginId)-small",
+                bigPic: "\(title)-big",
+                smallPic: "\(title)-small",
                 descripiton: description,
                 liveType: platform.liveType
             )

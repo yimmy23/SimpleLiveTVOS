@@ -59,10 +59,12 @@ struct ContentView: View {
                         }
 
                         TabSection("平台") {
-                            Tab(value: TabSelection.allPlatforms) {
-                                MacShellConfigView()
-                            } label: {
-                                Label("配置", systemImage: "square.grid.2x2.fill")
+                            if !pluginAvailability.hasAvailablePlugins {
+                                Tab(value: TabSelection.allPlatforms) {
+                                    MacShellConfigView()
+                                } label: {
+                                    Label("配置", systemImage: "square.grid.2x2.fill")
+                                }
                             }
 
                             if pluginAvailability.hasAvailablePlugins {
@@ -133,6 +135,9 @@ struct ContentView: View {
                 } else if selectedTab == .search {
                     selectedTab = .favorite
                 }
+            } else if selectedTab == .allPlatforms,
+                      let firstPlatform = platformViewModel.platformInfo.first {
+                selectedTab = .platform(firstPlatform)
             }
         }
         .overlay(alignment: .top) {

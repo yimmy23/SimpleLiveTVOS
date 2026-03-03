@@ -56,6 +56,32 @@ struct SettingView: View {
                 }
             }
 
+            if pluginAvailability.hasAvailablePlugins {
+                Section("插件管理") {
+                    NavigationLink {
+                        MacShellConfigView()
+                    } label: {
+                        HStack {
+                            Image(systemName: "puzzlepiece.extension.fill")
+                                .foregroundStyle(Color.orange.gradient)
+                                .frame(width: 24, height: 24)
+
+                            Text("插件管理")
+
+                            Spacer()
+
+                            Text("管理订阅与安装")
+                                .foregroundStyle(AppConstants.Colors.secondaryText)
+
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(AppConstants.Colors.secondaryText)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
             Section("弹幕设置") {
                 Toggle("显示弹幕", isOn: $danmuModel.showDanmu)
 
