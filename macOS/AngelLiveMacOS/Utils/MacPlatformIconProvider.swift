@@ -13,10 +13,30 @@ enum MacPlatformIconProvider {
     private static let tabIconPrefix = "assets/mini_live_card_"
 
     static func tabImage(for liveType: LiveType) -> NSImage? {
-        guard let platform = SandboxPluginCatalog.platform(for: liveType) else {
-            return nil
+        // 直接按沙盒已安装插件目录匹配 liveType -> pluginId，避免依赖内置资源映射。
+        if let pluginId = resolveInstalledPluginId(for: liveType),
+           let image = loadInstalledIcon(pluginId: pluginId, fileName: tabIconPrefix + pluginId) {
+            return image
         }
-        return loadInstalledIcon(pluginId: platform.pluginId, fileName: tabIconPrefix + platform.pluginId)
+
+        // 兜底：保持与现有平台映射行为一致。
+        if let platform = SandboxPluginCatalog.platform(for: liveType) {
+            return loadInstalledIcon(pluginId: platform.pluginId, fileName: tabIconPrefix + platform.pluginId)
+        }
+
+        return nil
+    }
+
+    private static func resolveInstalledPluginId(for liveType: LiveType) -> String? {
+        let rawValue = liveType.rawValue
+
+        for (pluginId, metadata) in SandboxPluginCatalog.installedPluginMap() {
+            if metadata.liveTypes.contains(rawValue) || metadata.liveTypes.isEmpty && pluginId == rawValue {
+                return pluginId
+            }
+        }
+
+        return nil
     }
 
     private static func loadInstalledIcon(pluginId: String, fileName: String) -> NSImage? {
