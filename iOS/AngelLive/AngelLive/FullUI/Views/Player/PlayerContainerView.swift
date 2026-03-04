@@ -165,6 +165,24 @@ struct PlayerContentView: View {
             switch state {
             case .readyToPlay:
                 viewModel.isPlaying = true
+                // readyToPlay 是读取真实 naturalSize 的最可靠时机
+                if !hasDetectedSize,
+                   let naturalSize = playerCoordinator.playerLayer?.player.naturalSize,
+                   naturalSize.width > 1.0, naturalSize.height > 1.0 {
+                    let ratio = naturalSize.width / naturalSize.height
+                    let isPortrait = ratio < 1.0
+                    let isVerticalLive = isPortrait && naturalSize.height >= 960
+                    print("📺 [readyToPlay] 视频尺寸: \(naturalSize.width) x \(naturalSize.height)")
+                    print("📐 [readyToPlay] 视频比例: \(ratio)")
+                    print("📱 [readyToPlay] 视频方向: \(isPortrait ? "竖屏" : "横屏")")
+                    applyVideoFillMode(isVerticalLive: isVerticalLive)
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        videoAspectRatio = ratio
+                        isVideoPortrait = isPortrait
+                        isVerticalLiveMode = isVerticalLive
+                        hasDetectedSize = true
+                    }
+                }
             case .paused, .playedToTheEnd, .error:
                 viewModel.isPlaying = false
             case .initialized, .buffering:
@@ -281,14 +299,20 @@ struct PlayerContentView: View {
                         print("🔍 开始检测视频尺寸... URL: \(playURL.absoluteString)")
 
                         while !Task.isCancelled && retryCount < maxRetries {
+                            // 已被 readyToPlay 回调提前设置，直接退出
+                            if hasDetectedSize { break }
+
                             if let naturalSize = playerCoordinator.playerLayer?.player.naturalSize,
                                naturalSize.width > 0, naturalSize.height > 0 {
 
+                                // 必须等到 readyToPlay 或之后状态才信任 naturalSize，
+                                // 否则可能拿到视图初始渲染尺寸（如屏幕尺寸 430x932）
+                                let isReady = playerCoordinator.state == .readyToPlay || playerCoordinator.state.isPlaying
                                 // 检查是否为有效尺寸（排除 1.0 x 1.0 等占位符）
                                 let isValidSize = naturalSize.width > 1.0 && naturalSize.height > 1.0
 
-                                if !isValidSize {
-                                    print("⚠️ 检测到无效视频尺寸: \(naturalSize.width) x \(naturalSize.height)，继续等待... (\(retryCount)/\(maxRetries))")
+                                if !isValidSize || !isReady {
+                                    print("⚠️ 视频尺寸未就绪: \(naturalSize.width) x \(naturalSize.height), state=\(playerCoordinator.state)，继续等待... (\(retryCount)/\(maxRetries))")
                                 } else if !hasDetectedSize {
                                     let ratio = naturalSize.width / naturalSize.height
                                     let isPortrait = ratio < 1.0

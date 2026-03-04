@@ -79,8 +79,6 @@ final class RoomInfoViewModel {
         KSOptions.isAutoPlay = true
         // 关闭双路自动重开，避免在弱网/失败时频繁重连导致 stop 循环
         KSOptions.isSecondOpen = false
-        KSOptions.firstPlayerType = KSMEPlayer.self
-        KSOptions.secondPlayerType = KSMEPlayer.self
         // 根据用户设置启用后台播放
         KSOptions.canBackgroundPlay = PlayerSettingModel().enableBackgroundAudio
         let option = PlayerOptions()
@@ -210,20 +208,14 @@ final class RoomInfoViewModel {
     // 切换清晰度
     @MainActor
     func changePlayUrl(cdnIndex: Int, urlIndex: Int) {
-        guard let playArgs = currentRoomPlayArgs, !playArgs.isEmpty else {
+        guard let playArgs = currentRoomPlayArgs, !playArgs.isEmpty,
+              cdnIndex < playArgs.count else {
             isLoading = false
             return
         }
 
-        guard cdnIndex < playArgs.count else {
-            return
-        }
-
         let currentCdn = playArgs[cdnIndex]
-        
-        guard urlIndex < currentCdn.qualitys.count else {
-            return
-        }
+        guard urlIndex < currentCdn.qualitys.count else { return }
 
         let currentQuality = currentCdn.qualitys[urlIndex]
         currentPlayQualityString = currentQuality.title
@@ -232,174 +224,133 @@ final class RoomInfoViewModel {
 
         applyPlaybackRequestOptions(for: currentQuality)
 
-        // B站/抖音优先使用 HLS（首次加载时）
-        if (currentRoom.liveType == .bilibili || currentRoom.liveType == .douyin) && cdnIndex == 0 && urlIndex == 0 {
+        // 1. 决定播放器类型
+        let resolved = resolvePlayerTypes(quality: currentQuality, cdnIndex: cdnIndex, urlIndex: urlIndex)
+        playerOption.playerTypes = resolved.playerTypes
+        isHLSStream = resolved.isHLS
+
+        // 如果已经通过 HLS 查找确定了播放地址，直接返回
+        if let resolvedURL = resolved.overrideURL {
+            currentPlayURL = resolvedURL
+            currentPlayQualityString = resolved.overrideTitle ?? currentPlayQualityString
+            isLoading = false
+            return
+        }
+
+        // 2. 设置播放地址（部分平台需要异步重新请求）
+        applyPlayURL(quality: currentQuality, cdn: currentCdn, cdnIndex: cdnIndex, urlIndex: urlIndex)
+    }
+
+    // MARK: - 播放器类型决策
+
+    private struct PlayerTypeResult {
+        let playerTypes: [MediaPlayerProtocol.Type]
+        let isHLS: Bool
+        /// 某些分支会直接确定播放地址（如 B站/抖音 HLS 查找）
+        var overrideURL: URL?
+        var overrideTitle: String?
+    }
+
+    private func resolvePlayerTypes(quality: LiveQualityDetail, cdnIndex: Int, urlIndex: Int) -> PlayerTypeResult {
+        let platform = currentRoom.liveType
+
+        // B站/抖音：首次加载优先找 HLS
+        if (platform == .bilibili || platform == .douyin) && cdnIndex == 0 && urlIndex == 0 {
             if let hlsQuality = findHLSQuality(), let url = URL(string: hlsQuality.url) {
-                KSOptions.firstPlayerType = KSAVPlayer.self
-                KSOptions.secondPlayerType = KSMEPlayer.self
-                self.currentPlayURL = url
-                self.currentPlayQualityString = hlsQuality.title
-                self.isLoading = false
-                self.isHLSStream = true
-                return
-            } else if currentRoom.liveType == .douyin {
-                // 抖音没有 HLS 时使用第一个可用流
-                KSOptions.firstPlayerType = KSMEPlayer.self
-                KSOptions.secondPlayerType = KSMEPlayer.self
-                if let firstQuality = findFirstQuality(), let url = URL(string: firstQuality.url) {
-                    self.currentPlayURL = url
-                    self.currentPlayQualityString = firstQuality.title
-                    self.isLoading = false
-                    self.isHLSStream = false
-                    return
-                }
-            } else {
-                // B站没有 HLS 时继续走下面的逻辑
-                KSOptions.firstPlayerType = KSMEPlayer.self
-                KSOptions.secondPlayerType = KSMEPlayer.self
-                self.isHLSStream = false
+                return PlayerTypeResult(playerTypes: [KSAVPlayer.self, KSMEPlayer.self], isHLS: true, overrideURL: url, overrideTitle: hlsQuality.title)
             }
-        }
-        // 其他平台
-        else {
-            if currentQuality.liveCodeType == .hls && currentRoom.liveType == .huya && LiveState(rawValue: currentRoom.liveState ?? "unknow") == .video {
-                KSOptions.firstPlayerType = KSMEPlayer.self
-                KSOptions.secondPlayerType = KSMEPlayer.self
-                isHLSStream = false
-            } else if currentQuality.liveCodeType == .hls && currentRoom.liveType != .youtube {
-                KSOptions.firstPlayerType = KSAVPlayer.self
-                KSOptions.secondPlayerType = KSMEPlayer.self
-                isHLSStream = true
-            } else {
-                KSOptions.firstPlayerType = KSMEPlayer.self
-                KSOptions.secondPlayerType = KSMEPlayer.self
-                isHLSStream = false
+            if platform == .douyin, let firstQuality = findFirstQuality(), let url = URL(string: firstQuality.url) {
+                return PlayerTypeResult(playerTypes: [KSMEPlayer.self], isHLS: false, overrideURL: url, overrideTitle: firstQuality.title)
             }
+            return PlayerTypeResult(playerTypes: [KSMEPlayer.self], isHLS: false)
         }
 
-        // 快手特殊处理
-        if currentRoom.liveType == .ks {
-            KSOptions.firstPlayerType = KSMEPlayer.self
-            KSOptions.secondPlayerType = KSMEPlayer.self
-            isHLSStream = false
+        // 快手：强制 MEPlayer
+        if platform == .ks {
+            return PlayerTypeResult(playerTypes: [KSMEPlayer.self], isHLS: false)
         }
 
-        // 斗鱼特殊处理
-        if currentRoom.liveType == .douyu && douyuFirstLoad == false {
-            // 取消之前的请求，避免快速切换时产生多个并发请求
-            qualitySwitchTask?.cancel()
-            
-            isLoading = true
-            qualitySwitchTask = Task { [weak self] in
-                guard let self = self else { return }
-                do {
-                    // 安全访问数组
-                    guard let playArgs = await MainActor.run(body: { self.currentRoomPlayArgs }),
-                          cdnIndex < playArgs.count else {
-                        await MainActor.run { self.isLoading = false }
-                        return
-                    }
-                    let cdn = playArgs[cdnIndex]
-                    guard urlIndex < cdn.qualitys.count else {
-                        await MainActor.run { self.isLoading = false }
-                        return
-                    }
-                    let quality = cdn.qualitys[urlIndex]
-                    
-                    // 检查是否已取消
-                    try Task.checkCancellation()
-                    
-                    let newPlayArgs = try await LiveParseJSPlatformManager.getPlayArgs(platform: .douyu, roomId: currentRoom.roomId, userId: nil, context: ["rate": quality.qn, "cdn": cdn.douyuCdnName ?? ""])
-                    
-                    // 再次检查是否已取消
-                    try Task.checkCancellation()
-                    
-                    await MainActor.run {
-                        if let newQuality = newPlayArgs.first?.qualitys.first,
-                           let url = URL(string: newQuality.url) {
-                            self.currentPlayURL = url
-                        }
-                        self.isLoading = false
-                    }
-                } catch is CancellationError {
-                    // 任务被取消，不做处理
-                } catch {
-                    await MainActor.run {
-                        self.isLoading = false
-                    }
-                }
+        // 虎牙录像 HLS：用 MEPlayer
+        if quality.liveCodeType == .hls && platform == .huya && LiveState(rawValue: currentRoom.liveState ?? "unknow") == .video {
+            return PlayerTypeResult(playerTypes: [KSMEPlayer.self], isHLS: false)
+        }
+
+        // 通用 HLS（非 YouTube）：用 AVPlayer
+        if quality.liveCodeType == .hls && platform != .youtube {
+            return PlayerTypeResult(playerTypes: [KSAVPlayer.self, KSMEPlayer.self], isHLS: true)
+        }
+
+        // 默认：MEPlayer
+        return PlayerTypeResult(playerTypes: [KSMEPlayer.self], isHLS: false)
+    }
+
+    // MARK: - 播放地址设置
+
+    private func applyPlayURL(quality: LiveQualityDetail, cdn: LiveQualityModel, cdnIndex: Int, urlIndex: Int) {
+        let platform = currentRoom.liveType
+
+        // 斗鱼/YY 切换清晰度时需要重新请求播放地址
+        if platform == .douyu && !douyuFirstLoad {
+            let context: [String: Any] = ["rate": quality.qn, "cdn": cdn.douyuCdnName ?? ""]
+            fetchPlayURL(platform: .douyu, context: context) { newPlayArgs in
+                newPlayArgs.first?.qualitys.first.flatMap { URL(string: $0.url) }
             }
-        } else {
+            return
+        } else if platform == .douyu {
             douyuFirstLoad = false
-            if let url = URL(string: currentQuality.url) {
-                self.currentPlayURL = url
-            }
         }
 
-        // YY 特殊处理
-        if currentRoom.liveType == .yy && yyFirstLoad == false {
-            // 取消之前的请求
-            qualitySwitchTask?.cancel()
-            
-            isLoading = true
-            qualitySwitchTask = Task { [weak self] in
-                guard let self = self else { return }
-                do {
-                    // 安全访问数组
-                    guard let playArgs = await MainActor.run(body: { self.currentRoomPlayArgs }),
-                          cdnIndex < playArgs.count else {
-                        await MainActor.run { self.isLoading = false }
-                        return
-                    }
-                    let cdn = playArgs[cdnIndex]
-                    guard urlIndex < cdn.qualitys.count else {
-                        await MainActor.run { self.isLoading = false }
-                        return
-                    }
-                    let quality = cdn.qualitys[urlIndex]
-                    
-                    // 检查是否已取消
-                    try Task.checkCancellation()
-                    
-                    let newPlayArgs = try await LiveParseJSPlatformManager.getPlayArgs(
-                        platform: .yy,
-                        roomId: currentRoom.roomId,
-                        userId: nil,
-                        context: yyPlaybackContext(cdn: cdn, quality: quality)
-                    )
-                    
-                    // 再次检查是否已取消
-                    try Task.checkCancellation()
-                    
-                    await MainActor.run {
-                        if let url = self.firstPlayableURL(from: newPlayArgs) {
-                            self.currentPlayURL = url
-                        }
-                        self.isLoading = false
-                    }
-                } catch is CancellationError {
-                    // 任务被取消，不做处理
-                } catch {
-                    await MainActor.run {
-                        self.isLoading = false
-                    }
-                }
+        if platform == .yy && !yyFirstLoad {
+            let context = yyPlaybackContext(cdn: cdn, quality: quality)
+            fetchPlayURL(platform: .yy, context: context) { [weak self] newPlayArgs in
+                guard let self else { return nil }
+                return firstPlayableURL(from: newPlayArgs)
             }
-        } else {
+            return
+        } else if platform == .yy {
             yyFirstLoad = false
-            if let url = URL(string: currentQuality.url) {
-                self.currentPlayURL = url
-            }
         }
 
-        // 只有非异步请求的平台才在这里设置 isLoading = false
-        // 斗鱼和YY平台会在各自的异步任务中管理 isLoading
-        if currentRoom.liveType != .douyu && currentRoom.liveType != .yy {
-            self.isLoading = false
-        } else if currentRoom.liveType == .douyu && douyuFirstLoad {
-            self.isLoading = false
-        } else if currentRoom.liveType == .yy && yyFirstLoad {
-            self.isLoading = false
+        // 通用：直接使用 URL
+        if let url = URL(string: quality.url) {
+            currentPlayURL = url
+        }
+        isLoading = false
+    }
+
+    /// 异步请求新的播放地址（斗鱼/YY 切换清晰度时使用）
+    private func fetchPlayURL(
+        platform: LiveType,
+        context: [String: Any],
+        extractURL: @escaping @Sendable ([LiveQualityModel]) -> URL?
+    ) {
+        guard let parsePlatform = SandboxPluginCatalog.platform(for: platform) else {
+            isLoading = false
+            return
+        }
+        qualitySwitchTask?.cancel()
+        isLoading = true
+
+        let roomId = currentRoom.roomId
+        qualitySwitchTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                try Task.checkCancellation()
+                let newPlayArgs = try await LiveParseJSPlatformManager.getPlayArgs(
+                    platform: parsePlatform, roomId: roomId, userId: nil, context: context
+                )
+                try Task.checkCancellation()
+                await MainActor.run {
+                    if let url = extractURL(newPlayArgs) {
+                        self.currentPlayURL = url
+                    }
+                    self.isLoading = false
+                }
+            } catch is CancellationError {
+                // 任务被取消，不做处理
+            } catch {
+                await MainActor.run { self.isLoading = false }
+            }
         }
     }
 
