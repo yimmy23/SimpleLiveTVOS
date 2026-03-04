@@ -14,7 +14,7 @@ extension Int: @retroactive Identifiable {
 
 struct SettingView: View {
 
-    @State var titles = ["账号管理", "通用设置", "弹幕设置", "数据同步", "历史记录", "开源许可", "关于"]
+    @State var titles = ["账号管理", "插件管理", "通用设置", "弹幕设置", "数据同步", "历史记录", "开源许可", "关于"]
     @State private var selectedIndex: Int? = nil
     @State private var fullScreenIndex: Int? = nil
     @StateObject var settingStore = SettingStore()
@@ -23,7 +23,7 @@ struct SettingView: View {
     @FocusState private var focusedIndex: Int?
 
     // 需要在右侧半屏显示的页面索引
-    private var halfScreenIndices: Set<Int> { [0, 1, 2] } // 账号管理、通用设置、弹幕设置
+    private var halfScreenIndices: Set<Int> { [0, 2, 3] } // 账号管理、通用设置、弹幕设置
 
     var body: some View {
         GeometryReader { geometry in
@@ -75,7 +75,7 @@ struct SettingView: View {
             if selectedIndex == 0 {
                 selectedIndex = nil
             }
-            if fullScreenIndex == 3 {
+            if fullScreenIndex == 1 || fullScreenIndex == 4 {
                 fullScreenIndex = nil
             }
         }
@@ -101,7 +101,7 @@ struct SettingView: View {
                                 Text(syncService.loginStatusDescription)
                                     .font(.system(size: 30))
                                     .foregroundStyle(.gray)
-                            } else if index == 3 {
+                            } else if index == 4 {
                                 Text(appViewModel.favoriteViewModel.cloudKitReady ? "iCloud就绪" : "iCloud状态异常")
                                     .font(.system(size: 30))
                                     .foregroundStyle(.gray)
@@ -121,8 +121,8 @@ struct SettingView: View {
         if appViewModel.pluginAvailability.hasAvailablePlugins {
             return true
         }
-        // 无插件时对齐 iOS：隐藏账号管理、数据同步
-        return index != 0 && index != 3
+        // 无插件时隐藏：账号管理(0)、插件管理(1)、数据同步(4)
+        return index != 0 && index != 1 && index != 4
     }
 
     // MARK: - 半屏内容视图（账号管理、通用设置、弹幕设置）
@@ -136,13 +136,13 @@ struct SettingView: View {
                 .onExitCommand {
                     selectedIndex = nil
                 }
-        case 1: // 通用设置
+        case 2: // 通用设置
             GeneralSettingView()
                 .environment(appViewModel)
                 .onExitCommand {
                     selectedIndex = nil
                 }
-        case 2: // 弹幕设置
+        case 3: // 弹幕设置
             DanmuSettingMainView()
                 .environment(appViewModel)
                 .onExitCommand {
@@ -153,11 +153,19 @@ struct SettingView: View {
         }
     }
 
-    // MARK: - 全屏内容视图（数据同步、历史记录、开源许可、关于）
+    // MARK: - 全屏内容视图（插件管理、数据同步、历史记录、开源许可、关于）
     @ViewBuilder
     private func fullScreenContentView(for index: Int) -> some View {
         switch index {
-        case 3: // 数据同步
+        case 1: // 插件管理
+            TVShellConfigView()
+                .environment(appViewModel)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(.ultraThinMaterial)
+                .onExitCommand {
+                    fullScreenIndex = nil
+                }
+        case 4: // 数据同步
             if appViewModel.favoriteViewModel.cloudKitReady {
                 SyncView()
                     .environment(appViewModel)
@@ -176,14 +184,14 @@ struct SettingView: View {
                     fullScreenIndex = nil
                 }
             }
-        case 4: // 历史记录
+        case 5: // 历史记录
             HistoryListView(appViewModel: appViewModel)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(.ultraThinMaterial)
                 .onExitCommand {
                     fullScreenIndex = nil
                 }
-        case 5: // 开源许可
+        case 6: // 开源许可
             NavigationStack {
                 OpenSourceListView()
             }
@@ -192,7 +200,7 @@ struct SettingView: View {
             .onExitCommand {
                 fullScreenIndex = nil
             }
-        case 6: // 关于
+        case 7: // 关于
             AboutUSView()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(.ultraThinMaterial)

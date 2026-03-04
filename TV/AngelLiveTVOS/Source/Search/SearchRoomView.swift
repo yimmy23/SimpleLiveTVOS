@@ -18,8 +18,10 @@ struct SearchRoomView: View {
         
         @Bindable var appModel = appViewModel
         @Bindable var liveModel = liveViewModel
-        
-        VStack {
+
+        HStack(alignment: .top, spacing: 0) {
+            // 左侧：搜索主体
+            VStack {
             Text("请输入要搜索的主播名或平台链接/分享口令/房间号")
             HStack {
                 Picker(selection: $appModel.searchViewModel.searchTypeIndex) {
@@ -94,7 +96,11 @@ struct SearchRoomView: View {
                     .safeAreaPadding(.top, 50)
                     }
                 }
-            }
+            } // 左侧 VStack 结束
+
+            // 右侧：扫码输入面板
+            searchQRPanel
+        } // HStack 结束
         .simpleToast(isPresented: $liveModel.showToast, options: liveModel.toastOptions) {
             VStack(alignment: .leading) {
                 Label("提示", systemImage: liveModel.toastTypeIsSuccess ? "checkmark.circle" : "xmark.circle")
@@ -109,5 +115,54 @@ struct SearchRoomView: View {
         .onPlayPauseCommand(perform: {
             liveViewModel.getRoomList(index: 1)
         })
+        .onChange(of: appViewModel.remoteInputService.lastEvent?.value) {
+            guard let event = appViewModel.remoteInputService.lastEvent,
+                  event.field == .search else { return }
+            appModel.searchViewModel.searchText = event.value
+        }
+    }
+
+    // MARK: - 搜索页远程输入二维码面板
+
+    private var searchQRPanel: some View {
+        let service = appViewModel.remoteInputService
+        let url = "http://\(service.localIPAddress):\(service.port)/search"
+        return VStack(spacing: 16) {
+            Spacer()
+            if service.isRunning && !service.localIPAddress.isEmpty {
+                Image(uiImage: Common.generateQRCode(from: url))
+                    .interpolation(.none)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 220, height: 220)
+                    .padding(20)
+                    .background(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .fill(.ultraThinMaterial)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                    .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                            )
+                    )
+                    .shadow(color: Color.black.opacity(0.35), radius: 20, x: 0, y: 14)
+                Text("扫码用手机输入")
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                Text(url)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 360)
+            } else {
+                ProgressView()
+                Text("正在启动远程输入...")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+        }
+        .frame(width: 320)
+        .padding(.trailing, 40)
     }
 }

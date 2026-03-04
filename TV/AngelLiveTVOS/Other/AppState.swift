@@ -18,11 +18,19 @@ class AppState {
     var pluginAvailability = PluginAvailabilityService()
     var pluginSourceManager = PluginSourceManager()
     var bookmarkService = StreamBookmarkService()
+    var shellHistoryService = ShellHistoryService()
+    var remoteInputService: RemoteInputService
     var danmuSettingsViewModel = DanmuSettingModel()
     var searchViewModel = SearchViewModel()
     var historyViewModel = HistoryModel()
     var playerSettingsViewModel = PlayerSettingModel()
     var generalSettingsViewModel = GeneralSettingModel()
+
+    init() {
+        let service = RemoteInputService()
+        service.start()
+        self.remoteInputService = service
+    }
 
     // MARK: - Deep Link
     var pendingDeepLinkRoom: LiveModel?
