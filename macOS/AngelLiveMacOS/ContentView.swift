@@ -75,8 +75,15 @@ struct ContentView: View {
                                         Label {
                                             Text(platform.title)
                                         } icon: {
-                                            Image(getImage(platform: platform))
-                                                .frame(width: 25, height: 25)
+                                            if let icon = MacPlatformIconProvider.tabImage(for: platform.liveType) {
+                                                Image(nsImage: icon)
+                                                    .resizable()
+                                                    .scaledToFit()
+                                                    .frame(width: 25, height: 25)
+                                            } else {
+                                                Image(systemName: "puzzlepiece.extension")
+                                                    .frame(width: 25, height: 25)
+                                            }
                                         }
                                     }
                                 }
@@ -147,21 +154,6 @@ struct ContentView: View {
             }
         }
         .animation(.spring(response: 0.5, dampingFraction: 0.7), value: toastManager.currentToast)
-    }
-    
-    func getImage(platform: Platformdescription) -> String {
-        let imageByType: [String: String] = [
-            LiveType.bilibili.rawValue: "mini_live_card_bili",
-            LiveType.douyu.rawValue: "mini_live_card_douyu",
-            LiveType.huya.rawValue: "mini_live_card_huya",
-            LiveType.douyin.rawValue: "mini_live_card_douyin",
-            LiveType.yy.rawValue: "mini_live_card_yy",
-            LiveType.cc.rawValue: "mini_live_card_cc",
-            LiveType.ks.rawValue: "mini_live_card_ks",
-            LiveType.soop.rawValue: "mini_live_card_soop",
-            LiveType.youtube.rawValue: "mini_live_card_yy"
-        ]
-        return imageByType[platform.liveType.rawValue] ?? "mini_live_card_yy"
     }
 }
 

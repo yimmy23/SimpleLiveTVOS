@@ -72,26 +72,15 @@ struct CategoryManagementView: View {
     }
 
     /// 平台默认图标
-    private var platformIcon: String {
-        let iconByType: [String: String] = [
-            LiveType.bilibili.rawValue: "mini_live_card_bili",
-            LiveType.douyu.rawValue: "mini_live_card_douyu",
-            LiveType.huya.rawValue: "mini_live_card_huya",
-            LiveType.douyin.rawValue: "mini_live_card_douyin",
-            LiveType.yy.rawValue: "mini_live_card_yy",
-            LiveType.cc.rawValue: "mini_live_card_cc",
-            LiveType.ks.rawValue: "mini_live_card_ks",
-            LiveType.soop.rawValue: "mini_live_card_soop",
-            LiveType.youtube.rawValue: "mini_live_card_yy"
-        ]
-        return iconByType[viewModel.platform.liveType.rawValue] ?? "mini_live_card_yy"
+    private var platformIcon: NSImage? {
+        MacPlatformIconProvider.tabImage(for: viewModel.platform.liveType)
     }
 }
 
 struct CategoryCard: View {
     let category: LiveCategoryModel
     let isSelected: Bool
-    let platformIcon: String
+    let platformIcon: NSImage?
 
     /// 分类图标 URL（如果有）
     private var categoryIconURL: URL? {
@@ -106,10 +95,15 @@ struct CategoryCard: View {
                     KFImage(iconURL)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                } else {
-                    Image(platformIcon)
+                } else if let platformIcon {
+                    Image(nsImage: platformIcon)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
+                } else {
+                    Image(systemName: "puzzlepiece.extension")
+                        .resizable()
+                        .scaledToFit()
+                        .foregroundStyle(.secondary)
                 }
             }
             .frame(width: 40, height: 40)
