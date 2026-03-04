@@ -8,6 +8,7 @@
 
 import SwiftUI
 import AngelLiveCore
+import LiveParse
 
 struct SettingView: View {
     @StateObject private var syncService = BilibiliCookieSyncService.shared
@@ -16,8 +17,13 @@ struct SettingView: View {
     @State private var danmuModel = DanmuSettingModel()
     @State private var showBilibiliLogin = false
     @State private var showOpenSourceList = false
+    @State private var showPluginManagement = false
     @State private var selectedCookiePlatform: MacOSPlatformAccountItem?
     @State private var platformLoginStatus: [PlatformSessionID: Bool] = [:]
+
+    private var bilibiliAccountIcon: NSImage? {
+        MacPlatformIconProvider.tabImage(for: .bilibili)
+    }
 
     var body: some View {
         Form {
@@ -30,9 +36,18 @@ struct SettingView: View {
                             selectedCookiePlatform = platform
                         } label: {
                             HStack {
-                                Image(systemName: platform.iconSystemName)
-                                    .foregroundStyle(platform.iconTint.gradient)
-                                    .frame(width: 24, height: 24)
+                                Group {
+                                    if let icon = accountIcon(for: platform) {
+                                        Image(nsImage: icon)
+                                            .resizable()
+                                            .scaledToFit()
+                                    } else {
+                                        Image(systemName: platform.iconSystemName)
+                                            .foregroundStyle(platform.iconTint.gradient)
+                                    }
+                                }
+                                .frame(width: 20, height: 20)
+                                .frame(width: 24, height: 24)
 
                                 Text(platform.title)
 
@@ -58,8 +73,8 @@ struct SettingView: View {
 
             if pluginAvailability.hasAvailablePlugins {
                 Section("插件管理") {
-                    NavigationLink {
-                        MacShellConfigView()
+                    Button {
+                        showPluginManagement = true
                     } label: {
                         HStack {
                             Image(systemName: "puzzlepiece.extension.fill")
@@ -186,6 +201,19 @@ struct SettingView: View {
         }) { platform in
             MacOSPlatformCookieWebLoginView(platform: platform)
         }
+        .sheet(isPresented: $showPluginManagement) {
+            NavigationStack {
+                MacPluginManagementView()
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("关闭") {
+                                showPluginManagement = false
+                            }
+                        }
+                    }
+            }
+            .frame(minWidth: 600, minHeight: 480)
+        }
         .sheet(isPresented: $showOpenSourceList) {
             NavigationStack {
                 OpenSourceListView()
@@ -208,11 +236,20 @@ struct SettingView: View {
             showBilibiliLogin = true
         } label: {
             HStack {
-                Image("bilibili")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 24, height: 24)
-                    .cornerRadius(4)
+                Group {
+                    if let bilibiliAccountIcon {
+                        Image(nsImage: bilibiliAccountIcon)
+                            .resizable()
+                            .scaledToFit()
+                    } else {
+                        Image("bilibili")
+                            .resizable()
+                            .scaledToFit()
+                    }
+                }
+                .frame(width: 20, height: 20)
+                .frame(width: 24, height: 24)
+                .cornerRadius(4)
 
                 Text("哔哩哔哩")
 
@@ -232,6 +269,17 @@ struct SettingView: View {
             }
         }
         .buttonStyle(.plain)
+    }
+
+    private func accountIcon(for platform: MacOSPlatformAccountItem) -> NSImage? {
+        switch platform {
+        case .douyin:
+            return MacPlatformIconProvider.tabImage(for: .douyin)
+        case .kuaishou:
+            return MacPlatformIconProvider.tabImage(for: .ks)
+        case .soop:
+            return MacPlatformIconProvider.tabImage(for: .soop)
+        }
     }
 
     private func refreshLoginStatus() async {

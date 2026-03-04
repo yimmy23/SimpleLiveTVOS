@@ -15,6 +15,16 @@ struct SettingView: View {
     @State private var cloudKitStateString = "检查中..."
     @Environment(PluginAvailabilityService.self) private var pluginAvailability
 
+    private var accountManagementIcon: UIImage? {
+        let preferredTypes: [LiveType] = [.bilibili, .douyin, .ks, .soop]
+        for type in preferredTypes {
+            if let image = PlatformIconProvider.tabImage(for: type) {
+                return image
+            }
+        }
+        return nil
+    }
+
     var body: some View {
         NavigationStack {
             List {
@@ -26,10 +36,19 @@ struct SettingView: View {
                                 .toolbar(.hidden, for: .tabBar)
                         } label: {
                             HStack {
-                                Image(systemName: "person.circle.fill")
-                                    .font(.title3)
-                                    .foregroundStyle(AppConstants.Colors.link.gradient)
-                                    .frame(width: 32)
+                                Group {
+                                    if let image = accountManagementIcon {
+                                        Image(uiImage: image)
+                                            .resizable()
+                                            .scaledToFit()
+                                    } else {
+                                        Image(systemName: "person.circle.fill")
+                                            .font(.title3)
+                                            .foregroundStyle(AppConstants.Colors.link.gradient)
+                                    }
+                                }
+                                .frame(width: 24, height: 24)
+                                .frame(width: 32)
 
                                 Text("平台账号登录")
 

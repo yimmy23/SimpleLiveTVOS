@@ -50,6 +50,8 @@ enum MacPlatformIconProvider {
                 .appendingPathExtension("png")
             if FileManager.default.fileExists(atPath: iconURL.path),
                let image = NSImage(contentsOf: iconURL) {
+                // 强制设定逻辑尺寸为 16pt，让 sidebar tab 以正确大小渲染
+                image.size = NSSize(width: 16, height: 16)
                 return image
             }
         }

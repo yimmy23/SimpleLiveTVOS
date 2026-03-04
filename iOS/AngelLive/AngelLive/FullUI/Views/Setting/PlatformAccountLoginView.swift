@@ -8,6 +8,7 @@
 import SwiftUI
 import WebKit
 import AngelLiveCore
+import LiveParse
 
 private enum PlatformAccountItem: String, CaseIterable, Identifiable {
     case bilibili
@@ -66,6 +67,19 @@ private enum PlatformAccountItem: String, CaseIterable, Identifiable {
             return .douyin
         case .kuaishou:
             return .kuaishou
+        case .soop:
+            return .soop
+        }
+    }
+
+    var liveType: LiveType {
+        switch self {
+        case .bilibili:
+            return .bilibili
+        case .douyin:
+            return .douyin
+        case .kuaishou:
+            return .ks
         case .soop:
             return .soop
         }
@@ -133,10 +147,19 @@ struct PlatformAccountLoginView: View {
                         selectedPlatform = platform
                     } label: {
                         HStack(spacing: 12) {
-                            Image(systemName: platform.iconSystemName)
-                                .font(.title3)
-                                .foregroundStyle(platform.iconTint.gradient)
-                                .frame(width: 32)
+                            Group {
+                                if let image = PlatformIconProvider.tabImage(for: platform.liveType) {
+                                    Image(uiImage: image)
+                                        .resizable()
+                                        .scaledToFit()
+                                } else {
+                                    Image(systemName: platform.iconSystemName)
+                                        .font(.title3)
+                                        .foregroundStyle(platform.iconTint.gradient)
+                                }
+                            }
+                            .frame(width: 24, height: 24)
+                            .frame(width: 32)
 
                             Text(platform.title)
                                 .font(.body)

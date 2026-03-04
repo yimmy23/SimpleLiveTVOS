@@ -77,12 +77,8 @@ struct ContentView: View {
                                         } icon: {
                                             if let icon = MacPlatformIconProvider.tabImage(for: platform.liveType) {
                                                 Image(nsImage: icon)
-                                                    .resizable()
-                                                    .scaledToFit()
-                                                    .frame(width: 25, height: 25)
                                             } else {
                                                 Image(systemName: "puzzlepiece.extension")
-                                                    .frame(width: 25, height: 25)
                                             }
                                         }
                                     }
