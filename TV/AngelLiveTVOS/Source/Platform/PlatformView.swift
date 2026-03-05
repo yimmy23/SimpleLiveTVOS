@@ -16,6 +16,7 @@ struct PlatformView: View {
     @State private var show = false
     @State private var showAddSheet = false
     @State private var selectedIndex = 0
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         Group {
@@ -64,17 +65,27 @@ struct PlatformView: View {
                                 Image("platform-bg")
                                     .resizable()
                                     .frame(width: 370, height: 222)
-                                Image(platformViewModel.platformInfo[index].bigPic)
-                                    .resizable()
-                                    .frame(width: 370, height: 222)
-                                    .animation(.easeInOut(duration: 0.25), value: focusIndex == index)
-                                    .blur(radius: focusIndex == index ? 10 : 0)
+                                if let bigImage = TVPlatformIconProvider.bigCardImage(
+                                    for: platformViewModel.platformInfo[index],
+                                    isDarkMode: colorScheme == .dark
+                                ) {
+                                    Image(uiImage: bigImage)
+                                        .resizable()
+                                        .frame(width: 370, height: 222)
+                                        .animation(.easeInOut(duration: 0.25), value: focusIndex == index)
+                                        .blur(radius: focusIndex == index ? 10 : 0)
+                                }
 
                                 if appViewModel.generalSettingsViewModel.generalDisableMaterialBackground {
                                     ZStack {
-                                        Image(platformViewModel.platformInfo[index].smallPic)
-                                            .resizable()
-                                            .frame(width: 370, height: 222)
+                                        if let smallImage = TVPlatformIconProvider.smallCardImage(
+                                            for: platformViewModel.platformInfo[index],
+                                            isDarkMode: colorScheme == .dark
+                                        ) {
+                                            Image(uiImage: smallImage)
+                                                .resizable()
+                                                .frame(width: 370, height: 222)
+                                        }
                                         Text(platformViewModel.platformInfo[index].descripiton)
                                             .font(.body)
                                             .multilineTextAlignment(.leading)
@@ -87,9 +98,14 @@ struct PlatformView: View {
                                     .animation(.easeInOut(duration: 0.25), value: focusIndex == index)
                                 } else {
                                     ZStack {
-                                        Image(platformViewModel.platformInfo[index].smallPic)
-                                            .resizable()
-                                            .frame(width: 370, height: 222)
+                                        if let smallImage = TVPlatformIconProvider.smallCardImage(
+                                            for: platformViewModel.platformInfo[index],
+                                            isDarkMode: colorScheme == .dark
+                                        ) {
+                                            Image(uiImage: smallImage)
+                                                .resizable()
+                                                .frame(width: 370, height: 222)
+                                        }
                                         Text(platformViewModel.platformInfo[index].descripiton)
                                             .font(.body)
                                             .multilineTextAlignment(.leading)

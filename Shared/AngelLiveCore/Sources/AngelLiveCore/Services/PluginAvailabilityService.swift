@@ -43,5 +43,7 @@ public final class PluginAvailabilityService {
         // 重新加载插件管理器
         try? LiveParsePlugins.shared.reload()
         await checkAvailability()
+        // 插件安装/更新后，立即把持久化会话同步进插件运行时。
+        await PlatformSessionLiveParseBridge.syncFromPersistedSessionsOnLaunch()
     }
 }

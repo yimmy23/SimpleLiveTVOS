@@ -194,7 +194,7 @@ struct SettingView: View {
 
                                 Spacer()
 
-                                Text("Bilibili Cookie")
+                                Text("多平台账号")
                                     .font(.caption)
                                     .foregroundStyle(AppConstants.Colors.secondaryText)
                             }
@@ -202,7 +202,7 @@ struct SettingView: View {
                     } header: {
                         Text("tvOS")
                     } footer: {
-                        Text("将 Bilibili Cookie 同步到 Apple TV，支持局域网自动发现或扫描二维码。")
+                        Text("将哔哩哔哩/抖音/快手/SOOP 登录信息同步到 Apple TV，支持局域网自动发现。")
                             .font(.caption)
                             .foregroundStyle(AppConstants.Colors.secondaryText)
                     }

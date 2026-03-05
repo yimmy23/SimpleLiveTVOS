@@ -8,6 +8,7 @@
 import Foundation
 import Observation
 import SwiftUI
+import UIKit
 import AngelLiveDependencies
 import AngelLiveCore
 
@@ -30,8 +31,9 @@ class PlatformViewModel {
 
             return Platformdescription(
                 title: title,
-                bigPic: "\(title)-big",
-                smallPic: "\(title)-small",
+                pluginId: platform.pluginId,
+                bigPic: "tv_\(platform.pluginId)_big",
+                smallPic: "tv_\(platform.pluginId)_small",
                 descripiton: description,
                 liveType: platform.liveType
             )
@@ -42,8 +44,82 @@ class PlatformViewModel {
 
 struct Platformdescription {
     let title: String
+    let pluginId: String
     let bigPic: String
     let smallPic: String
     let descripiton: String
     let liveType: LiveType
+}
+
+enum TVPlatformIconProvider {
+    private static let installedCardIconPrefix = "assets/tv_"
+    private static let imageCache = NSCache<NSString, UIImage>()
+
+    static func bigCardImage(for platform: Platformdescription, isDarkMode: Bool) -> UIImage? {
+        let primaryName = installedCardIconPrefix + platform.pluginId + (isDarkMode ? "_big_dark" : "_big")
+        let fallbackName = installedCardIconPrefix + platform.pluginId + (isDarkMode ? "_big" : "_big_dark")
+
+        if let image = loadInstalledIcon(
+            pluginId: platform.pluginId,
+            fileNames: [primaryName, fallbackName]
+        ) {
+            return image
+        }
+
+        return UIImage(named: platform.bigPic)
+    }
+
+    static func smallCardImage(for platform: Platformdescription, isDarkMode: Bool) -> UIImage? {
+        let primaryName = installedCardIconPrefix + platform.pluginId + (isDarkMode ? "_small_dark" : "_small")
+        let fallbackName = installedCardIconPrefix + platform.pluginId + (isDarkMode ? "_small" : "_small_dark")
+
+        if let image = loadInstalledIcon(
+            pluginId: platform.pluginId,
+            fileNames: [primaryName, fallbackName]
+        ) {
+            return image
+        }
+
+        return UIImage(named: platform.smallPic)
+    }
+
+    private static func loadInstalledIcon(pluginId: String, fileNames: [String]) -> UIImage? {
+        let storage = LiveParsePlugins.shared.storage
+        let versionDirs = storage.listInstalledVersions(pluginId: pluginId)
+            .sorted { semverCompare($0.lastPathComponent, $1.lastPathComponent) > 0 }
+
+        for versionDir in versionDirs {
+            for fileName in fileNames {
+                let cacheKey = "\(pluginId)::\(fileName)" as NSString
+                if let cached = imageCache.object(forKey: cacheKey) {
+                    return cached
+                }
+
+                let iconURL = versionDir
+                    .appendingPathComponent(fileName)
+                    .appendingPathExtension("png")
+
+                if FileManager.default.fileExists(atPath: iconURL.path),
+                   let image = UIImage(contentsOfFile: iconURL.path) {
+                    imageCache.setObject(image, forKey: cacheKey)
+                    return image
+                }
+            }
+        }
+
+        return nil
+    }
+
+    private static func semverCompare(_ lhs: String, _ rhs: String) -> Int {
+        func parts(_ text: String) -> [Int] {
+            text.split(separator: ".").map { Int($0) ?? 0 } + [0, 0, 0]
+        }
+
+        let left = parts(lhs)
+        let right = parts(rhs)
+        for index in 0..<3 where left[index] != right[index] {
+            return left[index] < right[index] ? -1 : 1
+        }
+        return 0
+    }
 }

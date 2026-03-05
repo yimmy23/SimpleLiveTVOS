@@ -13,6 +13,16 @@ public enum PlatformSessionID: String, Codable, Sendable, CaseIterable {
     case douyin
     case kuaishou
     case soop
+
+    /// LiveParse 插件 ID，可能与会话 ID 不同（例如 kuaishou -> ks）。
+    public var pluginId: String {
+        switch self {
+        case .kuaishou:
+            return "ks"
+        default:
+            return rawValue
+        }
+    }
 }
 
 public enum PlatformSessionState: String, Codable, Sendable {

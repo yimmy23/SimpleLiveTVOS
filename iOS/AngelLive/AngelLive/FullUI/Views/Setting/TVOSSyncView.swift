@@ -26,11 +26,11 @@ struct TVOSSyncView: View {
                             .foregroundStyle(syncService.isLoggedIn ? AppConstants.Colors.success.gradient : AppConstants.Colors.error.gradient)
 
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Bilibili Cookie")
+                            Text("多平台 Cookie")
                                 .font(.headline)
                                 .foregroundStyle(AppConstants.Colors.primaryText)
 
-                            Text(syncService.isLoggedIn ? "Cookie 已就绪，可以同步" : "请先登录 Bilibili")
+                            Text("将已登录的平台账号同步到 tvOS（哔哩哔哩 / 抖音 / 快手 / SOOP）")
                                 .font(.caption)
                                 .foregroundStyle(AppConstants.Colors.secondaryText)
                         }
@@ -66,11 +66,16 @@ struct TVOSSyncView: View {
                             .labelsHidden()
                     }
 
-                    if syncService.iCloudSyncEnabled && syncService.isLoggedIn {
+                    if syncService.iCloudSyncEnabled {
                         Button {
-                            syncService.syncToICloud()
-                            sendResult = "已同步到 iCloud"
-                            sendSuccess = true
+                            Task {
+                                syncService.syncToICloud()
+                                await syncService.syncAllPlatformsToICloud()
+                                await MainActor.run {
+                                    sendResult = "已同步到 iCloud（含多平台）"
+                                    sendSuccess = true
+                                }
+                            }
                         } label: {
                             HStack {
                                 Image(systemName: "arrow.triangle.2.circlepath")
@@ -148,7 +153,7 @@ struct TVOSSyncView: View {
                                     .background(Color.purple.opacity(0.1))
                                     .cornerRadius(AppConstants.CornerRadius.md)
                                 }
-                                .disabled(isSending || !syncService.isLoggedIn)
+                                .disabled(isSending)
                             }
                         }
                     } else if !isSearching {
@@ -247,10 +252,10 @@ struct TVOSSyncView: View {
         isSending = true
         sendResult = nil
 
-        let success = await syncService.sendCookieToDevice(device)
+        let success = await syncService.sendAllPlatformCookiesToDevice(device)
 
         if success {
-            sendResult = "已成功发送到 \(device.name)"
+            sendResult = "已成功发送多平台登录信息到 \(device.name)"
             sendSuccess = true
         } else {
             sendResult = "发送失败，请重试"

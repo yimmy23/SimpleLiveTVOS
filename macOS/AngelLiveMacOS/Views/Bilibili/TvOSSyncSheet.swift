@@ -105,7 +105,7 @@ struct TvOSSyncSheet: View {
                     Text("同步成功")
                         .font(.title2.bold())
                         .foregroundStyle(AppConstants.Colors.primaryText)
-                    Text("Cookie 已发送到 tvOS 设备")
+                    Text("多平台登录信息已发送到 tvOS 设备")
                         .font(.subheadline)
                         .foregroundStyle(AppConstants.Colors.secondaryText)
                 }
@@ -213,7 +213,7 @@ struct TvOSSyncSheet: View {
         isSending = true
 
         Task {
-            let success = await syncService.sendCookieToDevice(device)
+            let success = await syncService.sendAllPlatformCookiesToDevice(device)
 
             await MainActor.run {
                 isSending = false

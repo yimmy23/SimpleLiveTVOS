@@ -444,6 +444,7 @@ struct BilibiliLANSyncPageView: View {
     let onBack: () -> Void
 
     @State private var isSuccess = false
+    @State private var syncedPlatformSummary = ""
 
     var body: some View {
         ScrollView {
@@ -456,7 +457,7 @@ struct BilibiliLANSyncPageView: View {
                             .foregroundColor(.green)
                         Text("同步成功")
                             .font(.title2.bold())
-                        Text("Cookie 已保存")
+                        Text(syncedPlatformSummary.isEmpty ? "登录信息已保存" : syncedPlatformSummary)
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                         Button("完成") {
@@ -486,7 +487,7 @@ struct BilibiliLANSyncPageView: View {
                         .font(.headline)
 
                     StepRow(number: 1, text: "确保 Apple TV 和 iOS 在同一 Wi-Fi 网络")
-                    StepRow(number: 2, text: "在 iOS 端 Angel Live 中登录哔哩哔哩")
+                    StepRow(number: 2, text: "在 iOS/macOS 端 Angel Live 中登录平台账号")
                     StepRow(number: 3, text: "点击「同步到 tvOS」按钮")
                     StepRow(number: 4, text: "选择此 Apple TV 设备")
                 }
@@ -505,16 +506,33 @@ struct BilibiliLANSyncPageView: View {
         .onDisappear {
             syncService.stopBonjourListener()
         }
-        .onChange(of: syncService.isLoggedIn) { _, newValue in
-            if newValue && syncService.lastSyncedData?.source == .bonjour {
-                Task {
-                    try? await Task.sleep(nanoseconds: 100_000_000)
-                    await MainActor.run {
-                        isSuccess = true
-                    }
-                }
+        .onChange(of: syncService.lastBonjourSyncAt) { _, newValue in
+            guard newValue != nil else { return }
+            syncedPlatformSummary = platformSummary(syncService.lastBonjourSyncedPlatformIds)
+            isSuccess = true
+        }
+    }
+
+    private func platformSummary(_ platformIds: [String]) -> String {
+        guard !platformIds.isEmpty else { return "登录信息已保存" }
+
+        let names = platformIds.compactMap { platformId -> String? in
+            switch platformId {
+            case PlatformSessionID.bilibili.rawValue:
+                return "哔哩哔哩"
+            case PlatformSessionID.douyin.rawValue:
+                return "抖音"
+            case PlatformSessionID.kuaishou.rawValue:
+                return "快手"
+            case PlatformSessionID.soop.rawValue:
+                return "SOOP"
+            default:
+                return nil
             }
         }
+
+        guard !names.isEmpty else { return "登录信息已保存" }
+        return "已保存：\(names.joined(separator: "、"))"
     }
 }
 

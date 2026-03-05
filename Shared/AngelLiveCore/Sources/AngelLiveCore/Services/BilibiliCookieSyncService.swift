@@ -71,6 +71,8 @@ public final class BilibiliCookieSyncService: ObservableObject {
 
     @Published public var discoveredDevices: [DiscoveredDevice] = []
     @Published public var isBonjourListening = false
+    @Published public var lastBonjourSyncAt: Date?
+    @Published public var lastBonjourSyncedPlatformIds: [String] = []
 
     // MARK: - Private Properties
 
@@ -216,6 +218,9 @@ public final class BilibiliCookieSyncService: ObservableObject {
             // 如果启用了 iCloud 同步，同步到 iCloud
             if iCloudSyncEnabled && source != .iCloud {
                 syncToICloud(syncedData)
+                Task {
+                    await syncAllPlatformsToICloud()
+                }
             }
         }
     }
@@ -231,6 +236,7 @@ public final class BilibiliCookieSyncService: ObservableObject {
         mirrorSessionClear()
         if clearICloud {
             clearICloudCookie()
+            clearAllPlatformICloudSessions()
         }
     }
 
@@ -652,6 +658,15 @@ public final class BilibiliCookieSyncService: ObservableObject {
         print("[BilibiliCookieSyncService] 已清除 iCloud Cookie")
     }
 
+    private func clearAllPlatformICloudSessions() {
+        let platformIds: [PlatformSessionID] = [.bilibili, .douyin, .kuaishou, .soop]
+        for platformId in platformIds {
+            let key = "angellive_session_sync_\(platformId.rawValue)"
+            NSUbiquitousKeyValueStore.default.removeObject(forKey: key)
+        }
+        NSUbiquitousKeyValueStore.default.synchronize()
+    }
+
     private func getDeviceName() -> String {
         #if os(tvOS)
         return UIDevice.current.name
@@ -766,11 +781,19 @@ extension BilibiliCookieSyncService {
     /// 同步所有平台到 iCloud
     public func syncAllPlatformsToICloud() async {
         let sessions = await collectAllPlatformSessions()
-        for session in sessions {
-            guard let platformId = session.platformId else { continue }
-            let key = "angellive_session_sync_\(platformId)"
-            if let encoded = try? JSONEncoder().encode(session) {
+        let sessionsByPlatformId: [String: SyncedCookieData] = sessions.reduce(into: [:]) { result, session in
+            guard let platformId = session.platformId else { return }
+            result[platformId] = session
+        }
+
+        let platformIds: [PlatformSessionID] = [.bilibili, .douyin, .kuaishou, .soop]
+        for platformId in platformIds {
+            let key = "angellive_session_sync_\(platformId.rawValue)"
+            if let session = sessionsByPlatformId[platformId.rawValue],
+               let encoded = try? JSONEncoder().encode(session) {
                 NSUbiquitousKeyValueStore.default.set(encoded, forKey: key)
+            } else {
+                NSUbiquitousKeyValueStore.default.removeObject(forKey: key)
             }
         }
         NSUbiquitousKeyValueStore.default.synchronize()
@@ -804,6 +827,7 @@ extension BilibiliCookieSyncService {
     public func handleMultiPlatformSyncData(_ data: Data) async {
         // 先尝试解析为多平台格式
         if let payload = try? JSONDecoder().decode(MultiPlatformSyncPayload.self, from: data) {
+            var appliedPlatformIds: [String] = []
             for session in payload.sessions {
                 if let platformIdStr = session.platformId,
                    let platformId = PlatformSessionID(rawValue: platformIdStr) {
@@ -812,18 +836,26 @@ extension BilibiliCookieSyncService {
                         let result = await validateCookie(session.cookie)
                         if case .valid = result {
                             setCookie(session.cookie, uid: session.uid, source: .bonjour)
+                            appliedPlatformIds.append(platformId.rawValue)
                         }
                     } else {
                         // 其他平台走 PlatformSessionManager
-                        _ = await PlatformSessionManager.shared.loginWithCookie(
+                        let result = await PlatformSessionManager.shared.loginWithCookie(
                             platformId: platformId,
                             cookie: session.cookie,
                             uid: session.uid,
                             source: .bonjour,
                             validateBeforeSave: true
                         )
+                        if case .valid = result {
+                            appliedPlatformIds.append(platformId.rawValue)
+                        }
                     }
                 }
+            }
+            if !appliedPlatformIds.isEmpty {
+                lastBonjourSyncedPlatformIds = appliedPlatformIds
+                lastBonjourSyncAt = Date()
             }
             print("[CookieSyncService] 多平台局域网同步完成 (\(payload.sessions.count) 个平台)")
             return
@@ -834,6 +866,8 @@ extension BilibiliCookieSyncService {
             let result = await validateCookie(syncedData.cookie)
             if case .valid = result {
                 setCookie(syncedData.cookie, uid: syncedData.uid, source: .bonjour)
+                lastBonjourSyncedPlatformIds = [PlatformSessionID.bilibili.rawValue]
+                lastBonjourSyncAt = Date()
             }
         }
     }

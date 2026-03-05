@@ -38,6 +38,7 @@ struct SimpleLiveTVOSApp: App {
                     // tvOS 启动时尝试从 iCloud 同步 Cookie
                     if BilibiliCookieSyncService.shared.iCloudSyncEnabled {
                         _ = await BilibiliCookieSyncService.shared.syncFromICloud()
+                        await BilibiliCookieSyncService.shared.syncAllPlatformsFromICloud()
                     }
                 }
                 .onOpenURL { url in

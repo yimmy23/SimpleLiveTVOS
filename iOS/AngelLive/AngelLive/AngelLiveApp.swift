@@ -45,6 +45,10 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 
         Task {
             await PlatformSessionLiveParseBridge.syncFromPersistedSessionsOnLaunch()
+            if BilibiliCookieSyncService.shared.iCloudSyncEnabled {
+                _ = await BilibiliCookieSyncService.shared.syncFromICloud()
+                await BilibiliCookieSyncService.shared.syncAllPlatformsFromICloud()
+            }
         }
 
         // 初始化屏幕方向设置
