@@ -101,8 +101,9 @@ struct MacOSPlatformCookieWebLoginView: View {
     let platform: MacOSPlatformAccountItem
 
     @Environment(\.dismiss) private var dismiss
+    @StateObject private var syncService = BilibiliCookieSyncService.shared
     @State private var currentWebView: WKWebView?
-    @State private var statusText = "请在网页中完成登录，系统会自动保存登录信息。"
+    @State private var statusText = "请在网页中完成登录，系统会自动保存会话并由宿主托管鉴权。"
     @State private var isSavingCookie = false
     @State private var isLoggedIn = false
     @State private var errorMessage: String?
@@ -193,7 +194,7 @@ struct MacOSPlatformCookieWebLoginView: View {
         } else if let host = url?.host(), !host.isEmpty {
             statusText = "当前页面：\(host)"
         } else {
-            statusText = "请在网页中完成登录，系统会自动保存登录信息。"
+            statusText = "请在网页中完成登录，系统会自动保存会话并由宿主托管鉴权。"
         }
     }
 
@@ -249,8 +250,11 @@ struct MacOSPlatformCookieWebLoginView: View {
         case .valid:
             isLoggedIn = true
             lastSavedCookieSignature = signature
-            statusText = "登录信息已保存"
+            statusText = "登录信息已保存（宿主托管鉴权）"
             errorMessage = nil
+            if syncService.iCloudSyncEnabled {
+                await syncService.syncAllPlatformsToICloud()
+            }
         case .expired:
             isLoggedIn = false
             statusText = "登录信息已过期"
@@ -271,6 +275,9 @@ struct MacOSPlatformCookieWebLoginView: View {
     private func logout() {
         Task {
             await PlatformSessionManager.shared.clearSession(platformId: platform.sessionID)
+            if syncService.iCloudSyncEnabled {
+                await syncService.syncAllPlatformsToICloud()
+            }
             await MainActor.run {
                 isLoggedIn = false
                 statusText = "已退出登录"
