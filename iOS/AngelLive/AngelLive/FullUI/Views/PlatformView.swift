@@ -35,11 +35,6 @@ struct PlatformView: View {
                     .padding(.vertical, gridSpacing)
                     .animation(.smooth(duration: 0.3), value: metrics.columns.count) // iOS 26: smooth 动画
 
-                    Text("敬请期待更多平台...")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                        .padding(.top, gridSpacing)
-                        .padding(.bottom, gridSpacing)
                 }
                 .scrollBounceBehavior(.basedOnSize) // iOS 26: 智能弹性滚动
                 .navigationTitle("配置")

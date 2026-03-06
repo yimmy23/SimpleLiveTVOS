@@ -9,77 +9,83 @@ import SwiftUI
 import AngelLiveDependencies
 
 struct SearchRoomView: View {
-    
+
     @FocusState var focusState: Int?
     @Environment(LiveViewModel.self) var liveViewModel
     @Environment(AppState.self) var appViewModel
-    
+
     var body: some View {
-        
+
         @Bindable var appModel = appViewModel
         @Bindable var liveModel = liveViewModel
 
-        HStack(alignment: .top, spacing: 0) {
-            // 左侧：搜索主体
-            VStack {
-            Text("请输入要搜索的主播名或平台链接/分享口令/房间号")
-            HStack {
-                Picker(selection: $appModel.searchViewModel.searchTypeIndex) {
-                    ForEach(liveViewModel.searchTypeArray.indices, id: \.self) { index in
-                        // 需要有一个变量text。不然会自动帮忙加很多0
-                        let text = liveViewModel.searchTypeArray[index]
-                        Text(text)
+        VStack(spacing: 0) {
+            // 顶部：搜索输入 + 二维码，左右分列
+            HStack(alignment: .center, spacing: 40) {
+                // 左侧：搜索输入区域
+                VStack(alignment: .leading, spacing: 20) {
+                    Text("请输入要搜索的主播名或平台链接/分享口令/房间号")
+                    Picker(selection: $appModel.searchViewModel.searchTypeIndex) {
+                        ForEach(liveViewModel.searchTypeArray.indices, id: \.self) { index in
+                            let text = liveViewModel.searchTypeArray[index]
+                            Text(text)
+                        }
+                    } label: {
+                        Text("搜索类型")
                     }
-                } label: {
-                    Text("字体大小")
-                }
-            }
-            TextField("搜索", text: $appModel.searchViewModel.searchText)
-            .onSubmit {
-                Task {
-                    await MainActor.run {
-                        liveViewModel.roomPage = 1
-                    }
-
-                    if appModel.searchViewModel.searchTypeIndex == 1 {
-                        // 关键词搜索
-                        await liveViewModel.searchRoomWithText(text: appModel.searchViewModel.searchText)
-                    } else {
-                        // 链接/口令搜索
-                        await liveViewModel.searchRoomWithShareCode(text: appModel.searchViewModel.searchText)
-                    }
-                }
-            }
-            Spacer()
-            if liveViewModel.hasError, let error = liveViewModel.currentError {
-                    ErrorView(
-                        title: error.isBilibiliAuthRequired ? "搜索失败-请登录B站账号并检查官方页面" : "搜索失败",
-                        message: error.liveParseMessage,
-                        detailMessage: error.liveParseDetail,
-                        curlCommand: error.liveParseCurl,
-                        showRetry: true,
-                        showLoginButton: error.isBilibiliAuthRequired,
-                        onDismiss: {
-                            liveViewModel.hasError = false
-                            liveViewModel.currentError = nil
-                        },
-                        onRetry: {
-                            liveViewModel.hasError = false
-                            liveViewModel.currentError = nil
+                    TextField("搜索", text: $appModel.searchViewModel.searchText)
+                        .onSubmit {
                             Task {
+                                await MainActor.run {
+                                    liveViewModel.roomPage = 1
+                                }
+
                                 if appModel.searchViewModel.searchTypeIndex == 1 {
-                                    // 关键词搜索
                                     await liveViewModel.searchRoomWithText(text: appModel.searchViewModel.searchText)
                                 } else {
-                                    // 链接/口令搜索
                                     await liveViewModel.searchRoomWithShareCode(text: appModel.searchViewModel.searchText)
                                 }
                             }
                         }
-                    )
-                } else {
-                    ScrollView {
-                        LazyVGrid(columns: [GridItem(.fixed(370), spacing: 50), GridItem(.fixed(370), spacing: 50), GridItem(.fixed(370), spacing: 50), GridItem(.fixed(370), spacing: 50)], alignment: .center, spacing: 50) {
+                }
+                .frame(maxWidth: 1200, alignment: .leading)
+
+                Spacer()
+
+                // 右侧：扫码输入面板
+                searchQRPanel
+            }
+
+            Spacer()
+
+            // 搜索结果区域（占满全宽）
+            if liveViewModel.hasError, let error = liveViewModel.currentError {
+                ErrorView(
+                    title: error.isBilibiliAuthRequired ? "搜索失败-请登录B站账号并检查官方页面" : "搜索失败",
+                    message: error.liveParseMessage,
+                    detailMessage: error.liveParseDetail,
+                    curlCommand: error.liveParseCurl,
+                    showRetry: true,
+                    showLoginButton: error.isBilibiliAuthRequired,
+                    onDismiss: {
+                        liveViewModel.hasError = false
+                        liveViewModel.currentError = nil
+                    },
+                    onRetry: {
+                        liveViewModel.hasError = false
+                        liveViewModel.currentError = nil
+                        Task {
+                            if appModel.searchViewModel.searchTypeIndex == 1 {
+                                await liveViewModel.searchRoomWithText(text: appModel.searchViewModel.searchText)
+                            } else {
+                                await liveViewModel.searchRoomWithShareCode(text: appModel.searchViewModel.searchText)
+                            }
+                        }
+                    }
+                )
+            } else {
+                ScrollView {
+                    LazyVGrid(columns: [GridItem(.fixed(370), spacing: 50), GridItem(.fixed(370), spacing: 50), GridItem(.fixed(370), spacing: 50), GridItem(.fixed(370), spacing: 50)], alignment: .center, spacing: 50) {
                         ForEach(liveViewModel.roomList.indices, id: \.self) { index in
                             LiveCardView(index: index)
                                 .environment(liveViewModel)
@@ -94,13 +100,9 @@ struct SearchRoomView: View {
                         }
                     }
                     .safeAreaPadding(.top, 50)
-                    }
                 }
-            } // 左侧 VStack 结束
-
-            // 右侧：扫码输入面板
-            searchQRPanel
-        } // HStack 结束
+            }
+        }
         .simpleToast(isPresented: $liveModel.showToast, options: liveModel.toastOptions) {
             VStack(alignment: .leading) {
                 Label("提示", systemImage: liveModel.toastTypeIsSuccess ? "checkmark.circle" : "xmark.circle")
@@ -128,7 +130,6 @@ struct SearchRoomView: View {
         let service = appViewModel.remoteInputService
         let url = "http://\(service.localIPAddress):\(service.port)/search"
         return VStack(spacing: 16) {
-            Spacer()
             if service.isRunning && !service.localIPAddress.isEmpty {
                 Image(uiImage: Common.generateQRCode(from: url))
                     .interpolation(.none)
@@ -160,9 +161,7 @@ struct SearchRoomView: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
-            Spacer()
         }
         .frame(width: 320)
-        .padding(.trailing, 40)
     }
 }

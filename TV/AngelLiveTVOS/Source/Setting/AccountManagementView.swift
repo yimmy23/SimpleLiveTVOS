@@ -8,6 +8,7 @@
 import SwiftUI
 import AngelLiveCore
 import AngelLiveDependencies
+import LiveParse
 
 // MARK: - Bilibili 用户信息模型 (tvOS)
 
@@ -105,11 +106,20 @@ struct AccountManagementView: View {
                 Button {
                     currentPage = .bilibiliDetail
                 } label: {
-                    HStack {
-                        Image("live_card_bili")
-                            .resizable()
-                            .frame(width: 50, height: 50)
-                            .cornerRadius(10)
+                    HStack(spacing: 12) {
+                        Group {
+                            if let image = TVPlatformIconProvider.tabImage(for: .bilibili) {
+                                Image(uiImage: image)
+                                    .resizable()
+                                    .scaledToFit()
+                            } else {
+                                Image(systemName: "play.tv.fill")
+                                    .font(.system(size: 28))
+                                    .foregroundStyle(Color.pink.gradient)
+                            }
+                        }
+                        .frame(width: 50, height: 50)
+                        .cornerRadius(10)
                         Text("哔哩哔哩")
                             .font(.system(size: 32))
                         Spacer()
@@ -119,7 +129,7 @@ struct AccountManagementView: View {
                         Image(systemName: "chevron.right")
                             .foregroundStyle(.secondary)
                     }
-                    .padding(.horizontal, 25)
+                    .padding(.horizontal, 12)
                     .padding(.vertical, 20)
                 }
                 .buttonStyle(.card)
@@ -708,10 +718,34 @@ enum TVOtherPlatformItem: String, CaseIterable, Identifiable {
         }
     }
 
+    var iconSystemName: String {
+        switch self {
+        case .douyin: return "music.note.tv"
+        case .kuaishou: return "bolt.circle.fill"
+        case .soop: return "globe.asia.australia.fill"
+        }
+    }
+
+    var iconTint: Color {
+        switch self {
+        case .douyin: return .orange
+        case .kuaishou: return .blue
+        case .soop: return .purple
+        }
+    }
+
     var sessionID: PlatformSessionID {
         switch self {
         case .douyin: return .douyin
         case .kuaishou: return .kuaishou
+        case .soop: return .soop
+        }
+    }
+
+    var liveType: LiveType {
+        switch self {
+        case .douyin: return .douyin
+        case .kuaishou: return .ks
         case .soop: return .soop
         }
     }
@@ -722,22 +756,34 @@ struct TVOtherPlatformRow: View {
     @State private var isLoggedIn = false
 
     var body: some View {
-        HStack {
-            Image(platform.iconName)
-                .resizable()
+        Button {
+            // 暂无操作，仅展示状态
+        } label: {
+            HStack(spacing: 12) {
+                Group {
+                    if let image = TVPlatformIconProvider.tabImage(for: platform.liveType) {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFit()
+                    } else {
+                        Image(systemName: platform.iconSystemName)
+                            .font(.system(size: 28))
+                            .foregroundStyle(platform.iconTint.gradient)
+                    }
+                }
                 .frame(width: 50, height: 50)
                 .cornerRadius(10)
-            Text(platform.title)
-                .font(.system(size: 32))
-            Spacer()
-            Text(isLoggedIn ? "已登录" : "未登录")
-                .font(.system(size: 28))
-                .foregroundStyle(isLoggedIn ? .green : .gray)
+                Text(platform.title)
+                    .font(.system(size: 32))
+                Spacer()
+                Text(isLoggedIn ? "已登录" : "未登录")
+                    .font(.system(size: 28))
+                    .foregroundStyle(isLoggedIn ? .green : .gray)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 20)
         }
-        .padding(.horizontal, 25)
-        .padding(.vertical, 20)
-        .background(Color.white.opacity(0.05))
-        .cornerRadius(16)
+        .buttonStyle(.card)
         .task {
             await refreshLoginStatus()
         }

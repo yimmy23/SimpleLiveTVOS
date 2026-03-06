@@ -53,11 +53,6 @@ struct AdaptivePlatformView: View {
                     .padding(.vertical, gridSpacing)
                     .animation(.smooth(duration: 0.3), value: metrics.columns.count)
 
-                    Text("敬请期待更多平台...")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                        .padding(.top, gridSpacing)
-                        .padding(.bottom, gridSpacing)
                 }
                 .scrollBounceBehavior(.basedOnSize)
             }

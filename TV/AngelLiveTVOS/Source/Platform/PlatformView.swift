@@ -151,9 +151,6 @@ struct PlatformView: View {
                 }
             })
 
-            Text("敬请期待更多平台...")
-                .foregroundStyle(.separator)
-                .padding(.bottom, 24)
         }
         .sheet(isPresented: $showAddSheet) {
             TVShellConfigView()
