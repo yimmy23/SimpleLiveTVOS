@@ -11,7 +11,7 @@ private let useVLC = ProcessInfo.processInfo.environment["USE_VLC"] == "1"
 private func resolveKSPlayerDependency() -> (package: Package.Dependency, target: Target.Dependency)? {
     guard !useVLC else { return nil }
     return (
-        .package(url: "https://github.com/TracyPlayer/KSPlayer", branch: "lgpl"),
+        .package(url: "https://github.com/TracyPlayer/KSPlayer", exact: "2.8.0"),
         "KSPlayer"
     )
 }
@@ -37,7 +37,7 @@ if useVLC {
 }
 
 packageDependencies += [
-    .package(url: "https://github.com/pcccccc/LiveParse", from: "2.1.3"),
+    .package(url: "https://github.com/pcccccc/LiveParse", from: "2.1.4"),
     .package(url: "https://github.com/EmergeTools/Pow", from: "1.0.5"),
     .package(url: "https://github.com/sanzaru/SimpleToast", from: "0.11.0"),
     .package(url: "https://github.com/daltoniam/Starscream", from: "4.0.8"),

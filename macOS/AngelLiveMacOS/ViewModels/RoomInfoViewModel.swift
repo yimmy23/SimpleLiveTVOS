@@ -271,13 +271,17 @@ final class RoomInfoViewModel {
 
         // 斗鱼特殊处理
         if currentRoom.liveType == .douyu && douyuFirstLoad == false {
+            guard let douyuPlatform = SandboxPluginCatalog.platform(for: .douyu) else {
+                isLoading = false
+                return
+            }
             // 斗鱼平台每次切换清晰度都需要重新请求流地址
             isLoading = true
             Task {
                 do {
                     let currentCdn = currentRoomPlayArgs![cdnIndex]
                     let currentQuality = currentCdn.qualitys[urlIndex]
-                    let playArgs = try await LiveParseJSPlatformManager.getPlayArgs(platform: .douyu, roomId: currentRoom.roomId, userId: nil, context: ["rate": currentQuality.qn, "cdn": currentCdn.douyuCdnName ?? ""])
+                    let playArgs = try await LiveParseJSPlatformManager.getPlayArgs(platform: douyuPlatform, roomId: currentRoom.roomId, userId: nil, context: ["rate": currentQuality.qn, "cdn": currentCdn.douyuCdnName ?? ""])
                     await MainActor.run {
                         if let newQuality = playArgs.first?.qualitys.first,
                            let url = URL(string: newQuality.url) {
@@ -308,6 +312,10 @@ final class RoomInfoViewModel {
 
         // YY 特殊处理
         if currentRoom.liveType == .yy && yyFirstLoad == false {
+            guard let yyPlatform = SandboxPluginCatalog.platform(for: .yy) else {
+                isLoading = false
+                return
+            }
             // YY 平台每次切换清晰度都需要重新请求流地址
             isLoading = true
             Task {
@@ -322,7 +330,7 @@ final class RoomInfoViewModel {
                     let currentCdn = playArgs[cdnIndex]
                     let currentQuality = currentCdn.qualitys[urlIndex]
                     playArgs = try await LiveParseJSPlatformManager.getPlayArgs(
-                        platform: .yy,
+                        platform: yyPlatform,
                         roomId: currentRoom.roomId,
                         userId: nil,
                         context: yyPlaybackContext(cdn: currentCdn, quality: currentQuality)

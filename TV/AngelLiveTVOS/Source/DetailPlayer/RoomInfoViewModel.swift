@@ -221,10 +221,13 @@ final class RoomInfoViewModel {
         }
         
         if currentRoom.liveType == .douyu && douyuFirstLoad == false {
+            guard let douyuPlatform = SandboxPluginCatalog.platform(for: .douyu) else {
+                return
+            }
             Task {
                 let currentCdn = currentRoomPlayArgs![cdnIndex]
                 let currentQuality = currentCdn.qualitys[urlIndex]
-                let playArgs = try await LiveParseJSPlatformManager.getPlayArgsWithQuality(platform: .douyu, roomId: currentRoom.roomId, userId: nil, quality: ["rate": currentQuality.qn, "cdn": currentCdn.douyuCdnName ?? ""])
+                let playArgs = try await LiveParseJSPlatformManager.getPlayArgsWithQuality(platform: douyuPlatform, roomId: currentRoom.roomId, userId: nil, quality: ["rate": currentQuality.qn, "cdn": currentCdn.douyuCdnName ?? ""])
                 DispatchQueue.main.async {
                     let currentQuality = playArgs.first?.qualitys[urlIndex]
                     let lastCurrentPlayURL = self.currentPlayURL
@@ -242,13 +245,16 @@ final class RoomInfoViewModel {
         }
         
         if currentRoom.liveType == .yy && yyFirstLoad == false {
+            guard let yyPlatform = SandboxPluginCatalog.platform(for: .yy) else {
+                return
+            }
             Task {
                 guard var playArgs = currentRoomPlayArgs,
                       cdnIndex < playArgs.count else { return }
                 let currentCdn = playArgs[cdnIndex]
                 let currentQuality = currentCdn.qualitys[urlIndex]
                 playArgs = try await LiveParseJSPlatformManager.getPlayArgsWithQuality(
-                    platform: .yy,
+                    platform: yyPlatform,
                     roomId: currentRoom.roomId,
                     userId: nil,
                     quality: yyPlaybackContext(cdn: currentCdn, quality: currentQuality)

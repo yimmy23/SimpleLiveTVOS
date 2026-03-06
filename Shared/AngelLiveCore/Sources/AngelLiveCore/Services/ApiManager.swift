@@ -26,18 +26,18 @@ public enum ApiManager {
             return []
         }
         if liveType == .bilibili {
-            return try await fetchBilibiliRoomListWithRetry(id: liveCategory.id, parentId: liveCategory.parentId, page: page)
+            return try await fetchBilibiliRoomListWithRetry(platform: platform, id: liveCategory.id, parentId: liveCategory.parentId, page: page)
         }
         return try await LiveParseJSPlatformManager.getRoomList(platform: platform, id: liveCategory.id, parentId: liveCategory.parentId, page: page)
     }
 
     /// B站请求带重试
-    private static func fetchBilibiliRoomListWithRetry(id: String, parentId: String?, page: Int, maxRetries: Int = 3) async throws -> [LiveModel] {
+    private static func fetchBilibiliRoomListWithRetry(platform: LiveParseJSPlatform, id: String, parentId: String?, page: Int, maxRetries: Int = 3) async throws -> [LiveModel] {
         var lastError: Error?
 
         for attempt in 1...maxRetries {
             do {
-                return try await LiveParseJSPlatformManager.getRoomList(platform: .bilibili, id: id, parentId: parentId, page: page)
+                return try await LiveParseJSPlatformManager.getRoomList(platform: platform, id: id, parentId: parentId, page: page)
             } catch {
                 lastError = error
 
