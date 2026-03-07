@@ -46,6 +46,7 @@ public enum LogCategory: String {
     case favorite = "Favorite"
     case cloudKit = "CloudKit"
     case general = "General"
+    case plugin = "Plugin"
 }
 
 /// 统一的日志工具

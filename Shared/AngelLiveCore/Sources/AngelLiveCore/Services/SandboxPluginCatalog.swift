@@ -114,16 +114,4 @@ public enum SandboxPluginCatalog {
         availablePlatforms().first { $0.liveType == liveType }
     }
 
-    private static func semverCompare(_ lhs: String, _ rhs: String) -> Int {
-        func parts(_ text: String) -> [Int] {
-            text.split(separator: ".").map { Int($0) ?? 0 } + [0, 0, 0]
-        }
-
-        let left = parts(lhs)
-        let right = parts(rhs)
-        for index in 0..<3 where left[index] != right[index] {
-            return left[index] < right[index] ? -1 : 1
-        }
-        return 0
-    }
 }
