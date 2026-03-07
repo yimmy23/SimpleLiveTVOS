@@ -99,22 +99,9 @@ tvOS 17+
 
 感谢bugsnag提供的开源许可，在此表达我的感谢。
 
-
-<a href="https://dartnode.com" target="_blank"><img src="https://dartnode.com/branding/DN-Open-Source-sm.png" alt="Powered by DartNode - Free VPS for Open Source" width="150"></a>
-
-感谢DartNode提供的开源许可，在此表达我的感谢。
-
 ## 支持：
 
 [爱发电](https://afdian.com/a/laopc)
-
-## 免责声明：
-
-本项目的所有功能都是基于互联网上公开的资料开发，无任何破解、逆向工程等行为。
-
-本项目仅用于学习交流编程技术，严禁将本项目用于商业目的。如有任何商业行为，均与本项目无关。
-
-如果本项目存在侵犯您的合法权益的情况，请及时与开发者联系，开发者将会及时删除有关内容。
 
 ## Star History
 
