@@ -29,6 +29,7 @@ struct PlayerGestureView: View {
     @Environment(\.isIPadFullscreen) private var isIPadFullscreen: Binding<Bool>
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(\.safeAreaInsetsCustom) private var safeAreaInsets
 
     /// 单击回调
     var onSingleTap: (() -> Void)?
@@ -62,7 +63,8 @@ struct PlayerGestureView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let bottomSafeArea: CGFloat = 50 // 底部安全区域高度，避免与系统手势冲突
+            // 底部安全区域：使用实际安全区 + 额外边距，避免与系统底部手势（Home Indicator）冲突
+            let bottomSafeArea: CGFloat = max(safeAreaInsets.bottom + 20, 50)
 
             ZStack {
                 // 透明手势接收层（底部留出安全区域）

@@ -24,6 +24,9 @@ struct UnifiedPlayerControlOverlay: View {
     @State private var isSettingsPopupOpen = false
     @State private var statusBarVM = StatusBarViewModel()
 
+    // 将 bridge.isMaskShow 的值提取到本地 @State 以便 SwiftUI 能可靠追踪变化
+    @State private var isMaskVisible: Bool = true
+
     // MARK: - Computed Properties
 
     /// 是否处于全屏模式（iPad全屏 或 iPhone横屏）
@@ -81,7 +84,7 @@ struct UnifiedPlayerControlOverlay: View {
                     .frame(height: 120)
                 }
                 .ignoresSafeArea()
-                .opacity(bridge.isMaskShow.wrappedValue ? 1 : 0)
+                .opacity(isMaskVisible ? 1 : 0)
                 .allowsHitTesting(false)
             }
 
@@ -120,44 +123,54 @@ struct UnifiedPlayerControlOverlay: View {
                 }
             }
             .padding(controlPadding)
-            .opacity(bridge.isMaskShow.wrappedValue ? 1 : 0)
-            .allowsHitTesting(bridge.isMaskShow.wrappedValue)
+            .opacity(isMaskVisible ? 1 : 0)
+            .allowsHitTesting(isMaskVisible)
             .ignoresSafeArea(shouldIgnoreSafeArea ? .all : [])
             // 触摸控制层时重置自动隐藏
             .simultaneousGesture(
                 TapGesture()
                     .onEnded { _ in
-                        if bridge.isMaskShow.wrappedValue && !isPopupOpen {
+                        if isMaskVisible && !isPopupOpen {
                             startAutoHideTimer()
                         }
                     }
             )
         }
         .tint(.white)
-        // 自动隐藏计时器管理
-        .onChange(of: bridge.isMaskShow.wrappedValue) { _, isMaskShow in
-            if isMaskShow && !isPopupOpen {
+        // 双向同步 bridge.isMaskShow ↔ isMaskVisible
+        .onChange(of: bridge.isMaskShow.wrappedValue) { _, newValue in
+            if isMaskVisible != newValue {
+                isMaskVisible = newValue
+            }
+        }
+        .onChange(of: isMaskVisible) { _, newValue in
+            if bridge.isMaskShow.wrappedValue != newValue {
+                bridge.isMaskShow.wrappedValue = newValue
+            }
+            // 自动隐藏计时器管理
+            if newValue && !isPopupOpen {
                 startAutoHideTimer()
-            } else if !isMaskShow {
+            } else if !newValue {
                 cancelAutoHideTimer()
             }
         }
         .onChange(of: showDanmakuSettings) { _, isShowing in
-            if !isShowing && bridge.isMaskShow.wrappedValue && !isPopupOpen {
+            if !isShowing && isMaskVisible && !isPopupOpen {
                 startAutoHideTimer()
             } else if isShowing {
                 cancelAutoHideTimer()
             }
         }
         .onChange(of: showVideoSetting) { _, isShowing in
-            if !isShowing && bridge.isMaskShow.wrappedValue && !isPopupOpen {
+            if !isShowing && isMaskVisible && !isPopupOpen {
                 startAutoHideTimer()
             } else if isShowing {
                 cancelAutoHideTimer()
             }
         }
         .onAppear {
-            if bridge.isMaskShow.wrappedValue && !isPopupOpen {
+            isMaskVisible = bridge.isMaskShow.wrappedValue
+            if isMaskVisible && !isPopupOpen {
                 startAutoHideTimer()
             }
         }
@@ -246,7 +259,7 @@ struct UnifiedPlayerControlOverlay: View {
                                 isSettingsPopupOpen = isOpen
                                 if isOpen {
                                     cancelAutoHideTimer()
-                                } else if bridge.isMaskShow.wrappedValue {
+                                } else if isMaskVisible {
                                     startAutoHideTimer()
                                 }
                             }
@@ -471,10 +484,10 @@ struct UnifiedPlayerControlOverlay: View {
 
     private func startAutoHideTimer() {
         autoHideTask?.cancel()
-        autoHideTask = Task {
+        autoHideTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 5_000_000_000)
             if !Task.isCancelled && !isPopupOpen {
-                bridge.isMaskShow.wrappedValue = false
+                isMaskVisible = false
             }
         }
     }
