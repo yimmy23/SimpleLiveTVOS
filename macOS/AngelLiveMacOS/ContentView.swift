@@ -31,6 +31,9 @@ struct ContentView: View {
     @State private var pluginAvailability = PluginAvailabilityService()
     @State private var bookmarkService = StreamBookmarkService()
     @State private var pluginSourceManager = PluginSourceManager()
+    // CloudKit 插件源同步
+    @State private var pluginSourceSyncService = PluginSourceSyncService()
+    @State private var showPluginSyncPrompt = false
     // 创建局部 ViewModels
     @State private var platformViewModel = PlatformViewModel()
     @State private var searchViewModel = SearchViewModel()
@@ -129,6 +132,28 @@ struct ContentView: View {
         .task {
             await pluginAvailability.checkAvailability()
             platformViewModel.refreshPlatforms(installedPluginIds: pluginAvailability.installedPluginIds)
+            // 无本地插件时，检查 CloudKit 是否有已保存的插件源
+            if !pluginAvailability.hasAvailablePlugins {
+                await pluginSourceSyncService.checkCloudForSources()
+                if pluginSourceSyncService.hasSyncedSources {
+                    showPluginSyncPrompt = true
+                }
+            }
+        }
+        .alert("检测到云端插件", isPresented: $showPluginSyncPrompt) {
+            Button("一键安装") {
+                Task {
+                    await pluginSourceSyncService.performOneClickInstall(
+                        pluginSourceManager: pluginSourceManager,
+                        pluginAvailability: pluginAvailability
+                    )
+                }
+            }
+            Button("取消", role: .cancel) {
+                pluginSourceSyncService.dismissPrompt()
+            }
+        } message: {
+            Text("检测到您已在其他设备安装过插件，是否一键安装？")
         }
         .onChange(of: pluginAvailability.installedPluginIds) { _, installedPluginIds in
             platformViewModel.refreshPlatforms(installedPluginIds: installedPluginIds)

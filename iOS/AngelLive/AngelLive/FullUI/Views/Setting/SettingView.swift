@@ -232,7 +232,7 @@ struct SettingView: View {
                                 .font(.title3)
                                 .foregroundStyle(Color.indigo.gradient)
                                 .frame(width: 32)
-                            Text("关于")
+                            Text("关于&问题反馈")
                         }
                     }
                 } header: {

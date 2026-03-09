@@ -148,7 +148,7 @@ struct SettingView: View {
                 }
             }
 
-            Section("关于") {
+            Section("关于&问题反馈") {
                 Button {
                     updaterViewModel.checkForUpdates()
                 } label: {

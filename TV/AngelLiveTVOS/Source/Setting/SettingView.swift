@@ -14,7 +14,7 @@ extension Int: @retroactive Identifiable {
 
 struct SettingView: View {
 
-    @State var titles = ["账号管理", "插件管理", "通用设置", "弹幕设置", "数据同步", "历史记录", "开源许可", "关于"]
+    @State var titles = ["账号管理", "插件管理", "通用设置", "弹幕设置", "数据同步", "历史记录", "开源许可", "关于&问题反馈"]
     @State private var selectedIndex: Int? = nil
     @State private var fullScreenIndex: Int? = nil
     @StateObject var settingStore = SettingStore()

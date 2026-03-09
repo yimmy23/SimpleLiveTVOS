@@ -11,12 +11,15 @@ import Network
 import Foundation
 import Darwin
 import AngelLiveDependencies
+import AngelLiveCore
 
 struct ContentView: View {
     
     var appViewModel: AppState
     var searchLiveViewModel: LiveViewModel
     var favoriteLiveViewModel: LiveViewModel
+
+    @State private var showPluginSyncPrompt = false
 
     init(appViewModel: AppState) {
         self.appViewModel = appViewModel
@@ -88,7 +91,29 @@ struct ContentView: View {
         .onAppear {
             Task {
                 await appViewModel.pluginAvailability.checkAvailability()
+                // 无本地插件时，检查 CloudKit 是否有已保存的插件源
+                if !appViewModel.pluginAvailability.hasAvailablePlugins {
+                    await appViewModel.pluginSourceSyncService.checkCloudForSources()
+                    if appViewModel.pluginSourceSyncService.hasSyncedSources {
+                        showPluginSyncPrompt = true
+                    }
+                }
             }
+        }
+        .alert("检测到云端插件", isPresented: $showPluginSyncPrompt) {
+            Button("一键安装") {
+                Task {
+                    await appViewModel.pluginSourceSyncService.performOneClickInstall(
+                        pluginSourceManager: appViewModel.pluginSourceManager,
+                        pluginAvailability: appViewModel.pluginAvailability
+                    )
+                }
+            }
+            Button("取消", role: .cancel) {
+                appViewModel.pluginSourceSyncService.dismissPrompt()
+            }
+        } message: {
+            Text("检测到您已在其他设备安装过插件，是否一键安装？")
         }
         .onPlayPauseCommand(perform: {
             if contentVM.selection == 0 {

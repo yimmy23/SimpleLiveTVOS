@@ -136,7 +136,7 @@ struct AboutUSView: View {
             .padding()
         }
         .scrollContentBackground(.hidden)
-        .navigationTitle("关于")
+        .navigationTitle("关于&问题反馈")
         .navigationBarTitleDisplayMode(.inline)
     }
 }

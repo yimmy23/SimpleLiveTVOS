@@ -42,8 +42,8 @@ public struct WelcomeView: View {
         } cards: {
             WelcomeCard(
                 symbol: "rectangle.stack.fill",
-                title: "多平台支持",
-                subTitle: "支持斗鱼、B站、虎牙等主流直播平台，一个应用畅享所有内容"
+                title: "聚合观看",
+                subTitle: "一个应用，畅享直播内容"
             )
             WelcomeCard(
                 symbol: "play.circle.fill",
@@ -53,7 +53,7 @@ public struct WelcomeView: View {
             WelcomeCard(
                 symbol: "message.fill",
                 title: "实时弹幕",
-                subTitle: "支持主流平台弹幕展示，感受热烈的直播氛围"
+                subTitle: "支持弹幕展示，感受热烈的直播氛围"
             )
             WelcomeCard(
                 symbol: "star.fill",

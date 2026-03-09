@@ -17,6 +17,7 @@ class AppState {
     var favoriteViewModel = AppFavoriteModel()
     var pluginAvailability = PluginAvailabilityService()
     var pluginSourceManager = PluginSourceManager()
+    var pluginSourceSyncService = PluginSourceSyncService()
     var bookmarkService = StreamBookmarkService()
     var shellHistoryService = ShellHistoryService()
     var remoteInputService: RemoteInputService

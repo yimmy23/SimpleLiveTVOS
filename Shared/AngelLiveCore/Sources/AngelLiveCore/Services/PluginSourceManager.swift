@@ -32,7 +32,7 @@ public final class RemotePluginDisplayItem: Identifiable, @unchecked Sendable {
 }
 
 @Observable
-public final class PluginSourceManager {
+public final class PluginSourceManager: @unchecked Sendable {
 
     /// 用户保存的插件源 URL 列表
     public private(set) var sourceURLs: [String] = []
@@ -89,6 +89,11 @@ public final class PluginSourceManager {
 
     private func saveSourceURLs() {
         UserDefaults.standard.set(sourceURLs, forKey: sourceURLsKey)
+        // 同步到 CloudKit
+        let urls = sourceURLs
+        Task {
+            await PluginSourceSyncService.syncToCloudStatic(sourceURLs: urls)
+        }
     }
 
     public func addSource(_ urlString: String) {
@@ -197,6 +202,41 @@ public final class PluginSourceManager {
     }
 
     // MARK: - 安装插件
+
+    /// 从所有已添加的订阅源拉取索引并合并到 remotePlugins（不覆盖，按 pluginId 去重）
+    public func fetchAllSourceIndexes() async {
+        isFetchingIndex = true
+        errorMessage = nil
+        defer { isFetchingIndex = false }
+
+        var allItems: [LiveParseRemotePluginItem] = []
+        var seenPluginIds = Set<String>()
+
+        for source in sourceURLs {
+            guard let url = URL(string: source) else { continue }
+            do {
+                let index = try await fetchIndexWithTimeout(url: url)
+                sourcePluginIds[source] = Set(index.plugins.map(\.pluginId))
+                for item in index.plugins {
+                    if !seenPluginIds.contains(item.pluginId) {
+                        seenPluginIds.insert(item.pluginId)
+                        allItems.append(item)
+                    }
+                }
+                mergeLatestRemoteItems(index.plugins)
+            } catch {
+                errorMessage = "拉取插件索引失败: \(error.localizedDescription)"
+            }
+        }
+
+        remotePlugins = allItems.map { item in
+            let displayItem = RemotePluginDisplayItem(item: item)
+            if installedVersion(for: item.pluginId) != nil {
+                displayItem.installState = .installed
+            }
+            return displayItem
+        }
+    }
 
     public func installPlugin(_ displayItem: RemotePluginDisplayItem) async -> Bool {
         displayItem.installState = .installing

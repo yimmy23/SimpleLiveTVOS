@@ -12,7 +12,7 @@ import Observation
 import LiveParse
 
 @Observable
-public final class PluginAvailabilityService {
+public final class PluginAvailabilityService: @unchecked Sendable {
 
     /// sandbox 中是否有已安装的插件
     public private(set) var hasAvailablePlugins: Bool = false

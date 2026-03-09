@@ -8,9 +8,28 @@
 import Foundation
 import LiveParse
 import Network
+import CloudKit
 #if canImport(UIKit)
 import UIKit
 #endif
+
+// MARK: - CloudKit 配置
+
+private enum CloudCookieFields {
+    static let containerIdentifier = "iCloud.icloud.dev.igod.simplelive"
+    static let recordType = "cookie_sessions"
+    static let cookieDataField = "cookie_data"
+    static let platformIdField = "platform_id"
+    static let updatedAtField = "updated_at"
+
+    /// 固定 recordName：bilibili_cookie_sync（兼容旧 KVStore key）
+    static let bilibiliRecordName = "bilibili_cookie_sync"
+
+    /// 每个平台的 recordName 前缀
+    static func sessionRecordName(for platformId: String) -> String {
+        "angellive_session_sync_\(platformId)"
+    }
+}
 
 // MARK: - Cookie 同步数据模型
 
@@ -82,7 +101,6 @@ public final class BilibiliCookieSyncService: ObservableObject {
         static let sessionSnapshotKey = "BilibiliCookieSyncService.sessionSnapshot"
         static let lastSyncedDataKey = "BilibiliCookieSyncService.lastSyncedData"
         static let iCloudSyncEnabled = "BilibiliCookieSyncService.iCloudSyncEnabled"
-        static let iCloudCookieKey = "bilibili_cookie_sync"
     }
 
     private struct SessionSnapshot: Codable {
@@ -116,25 +134,10 @@ public final class BilibiliCookieSyncService: ObservableObject {
             currentUidStorage = legacy.uid
         }
 
-        // 监听 iCloud 变化
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(iCloudDidChange),
-            name: NSUbiquitousKeyValueStore.didChangeExternallyNotification,
-            object: NSUbiquitousKeyValueStore.default
-        )
-
-        // 启动 iCloud 同步
-        NSUbiquitousKeyValueStore.default.synchronize()
-
         // 冷启动时统一从 SessionStore 启动，旧 key 仅用于兼容兜底
         Task {
             await bootstrapSessionCache()
         }
-    }
-
-    deinit {
-        NotificationCenter.default.removeObserver(self)
     }
 
     // MARK: - Cookie 有效性验证
@@ -245,9 +248,9 @@ public final class BilibiliCookieSyncService: ObservableObject {
         return getCurrentCookie().contains("SESSDATA")
     }
 
-    // MARK: - iCloud 同步
+    // MARK: - iCloud 同步 (CloudKit)
 
-    /// 同步到 iCloud
+    /// 同步到 CloudKit
     public func syncToICloud(_ data: SyncedCookieData? = nil) {
         let syncData = data ?? SyncedCookieData(
             cookie: getCurrentCookie(),
@@ -261,23 +264,49 @@ public final class BilibiliCookieSyncService: ObservableObject {
             return
         }
 
-        if let encoded = try? JSONEncoder().encode(syncData) {
-            NSUbiquitousKeyValueStore.default.set(encoded, forKey: Keys.iCloudCookieKey)
-            NSUbiquitousKeyValueStore.default.synchronize()
-            print("[BilibiliCookieSyncService] 已同步到 iCloud")
+        guard let encoded = try? JSONEncoder().encode(syncData) else { return }
+
+        Task {
+            let container = CKContainer(identifier: CloudCookieFields.containerIdentifier)
+            let database = container.privateCloudDatabase
+            let recordID = CKRecord.ID(recordName: CloudCookieFields.bilibiliRecordName)
+
+            let record: CKRecord
+            do {
+                record = try await database.record(for: recordID)
+            } catch {
+                record = CKRecord(recordType: CloudCookieFields.recordType, recordID: recordID)
+            }
+
+            record[CloudCookieFields.cookieDataField] = encoded as NSData
+            record[CloudCookieFields.platformIdField] = PlatformSessionID.bilibili.rawValue as NSString
+            record[CloudCookieFields.updatedAtField] = Date() as NSDate
+
+            do {
+                try await database.save(record)
+                Logger.info("已同步 Bilibili Cookie 到 CloudKit", category: .general)
+            } catch {
+                Logger.warning("同步 Bilibili Cookie 到 CloudKit 失败: \(error.localizedDescription)", category: .general)
+            }
         }
     }
 
-    /// 从 iCloud 获取 Cookie
+    /// 从 CloudKit 获取 Cookie
     public func fetchFromICloud() async -> SyncedCookieData? {
-        NSUbiquitousKeyValueStore.default.synchronize()
+        let container = CKContainer(identifier: CloudCookieFields.containerIdentifier)
+        let database = container.privateCloudDatabase
+        let recordID = CKRecord.ID(recordName: CloudCookieFields.bilibiliRecordName)
 
-        guard let data = NSUbiquitousKeyValueStore.default.data(forKey: Keys.iCloudCookieKey),
-              let syncedData = try? JSONDecoder().decode(SyncedCookieData.self, from: data) else {
+        do {
+            let record = try await database.record(for: recordID)
+            guard let data = record[CloudCookieFields.cookieDataField] as? Data,
+                  let syncedData = try? JSONDecoder().decode(SyncedCookieData.self, from: data) else {
+                return nil
+            }
+            return syncedData
+        } catch {
             return nil
         }
-
-        return syncedData
     }
 
     /// 从 iCloud 同步并验证
@@ -301,16 +330,6 @@ public final class BilibiliCookieSyncService: ObservableObject {
         default:
             print("[BilibiliCookieSyncService] iCloud Cookie 无效")
             return false
-        }
-    }
-
-    @objc nonisolated private func iCloudDidChange(_ notification: Notification) {
-        Task { @MainActor in
-            guard iCloudSyncEnabled else { return }
-            // 同步 Bilibili
-            _ = await syncFromICloud()
-            // 同步其他平台
-            await syncAllPlatformsFromICloud()
         }
     }
 
@@ -653,18 +672,38 @@ public final class BilibiliCookieSyncService: ObservableObject {
     }
 
     private func clearICloudCookie() {
-        NSUbiquitousKeyValueStore.default.removeObject(forKey: Keys.iCloudCookieKey)
-        NSUbiquitousKeyValueStore.default.synchronize()
-        print("[BilibiliCookieSyncService] 已清除 iCloud Cookie")
+        Task {
+            let container = CKContainer(identifier: CloudCookieFields.containerIdentifier)
+            let database = container.privateCloudDatabase
+            let recordID = CKRecord.ID(recordName: CloudCookieFields.bilibiliRecordName)
+            do {
+                try await database.deleteRecord(withID: recordID)
+                Logger.info("已清除 CloudKit Bilibili Cookie", category: .general)
+            } catch let error as CKError where error.code == .unknownItem {
+                // 记录不存在，忽略
+            } catch {
+                Logger.warning("清除 CloudKit Bilibili Cookie 失败: \(error.localizedDescription)", category: .general)
+            }
+        }
     }
 
     private func clearAllPlatformICloudSessions() {
         let platformIds: [PlatformSessionID] = [.bilibili, .douyin, .kuaishou, .soop]
-        for platformId in platformIds {
-            let key = "angellive_session_sync_\(platformId.rawValue)"
-            NSUbiquitousKeyValueStore.default.removeObject(forKey: key)
+        Task {
+            let container = CKContainer(identifier: CloudCookieFields.containerIdentifier)
+            let database = container.privateCloudDatabase
+            for platformId in platformIds {
+                let recordName = CloudCookieFields.sessionRecordName(for: platformId.rawValue)
+                let recordID = CKRecord.ID(recordName: recordName)
+                do {
+                    try await database.deleteRecord(withID: recordID)
+                } catch let error as CKError where error.code == .unknownItem {
+                    // 记录不存在，忽略
+                } catch {
+                    Logger.warning("清除 CloudKit session 失败 (\(platformId.rawValue)): \(error.localizedDescription)", category: .general)
+                }
+            }
         }
-        NSUbiquitousKeyValueStore.default.synchronize()
     }
 
     private func getDeviceName() -> String {
@@ -778,7 +817,7 @@ extension BilibiliCookieSyncService {
         }
     }
 
-    /// 同步所有平台到 iCloud
+    /// 同步所有平台到 CloudKit
     public func syncAllPlatformsToICloud() async {
         let sessions = await collectAllPlatformSessions()
         let sessionsByPlatformId: [String: SyncedCookieData] = sessions.reduce(into: [:]) { result, session in
@@ -786,40 +825,72 @@ extension BilibiliCookieSyncService {
             result[platformId] = session
         }
 
+        let container = CKContainer(identifier: CloudCookieFields.containerIdentifier)
+        let database = container.privateCloudDatabase
+
         let platformIds: [PlatformSessionID] = [.bilibili, .douyin, .kuaishou, .soop]
         for platformId in platformIds {
-            let key = "angellive_session_sync_\(platformId.rawValue)"
+            let recordName = CloudCookieFields.sessionRecordName(for: platformId.rawValue)
+            let recordID = CKRecord.ID(recordName: recordName)
+
             if let session = sessionsByPlatformId[platformId.rawValue],
                let encoded = try? JSONEncoder().encode(session) {
-                NSUbiquitousKeyValueStore.default.set(encoded, forKey: key)
+                let record: CKRecord
+                do {
+                    record = try await database.record(for: recordID)
+                } catch {
+                    record = CKRecord(recordType: CloudCookieFields.recordType, recordID: recordID)
+                }
+                record[CloudCookieFields.cookieDataField] = encoded as NSData
+                record[CloudCookieFields.platformIdField] = platformId.rawValue as NSString
+                record[CloudCookieFields.updatedAtField] = Date() as NSDate
+                do {
+                    try await database.save(record)
+                } catch {
+                    Logger.warning("同步 \(platformId.rawValue) session 到 CloudKit 失败: \(error.localizedDescription)", category: .general)
+                }
             } else {
-                NSUbiquitousKeyValueStore.default.removeObject(forKey: key)
+                // 该平台无 session，删除云端记录
+                do {
+                    try await database.deleteRecord(withID: recordID)
+                } catch let error as CKError where error.code == .unknownItem {
+                    // 不存在则忽略
+                } catch {
+                    Logger.warning("删除 CloudKit session 失败 (\(platformId.rawValue)): \(error.localizedDescription)", category: .general)
+                }
             }
         }
-        NSUbiquitousKeyValueStore.default.synchronize()
-        print("[CookieSyncService] 已同步 \(sessions.count) 个平台到 iCloud")
+        Logger.info("已同步 \(sessions.count) 个平台 session 到 CloudKit", category: .general)
     }
 
-    /// 从 iCloud 同步所有平台
+    /// 从 CloudKit 同步所有平台
     public func syncAllPlatformsFromICloud() async {
-        NSUbiquitousKeyValueStore.default.synchronize()
+        let container = CKContainer(identifier: CloudCookieFields.containerIdentifier)
+        let database = container.privateCloudDatabase
 
         let platformIds: [PlatformSessionID] = [.douyin, .kuaishou, .soop]
         for platformId in platformIds {
-            let key = "angellive_session_sync_\(platformId.rawValue)"
-            guard let data = NSUbiquitousKeyValueStore.default.data(forKey: key),
-                  let syncedData = try? JSONDecoder().decode(SyncedCookieData.self, from: data),
-                  !syncedData.cookie.isEmpty else {
-                continue
-            }
+            let recordName = CloudCookieFields.sessionRecordName(for: platformId.rawValue)
+            let recordID = CKRecord.ID(recordName: recordName)
 
-            _ = await PlatformSessionManager.shared.loginWithCookie(
-                platformId: platformId,
-                cookie: syncedData.cookie,
-                uid: syncedData.uid,
-                source: .iCloud,
-                validateBeforeSave: true
-            )
+            do {
+                let record = try await database.record(for: recordID)
+                guard let data = record[CloudCookieFields.cookieDataField] as? Data,
+                      let syncedData = try? JSONDecoder().decode(SyncedCookieData.self, from: data),
+                      !syncedData.cookie.isEmpty else {
+                    continue
+                }
+
+                _ = await PlatformSessionManager.shared.loginWithCookie(
+                    platformId: platformId,
+                    cookie: syncedData.cookie,
+                    uid: syncedData.uid,
+                    source: .iCloud,
+                    validateBeforeSave: true
+                )
+            } catch {
+                // 该平台无云端记录或获取失败，跳过
+            }
         }
     }
 
