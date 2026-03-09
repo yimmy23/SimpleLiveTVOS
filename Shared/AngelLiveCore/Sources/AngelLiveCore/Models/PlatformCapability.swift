@@ -68,6 +68,33 @@ public enum PlatformCapability {
         let capabilities: [PlatformFeature: FeatureStatus]
     }
 
+    // MARK: - Cache
+
+    private final class Cache: @unchecked Sendable {
+        private var storage: [String: [(PlatformFeature, FeatureStatus)]] = [:]
+        private let lock = NSLock()
+
+        func get(_ key: String) -> [(PlatformFeature, FeatureStatus)]? {
+            lock.lock()
+            defer { lock.unlock() }
+            return storage[key]
+        }
+
+        func set(_ key: String, value: [(PlatformFeature, FeatureStatus)]) {
+            lock.lock()
+            defer { lock.unlock() }
+            storage[key] = value
+        }
+
+        func clear() {
+            lock.lock()
+            defer { lock.unlock() }
+            storage.removeAll()
+        }
+    }
+
+    private static let cache = Cache()
+
     private static let featureFunctionNames: [(PlatformFeature, [String])] = [
         (.categories, ["getCategories", "getCategoryList"]),
         (.rooms, ["getRooms", "getRoomList"]),
@@ -80,24 +107,39 @@ public enum PlatformCapability {
     ]
 
     public static func features(for liveType: LiveType) -> [(PlatformFeature, FeatureStatus)] {
-        guard let platform = SandboxPluginCatalog.platform(for: liveType) else {
-            return featureFunctionNames.map { ($0.0, .unavailable) }
+        let cacheKey = liveType.rawValue
+        if let cached = cache.get(cacheKey) {
+            return cached
         }
+
+        guard let platform = SandboxPluginCatalog.platform(for: liveType) else {
+            let result = featureFunctionNames.map { ($0.0, FeatureStatus.unavailable) }
+            cache.set(cacheKey, value: result)
+            return result
+        }
+
+        let result: [(PlatformFeature, FeatureStatus)]
 
         if let capabilities = loadPluginCapabilities(pluginId: platform.pluginId) {
-            return PlatformFeature.allCases.map { feature in
+            result = PlatformFeature.allCases.map { feature in
                 (feature, capabilities[feature] ?? .unavailable)
             }
+        } else if let entryScript = loadPluginEntryScript(pluginId: platform.pluginId) {
+            result = featureFunctionNames.map { feature, functionNames in
+                let isAvailable = functionNames.contains { containsFunction(named: $0, in: entryScript) }
+                return (feature, isAvailable ? .available : .unavailable)
+            }
+        } else {
+            result = featureFunctionNames.map { ($0.0, FeatureStatus.unavailable) }
         }
 
-        guard let entryScript = loadPluginEntryScript(pluginId: platform.pluginId) else {
-            return featureFunctionNames.map { ($0.0, .unavailable) }
-        }
+        cache.set(cacheKey, value: result)
+        return result
+    }
 
-        return featureFunctionNames.map { feature, functionNames in
-            let isAvailable = functionNames.contains { containsFunction(named: $0, in: entryScript) }
-            return (feature, isAvailable ? .available : .unavailable)
-        }
+    /// 清除缓存，在插件 reload 后调用
+    public static func invalidateCache() {
+        cache.clear()
     }
 
     private static func loadPluginCapabilities(pluginId: String) -> [PlatformFeature: FeatureStatus]? {
@@ -218,17 +260,4 @@ public enum PlatformCapability {
         return false
     }
 
-    private static func semverCompare(_ lhs: String, _ rhs: String) -> Int {
-        func parts(_ text: String) -> [Int] {
-            text.split(separator: ".").map { Int($0) ?? 0 } + [0, 0, 0]
-        }
-
-        let left = parts(lhs)
-        let right = parts(rhs)
-
-        for index in 0..<3 where left[index] != right[index] {
-            return left[index] < right[index] ? -1 : 1
-        }
-        return 0
-    }
 }

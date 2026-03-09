@@ -50,11 +50,16 @@ public enum PlatformSessionLiveParseBridge {
             payload["uid"] = uid
         }
 
-        _ = try? await LiveParsePlugins.shared.call(
-            pluginId: pluginId,
-            function: "setCookie",
-            payload: payload
-        )
+        do {
+            _ = try await LiveParsePlugins.shared.call(
+                pluginId: pluginId,
+                function: "setCookie",
+                payload: payload
+            )
+            Logger.debug("Cookie synced for plugin: \(pluginId)", category: .plugin)
+        } catch {
+            Logger.error(error, message: "Failed to sync cookie for plugin: \(pluginId)", category: .plugin)
+        }
     }
 
     private static func clearCookie(platformId: PlatformSessionID) async {
@@ -62,10 +67,15 @@ public enum PlatformSessionLiveParseBridge {
         guard SandboxPluginCatalog.isInstalled(pluginId: pluginId) else {
             return
         }
-        _ = try? await LiveParsePlugins.shared.call(
-            pluginId: pluginId,
-            function: "clearCookie",
-            payload: [:]
-        )
+        do {
+            _ = try await LiveParsePlugins.shared.call(
+                pluginId: pluginId,
+                function: "clearCookie",
+                payload: [:]
+            )
+            Logger.debug("Cookie cleared for plugin: \(pluginId)", category: .plugin)
+        } catch {
+            Logger.error(error, message: "Failed to clear cookie for plugin: \(pluginId)", category: .plugin)
+        }
     }
 }

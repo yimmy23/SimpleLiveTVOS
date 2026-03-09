@@ -69,6 +69,10 @@ public final class PluginSourceManager {
     @ObservationIgnored
     private let updater: LiveParsePluginUpdater
 
+    /// 网络请求超时时间（秒）
+    @ObservationIgnored
+    private let fetchTimeoutSeconds: UInt64 = 30
+
     public init() {
         self.updater = LiveParsePluginUpdater(
             storage: LiveParsePlugins.shared.storage,
@@ -110,7 +114,7 @@ public final class PluginSourceManager {
         var pluginIds = sourcePluginIds[trimmed] ?? Set<String>()
         if pluginIds.isEmpty, let url = URL(string: trimmed) {
             do {
-                let index = try await updater.fetchIndex(url: url)
+                let index = try await fetchIndexWithTimeout(url: url)
                 pluginIds = Set(index.plugins.map(\.pluginId))
             } catch {
                 // 删除订阅源时仍然继续，避免卡住 UI
@@ -138,7 +142,7 @@ public final class PluginSourceManager {
         defer { isFetchingIndex = false }
 
         do {
-            let index = try await updater.fetchIndex(url: url)
+            let index = try await fetchIndexWithTimeout(url: url)
             sourcePluginIds[trimmed] = Set(index.plugins.map(\.pluginId))
             remotePlugins = index.plugins.map { item in
                 let displayItem = RemotePluginDisplayItem(item: item)
@@ -171,7 +175,7 @@ public final class PluginSourceManager {
         for source in sourceURLs {
             guard let url = URL(string: source) else { continue }
             do {
-                let index = try await updater.fetchIndex(url: url)
+                let index = try await fetchIndexWithTimeout(url: url)
                 pluginIdsBySource[source] = Set(index.plugins.map(\.pluginId))
                 for item in index.plugins {
                     guard let existing = latest[item.pluginId] else {
@@ -287,40 +291,60 @@ public final class PluginSourceManager {
         let storage = LiveParsePlugins.shared.storage
         let pluginDirectory = storage.pluginDirectory(pluginId: pluginId)
 
+        // 1. 先从内存中驱逐插件，防止卸载过程中被调用
+        LiveParsePlugins.shared.evict(pluginId: pluginId)
+
+        // 2. 先更新持久化状态（标记移除），确保即使后续步骤崩溃，
+        //    重启后也不会再加载该插件
+        do {
+            var state = storage.loadState()
+            state.plugins.removeValue(forKey: pluginId)
+            try storage.saveState(state)
+        } catch {
+            errorMessage = "删除插件状态失败: \(error.localizedDescription)"
+            Logger.error(error, message: "Failed to update state for plugin uninstall: \(pluginId)", category: .plugin)
+            return false
+        }
+
+        // 3. 删除文件（状态已安全，文件删除失败不影响一致性）
         do {
             if FileManager.default.fileExists(atPath: pluginDirectory.path) {
                 try FileManager.default.removeItem(at: pluginDirectory)
             }
-
-            var state = storage.loadState()
-            state.plugins.removeValue(forKey: pluginId)
-            try storage.saveState(state)
-
-            LiveParsePlugins.shared.evict(pluginId: pluginId)
-            try? LiveParsePlugins.shared.reload()
-
-            if let item = remotePlugins.first(where: { $0.id == pluginId }) {
-                item.installState = .notInstalled
-            }
-            return true
         } catch {
-            errorMessage = "删除插件失败: \(error.localizedDescription)"
-            return false
+            Logger.warning("Failed to delete plugin files for \(pluginId): \(error.localizedDescription)", category: .plugin)
+            // 文件删除失败不视为致命错误，状态已正确更新
+        }
+
+        // 4. 刷新运行时
+        try? LiveParsePlugins.shared.reload()
+        PlatformCapability.invalidateCache()
+
+        if let item = remotePlugins.first(where: { $0.id == pluginId }) {
+            item.installState = .notInstalled
+        }
+        return true
+    }
+
+    // MARK: - Timeout Helper
+
+    private func fetchIndexWithTimeout(url: URL) async throws -> LiveParseRemotePluginIndex {
+        let timeout = fetchTimeoutSeconds
+        let localUpdater = updater
+        return try await withThrowingTaskGroup(of: LiveParseRemotePluginIndex.self) { group in
+            group.addTask {
+                try await localUpdater.fetchIndex(url: url)
+            }
+            group.addTask {
+                try await Task.sleep(nanoseconds: timeout * 1_000_000_000)
+                throw URLError(.timedOut)
+            }
+            guard let result = try await group.next() else {
+                throw URLError(.timedOut)
+            }
+            group.cancelAll()
+            return result
         }
     }
 
-    private func semverCompare(_ lhs: String, _ rhs: String) -> Int {
-        func parts(_ text: String) -> [Int] {
-            text.split(separator: ".").map { Int($0) ?? 0 } + [0, 0, 0]
-        }
-
-        let left = parts(lhs)
-        let right = parts(rhs)
-
-        for index in 0..<3 where left[index] != right[index] {
-            return left[index] < right[index] ? -1 : 1
-        }
-
-        return 0
-    }
 }
