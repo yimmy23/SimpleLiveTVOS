@@ -7,7 +7,6 @@
 
 import SwiftUI
 import AngelLiveCore
-import LiveParse
 
 struct ShellConfigView: View {
     @Environment(StreamBookmarkService.self) private var bookmarkService

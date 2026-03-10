@@ -7,7 +7,6 @@
 
 import Foundation
 import Observation
-import LiveParse
 
 /// 单个插件的安装状态
 public enum PluginInstallState: Equatable, Sendable {

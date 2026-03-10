@@ -9,7 +9,6 @@ import Foundation
 import SwiftUI
 import CloudKit
 import Observation
-import LiveParse
 
 /// iCloud同步状态
 public enum CloudSyncStatus {

@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import LiveParse
 import AngelLiveCore
 
 struct TVPlatformCapabilitySheet: View {

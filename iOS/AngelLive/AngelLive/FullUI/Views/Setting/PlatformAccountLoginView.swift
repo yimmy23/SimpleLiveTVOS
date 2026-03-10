@@ -8,7 +8,6 @@
 import SwiftUI
 import WebKit
 import AngelLiveCore
-import LiveParse
 
 private enum PlatformAccountItem: String, CaseIterable, Identifiable {
     case bilibili

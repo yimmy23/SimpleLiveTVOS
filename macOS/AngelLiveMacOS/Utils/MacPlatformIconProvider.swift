@@ -7,7 +7,6 @@
 
 import AppKit
 import AngelLiveCore
-import LiveParse
 
 enum MacPlatformIconProvider {
     private static let tabIconPrefix = "assets/mini_live_card_"

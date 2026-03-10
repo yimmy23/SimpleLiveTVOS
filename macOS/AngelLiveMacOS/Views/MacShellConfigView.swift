@@ -1,6 +1,5 @@
 import SwiftUI
 import AngelLiveCore
-import LiveParse
 
 struct MacShellConfigView: View {
     @Environment(StreamBookmarkService.self) private var bookmarkService

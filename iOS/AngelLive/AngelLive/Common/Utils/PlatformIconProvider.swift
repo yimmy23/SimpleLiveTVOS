@@ -7,7 +7,6 @@
 
 import UIKit
 import AngelLiveCore
-import LiveParse
 
 enum PlatformIconProvider {
     private static let installedCardIconPrefix = "assets/tv_"

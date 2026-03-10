@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import LiveParse
 
 public struct FavoriteLiveSectionModel: Identifiable, Sendable {
     public var id = UUID()

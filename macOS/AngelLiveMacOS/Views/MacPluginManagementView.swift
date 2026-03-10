@@ -7,7 +7,6 @@
 
 import SwiftUI
 import AngelLiveCore
-import LiveParse
 
 struct MacPluginManagementView: View {
     @Environment(PluginAvailabilityService.self) private var pluginAvailability

@@ -9,7 +9,6 @@
 import SwiftUI
 import AngelLiveCore
 import AngelLiveDependencies
-import LiveParse
 
 struct FavoriteView: View {
     @Environment(AppFavoriteModel.self) private var viewModel

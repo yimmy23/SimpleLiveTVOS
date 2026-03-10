@@ -9,7 +9,6 @@
 
 import Foundation
 import Observation
-import LiveParse
 
 @Observable
 public final class PluginAvailabilityService: @unchecked Sendable {

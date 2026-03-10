@@ -16,7 +16,6 @@
 #if canImport(KSPlayer)
 @_exported import KSPlayer
 #endif
-@_exported import LiveParse
 @_exported import NIO
 @_exported import NIOHTTP1
 @_exported import Pow
@@ -27,7 +26,4 @@
 #elseif os(tvOS)
 @_exported import SimpleToast
 #endif
-@_exported import Starscream
-@_exported import SwiftyJSON
-@_exported import SWCompression
 @_exported import UDPBroadcast

@@ -8,7 +8,6 @@
 import SwiftUI
 import AngelLiveDependencies
 import AngelLiveCore
-import LiveParse
 
 struct PlatformView: View {
     @Environment(PlatformViewModel.self) private var viewModel

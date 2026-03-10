@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import LiveParse
 
 public extension Error {
     /// 从错误中提取用户友好的错误消息（带详细位置信息）

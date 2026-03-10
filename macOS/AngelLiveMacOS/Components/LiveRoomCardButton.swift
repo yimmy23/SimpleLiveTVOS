@@ -7,7 +7,6 @@
 
 import SwiftUI
 import AngelLiveCore
-import LiveParse
 
 // MARK: - 直播间卡片按钮包装器
 struct LiveRoomCardButton<Content: View>: View {

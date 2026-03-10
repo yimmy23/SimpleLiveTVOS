@@ -37,15 +37,10 @@ if useVLC {
 }
 
 packageDependencies += [
-    .package(url: "https://github.com/pcccccc/LiveParse", from: "2.1.4"),
     .package(url: "https://github.com/EmergeTools/Pow", from: "1.0.5"),
     .package(url: "https://github.com/sanzaru/SimpleToast", from: "0.11.0"),
-    .package(url: "https://github.com/daltoniam/Starscream", from: "4.0.8"),
-    .package(url: "https://github.com/tsolomko/SWCompression", from: "4.8.6"),
     .package(url: "https://github.com/apple/swift-nio.git", from: "2.86.2"),
-    .package(url: "https://github.com/apple/swift-protobuf.git", from: "1.32.0"),
     .package(url: "https://github.com/markiv/SwiftUI-Shimmer", branch: "iOS17-animate-start-end-points"),
-    .package(url: "https://github.com/SwiftyJSON/SwiftyJSON", from: "5.0.2"),
     .package(url: "https://github.com/gunterhager/UDPBroadcastConnection", from: "5.0.5"),
     .package(url: "https://github.com/sunghyun-k/swiftui-toasts", from: "1.1.1"),
     .package(url: "https://github.com/sunghyun-k/swiftui-window-overlay.git", from: "1.0.2"),
@@ -56,13 +51,6 @@ packageDependencies += [
 var targetDependencies: [Target.Dependency] = [
     "Alamofire",
     .product(name: "Cache", package: "Cache"),
-    "LiveParse",
-    "Starscream",
-    "SwiftyJSON",
-    "SWCompression",
-    .product(name: "SwiftProtobuf", package: "swift-protobuf"),
-    .product(name: "SwiftProtobufPluginLibrary", package: "swift-protobuf"),
-    .product(name: "protoc-gen-swift", package: "swift-protobuf"),
     .product(name: "Gzip", package: "GzipSwift"),
     .product(name: "Shimmer", package: "SwiftUI-Shimmer"),
     "AcknowList",

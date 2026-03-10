@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import LiveParse
 
 public struct SandboxPluginMetadata: Sendable, Hashable {
     public let pluginId: String

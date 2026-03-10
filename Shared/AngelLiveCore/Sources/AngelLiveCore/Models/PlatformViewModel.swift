@@ -8,7 +8,6 @@
 import Foundation
 import Observation
 import SwiftUI
-import LiveParse
 
 @Observable
 public final class PlatformViewModel {

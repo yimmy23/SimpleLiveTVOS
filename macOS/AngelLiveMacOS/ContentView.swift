@@ -8,7 +8,6 @@
 
 import SwiftUI
 import AngelLiveCore
-import LiveParse
 
 // 定义 Tab 选择类型
 enum TabSelection: Hashable {

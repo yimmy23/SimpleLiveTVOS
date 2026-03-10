@@ -8,7 +8,6 @@
 import Foundation
 import SwiftUI
 import Observation
-import LiveParse
 
 @Observable
 public final class HistoryModel {

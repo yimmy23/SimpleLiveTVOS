@@ -7,7 +7,7 @@
 //
 
 import Foundation
-import LiveParse
+import AngelLiveCore
 
 extension LiveModel: Hashable {
     public func hash(into hasher: inout Hasher) {

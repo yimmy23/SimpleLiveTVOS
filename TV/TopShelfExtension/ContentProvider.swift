@@ -7,7 +7,6 @@
 
 import TVServices
 import AngelLiveCore
-import LiveParse
 
 class ContentProvider: TVTopShelfContentProvider {
 

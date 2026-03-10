@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import LiveParse
 
 public enum PlatformSessionLiveParseBridge {
     public static func syncSessionToLiveParse(_ session: PlatformSession) {

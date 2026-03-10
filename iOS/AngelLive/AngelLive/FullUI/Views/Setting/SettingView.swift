@@ -7,7 +7,6 @@
 
 import SwiftUI
 import AngelLiveCore
-import LiveParse
 
 struct SettingView: View {
     @StateObject private var syncService = BilibiliCookieSyncService.shared

@@ -8,7 +8,6 @@
 import SwiftUI
 import AngelLiveCore
 import AngelLiveDependencies
-import LiveParse
 
 // MARK: - Bilibili 用户信息模型 (tvOS)
 

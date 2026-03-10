@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import LiveParse
 
 // MARK: - 直播状态显示名称常量
 

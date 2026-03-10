@@ -5,7 +5,6 @@
 
 import SwiftUI
 import AngelLiveCore
-import LiveParse
 
 struct TVShellConfigView: View {
     @Environment(AppState.self) private var appViewModel

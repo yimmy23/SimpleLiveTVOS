@@ -9,7 +9,6 @@
 import SwiftUI
 import AngelLiveCore
 import AngelLiveDependencies
-import LiveParse
 
 struct SearchView: View {
     @Environment(SearchViewModel.self) private var viewModel
