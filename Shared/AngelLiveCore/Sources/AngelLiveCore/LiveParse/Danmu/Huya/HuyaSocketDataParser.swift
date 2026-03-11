@@ -60,7 +60,21 @@ private final class HuyaDanmuJSCodec {
                 }
             }
 
-            if let huyaScriptURL = Bundle.main.url(forResource: "huya", withExtension: "js"),
+            let huyaScriptURL: URL? = {
+                // 优先从虎牙插件的沙盒目录加载 huya.js（preloadScripts）
+                let storage = LiveParsePlugins.shared.storage
+                let versions = storage.listInstalledVersions(pluginId: "huya")
+                for versionDir in versions.reversed() {
+                    let candidate = versionDir.appendingPathComponent("huya.js", isDirectory: false)
+                    if FileManager.default.fileExists(atPath: candidate.path) {
+                        return candidate
+                    }
+                }
+                // fallback 到 Bundle.main
+                return Bundle.main.url(forResource: "huya", withExtension: "js")
+            }()
+
+            if let huyaScriptURL,
                let huyaScript = try? String(contentsOf: huyaScriptURL, encoding: .utf8) {
                 context.evaluateScript(huyaScript, withSourceURL: huyaScriptURL)
             } else {

@@ -191,9 +191,6 @@ private extension JSRuntime {
             return !!__lp_host_load_builtin_script(String(name || ""));
           };
 
-          // Load YY Host API
-          Host.runtime.loadBuiltinScript("__lp_host_yy.js");
-
         })();
         """
         context.evaluateScript(script)
