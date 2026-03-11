@@ -7,6 +7,7 @@
 
 import SwiftUI
 import AngelLiveDependencies
+import AngelLiveCore
 import ColorfulX
 import TipKit
 

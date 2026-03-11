@@ -189,8 +189,13 @@ struct MacPluginManagementView: View {
     @ViewBuilder
     private func pluginStatusView(for pluginId: String) -> some View {
         if pluginSourceManager.updatingPluginIds.contains(pluginId) {
-            ProgressView()
-                .controlSize(.small)
+            HStack(spacing: 4) {
+                ProgressView()
+                    .controlSize(.small)
+                Text("更新中")
+                    .font(.caption)
+                    .foregroundStyle(AppConstants.Colors.secondaryText)
+            }
         } else if pluginSourceManager.hasUpdate(for: pluginId) {
             Button {
                 Task {

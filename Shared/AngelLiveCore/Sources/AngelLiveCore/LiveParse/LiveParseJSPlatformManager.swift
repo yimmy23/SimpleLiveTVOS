@@ -172,6 +172,7 @@ public enum LiveParseJSPlatformManager {
         userId: String?,
         context: [String: Any] = [:]
     ) async throws -> LiveModel {
+        print("[JSPlatformManager] getLiveLastestInfo: pluginId=\(platform.pluginId) roomId=\(roomId) 准备调用 callWithFallback")
         let room: PluginRoomDTO = try await callWithFallback(
             platform: platform,
             function: "getRoomDetail",
@@ -181,6 +182,7 @@ public enum LiveParseJSPlatformManager {
                 "userId": userId
             ])
         )
+        print("[JSPlatformManager] getLiveLastestInfo: pluginId=\(platform.pluginId) roomId=\(roomId) callWithFallback 返回成功")
         return room.toLiveModel(liveType: platform.liveType)
     }
 
@@ -290,11 +292,14 @@ public enum LiveParseJSPlatformManager {
         payload: [String: Any] = [:]
     ) async throws -> ResultType {
         do {
-            return try await LiveParsePlugins.shared.callDecodable(
+            print("[JSPlatformManager] callWithFallback: pluginId=\(platform.pluginId) function=\(function) 准备调用 callDecodable")
+            let result: ResultType = try await LiveParsePlugins.shared.callDecodable(
                 pluginId: platform.pluginId,
                 function: function,
                 payload: payload
             )
+            print("[JSPlatformManager] callWithFallback: pluginId=\(platform.pluginId) function=\(function) callDecodable 返回成功")
+            return result
         } catch let error as LiveParsePluginError {
             // 仅当函数不存在时回退，其他错误直接抛出
             if case .invalidReturnValue(let msg) = error, msg.contains("Missing function") {

@@ -8,6 +8,7 @@
 import Foundation
 import Observation
 import AngelLiveDependencies
+import AngelLiveCore
 
 @Observable
 final class PlayerControlCardViewModel {

@@ -58,6 +58,8 @@ public actor FavoriteStateModel {
         await withTaskGroup(of: (Int, LiveModel?, String, String, String, LiveType, Double).self) { group in
             for (index, liveModel) in roomList.enumerated() {
                 group.addTask {
+                    let platformName = LiveParseTools.getLivePlatformName(liveModel.liveType)
+                    favoriteSyncLog("[\(index + 1)/\(roomList.count)] 开始查询 \(platformName) - \(liveModel.userName) (roomId=\(liveModel.roomId), userId=\(liveModel.userId))")
                     let taskStart = CFAbsoluteTimeGetCurrent()
                     do {
                         let dataReq = try await ApiManager.fetchLastestLiveInfoFast(liveModel: liveModel)
@@ -71,6 +73,7 @@ public actor FavoriteStateModel {
                         }
                     } catch {
                         let duration = CFAbsoluteTimeGetCurrent() - taskStart
+                        favoriteSyncLog("[\(index + 1)/\(roomList.count)] 查询失败 \(platformName) - \(liveModel.userName) 耗时 \(formatSeconds(duration))s 错误: \(error)")
                         var errorModel = liveModel
                         if errorModel.liveType == .yy {
                             errorModel.liveState = LiveState.close.rawValue
@@ -171,9 +174,7 @@ private func favoriteUniqueKey(for room: LiveModel) -> String {
 }
 
 private func favoriteSyncLog(_ message: String) {
-#if DEBUG
     print("[FavoriteSync] \(message)")
-#endif
 }
 
 private func formatSeconds(_ seconds: Double) -> String {

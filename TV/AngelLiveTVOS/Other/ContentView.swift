@@ -115,12 +115,23 @@ struct ContentView: View {
         } message: {
             Text("检测到您已在其他设备安装过插件，是否一键安装？")
         }
+        .overlay {
+            if appViewModel.pluginSourceSyncService.isInstalling {
+                cloudInstallProgressOverlay
+            }
+        }
         .onPlayPauseCommand(perform: {
             if contentVM.selection == 0 {
                 NotificationCenter.default.post(name: SimpleLiveNotificationNames.favoriteRefresh, object: nil)
             }
         })
-        .onChange(of: appViewModel.pluginAvailability.installedPluginIds) { _, installedIds in
+        .onChange(of: appViewModel.pluginAvailability.installedPluginIds) { oldIds, installedIds in
+            // 从无插件变为有插件时，主动触发收藏同步
+            if oldIds.isEmpty && !installedIds.isEmpty {
+                Task {
+                    await appViewModel.favoriteViewModel.syncWithActor()
+                }
+            }
             if installedIds.isEmpty, contentVM.selection == 2 {
                 contentVM.selection = 1
             }
@@ -140,5 +151,35 @@ struct ContentView: View {
 //            .foregroundColor(Color.white)
 //            .cornerRadius(10)
 //        }
+    }
+
+    // MARK: - 云端一键安装进度
+
+    private var cloudInstallProgressOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.4)
+                .ignoresSafeArea()
+
+            VStack(spacing: 24) {
+                ProgressView()
+                    .scaleEffect(2)
+
+                if let message = appViewModel.pluginSourceSyncService.installStatusMessage {
+                    Text(message)
+                        .font(.title3)
+                        .foregroundStyle(.white)
+                }
+
+                if appViewModel.pluginSourceManager.installTotalCount > 0 {
+                    Text("\(appViewModel.pluginSourceManager.installCompletedCount)/\(appViewModel.pluginSourceManager.installTotalCount)")
+                        .font(.headline)
+                        .foregroundStyle(.white.opacity(0.8))
+                }
+            }
+            .padding(48)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24))
+        }
+        .transition(.opacity)
+        .animation(.easeInOut(duration: 0.25), value: appViewModel.pluginSourceSyncService.isInstalling)
     }
 }

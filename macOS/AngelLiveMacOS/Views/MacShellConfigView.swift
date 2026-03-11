@@ -126,10 +126,20 @@ private struct MacSubscriptionContentSheet: View {
                     Button("完成") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("全部安装") {
-                        installAllPlugins()
+                    if pluginSourceManager.installTotalCount > 0 {
+                        HStack(spacing: 6) {
+                            ProgressView()
+                                .controlSize(.small)
+                            Text("\(pluginSourceManager.installCompletedCount)/\(pluginSourceManager.installTotalCount)")
+                                .font(.caption)
+                                .foregroundStyle(AppConstants.Colors.secondaryText)
+                        }
+                    } else {
+                        Button("全部安装") {
+                            installAllPlugins()
+                        }
+                        .disabled(!canInstallAll)
                     }
-                    .disabled(!canInstallAll)
                 }
             }
         }
@@ -194,8 +204,13 @@ private struct MacSubscriptionContentSheet: View {
             }
 
         case .installing:
-            ProgressView()
-                .controlSize(.small)
+            HStack(spacing: 4) {
+                ProgressView()
+                    .controlSize(.small)
+                Text("安装中")
+                    .font(.caption)
+                    .foregroundStyle(AppConstants.Colors.secondaryText)
+            }
 
         case .installed:
             if pluginSourceManager.updatingPluginIds.contains(item.id) {

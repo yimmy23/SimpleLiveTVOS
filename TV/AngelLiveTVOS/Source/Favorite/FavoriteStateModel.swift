@@ -41,15 +41,11 @@ class AppFavoriteModel {
         syncProgressInfo = ("", "", "", 0, 0)
         self.isLoading = true
 
-        // 先重置状态，确保 UI 能感知变化
-        self.cloudKitReady = false
-
         let state = await actor.getState()
+        self.cloudKitReady = state.0
         self.cloudKitStateString = state.1
-        self.cloudKitReady = state.0  // 在设置 stateString 后再设置 ready 状态
 
         if self.cloudKitReady {
-            // 创建一个异步任务来处理进度更新
             let progressTask = Task { @MainActor in
                 while !Task.isCancelled {
                     let progress = await actor.getCurrentProgress()
@@ -59,14 +55,14 @@ class AppFavoriteModel {
             }
             do {
                 let resp = try await actor.syncStreamerLiveStates()
+                progressTask.cancel()
                 self.roomList = resp.0
                 self.groupedRoomList = resp.1
-                progressTask.cancel()
                 syncProgressInfo = ("", "", "", 0, 0)
                 isLoading = false
             }catch {
-                self.cloudKitStateString = "获取收藏列表失败：" + FavoriteService.formatErrorCode(error: error)
                 progressTask.cancel()
+                self.cloudKitStateString = "获取收藏列表失败：" + FavoriteService.formatErrorCode(error: error)
                 syncProgressInfo = ("", "", "", 0, 0)
                 isLoading = false
                 cloudReturnError = true

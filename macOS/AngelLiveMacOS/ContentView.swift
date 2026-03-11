@@ -154,8 +154,19 @@ struct ContentView: View {
         } message: {
             Text("检测到您已在其他设备安装过插件，是否一键安装？")
         }
-        .onChange(of: pluginAvailability.installedPluginIds) { _, installedPluginIds in
+        .overlay {
+            if pluginSourceSyncService.isInstalling {
+                cloudInstallProgressOverlay
+            }
+        }
+        .onChange(of: pluginAvailability.installedPluginIds) { oldIds, installedPluginIds in
             platformViewModel.refreshPlatforms(installedPluginIds: installedPluginIds)
+            // 从无插件变为有插件时，主动触发收藏同步
+            if oldIds.isEmpty && !installedPluginIds.isEmpty {
+                Task {
+                    await favoriteViewModel.syncWithActor()
+                }
+            }
             if installedPluginIds.isEmpty {
                 if case .platform = selectedTab {
                     selectedTab = .allPlatforms
@@ -174,6 +185,37 @@ struct ContentView: View {
             }
         }
         .animation(.spring(response: 0.5, dampingFraction: 0.7), value: toastManager.currentToast)
+    }
+
+    // MARK: - 云端一键安装进度
+
+    private var cloudInstallProgressOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.4)
+                .ignoresSafeArea()
+
+            VStack(spacing: 16) {
+                ProgressView()
+                    .scaleEffect(1.5)
+                    .tint(.white)
+
+                if let message = pluginSourceSyncService.installStatusMessage {
+                    Text(message)
+                        .font(.body)
+                        .foregroundStyle(.white)
+                }
+
+                if pluginSourceManager.installTotalCount > 0 {
+                    Text("\(pluginSourceManager.installCompletedCount)/\(pluginSourceManager.installTotalCount)")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.8))
+                }
+            }
+            .padding(32)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+        }
+        .transition(.opacity)
+        .animation(.easeInOut(duration: 0.25), value: pluginSourceSyncService.isInstalling)
     }
 }
 

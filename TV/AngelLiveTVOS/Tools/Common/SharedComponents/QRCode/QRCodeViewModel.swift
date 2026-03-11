@@ -8,6 +8,7 @@
 import SwiftUI
 import CloudKit
 import AngelLiveDependencies
+import AngelLiveCore
 
 enum SimpleLiveSyncTaskState: CustomStringConvertible {
     case cleanOld

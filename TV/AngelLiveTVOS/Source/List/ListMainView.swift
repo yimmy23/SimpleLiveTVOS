@@ -8,6 +8,7 @@
 import SwiftUI
 import GameController
 import AngelLiveDependencies
+import AngelLiveCore
 
 enum FocusableField: Hashable {
     case leftMenu(Int, Int)

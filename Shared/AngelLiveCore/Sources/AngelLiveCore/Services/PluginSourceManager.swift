@@ -51,6 +51,12 @@ public final class PluginSourceManager: @unchecked Sendable {
     /// 正在更新中的插件 ID
     public private(set) var updatingPluginIds: Set<String> = []
 
+    /// 批量安装进度：已完成数量
+    public private(set) var installCompletedCount: Int = 0
+
+    /// 批量安装进度：总数量
+    public private(set) var installTotalCount: Int = 0
+
     /// 错误信息
     public var errorMessage: String?
 
@@ -260,12 +266,21 @@ public final class PluginSourceManager: @unchecked Sendable {
 
     /// 安装所有未安装的插件
     public func installAll() async -> Int {
+        let toInstall = remotePlugins.filter { $0.installState == .notInstalled }
+        installTotalCount = toInstall.count
+        installCompletedCount = 0
+
         var successCount = 0
-        for plugin in remotePlugins where plugin.installState == .notInstalled {
+        for plugin in toInstall {
             if await installPlugin(plugin) {
                 successCount += 1
             }
+            installCompletedCount += 1
         }
+
+        // 安装完成后重置进度
+        installTotalCount = 0
+        installCompletedCount = 0
         return successCount
     }
 

@@ -221,10 +221,19 @@ private struct TVSubscriptionContentSheet: View {
                             } header: {
                                 HStack {
                                     Spacer()
-                                    Button(action: { installAll() }) {
-                                        Text("全部安装")
+                                    if pluginSourceManager.installTotalCount > 0 {
+                                        HStack(spacing: 12) {
+                                            ProgressView()
+                                            Text("正在安装 \(pluginSourceManager.installCompletedCount)/\(pluginSourceManager.installTotalCount)")
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                    } else {
+                                        Button(action: { installAll() }) {
+                                            Text("全部安装")
+                                        }
+                                        .disabled(!canInstallAll)
                                     }
-                                    .disabled(!canInstallAll)
                                 }
                                 .padding(.bottom, 16)
                             }
@@ -268,7 +277,12 @@ private struct TVSubscriptionContentSheet: View {
             Image(systemName: "exclamationmark.triangle.fill")
                 .foregroundStyle(.orange)
         case .installing:
-            ProgressView()
+            HStack(spacing: 8) {
+                ProgressView()
+                Text("安装中")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         case .notInstalled:
             if pluginSourceManager.updatingPluginIds.contains(item.id) {
                 ProgressView()

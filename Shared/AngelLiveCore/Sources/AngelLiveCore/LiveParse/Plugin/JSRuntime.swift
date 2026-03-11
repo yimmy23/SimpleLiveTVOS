@@ -76,6 +76,7 @@ public final class JSRuntime: @unchecked Sendable {
         try await withCheckedThrowingContinuation { continuation in
             queue.async {
                 do {
+                    print("[JSRuntime:\(self.pluginId)] callPluginFunction(\(name)) 进入队列")
                     guard let pluginObject = self.context.objectForKeyedSubscript("LiveParsePlugin") else {
                         throw LiveParsePluginError.invalidReturnValue("Missing globalThis.LiveParsePlugin")
                     }
@@ -92,12 +93,15 @@ public final class JSRuntime: @unchecked Sendable {
                     }
 
                     if Self.isPromise(result) {
-                        self.awaitPromise(result, continuation: continuation)
+                        print("[JSRuntime:\(self.pluginId)] callPluginFunction(\(name)) 返回 Promise，等待解析")
+                        self.awaitPromise(result, functionName: name, continuation: continuation)
                         return
                     }
 
+                    print("[JSRuntime:\(self.pluginId)] callPluginFunction(\(name)) 同步返回")
                     continuation.resume(returning: try Self.convertToJSONObject(result, in: self.context))
                 } catch {
+                    print("[JSRuntime:\(self.pluginId)] callPluginFunction(\(name)) 异常: \(error)")
                     continuation.resume(throwing: error)
                 }
             }
@@ -157,12 +161,18 @@ private extension JSRuntime {
 
           Host.http = Host.http || {};
           Host.http.request = function (options) {
+            var url = (options && options.url) || (options && options.request && options.request.url) || "";
+            console.log("[Host.http.request] 发起请求: " + url);
             return new Promise(function (resolve, reject) {
               __lp_host_http_request(
                 JSON.stringify(options || {}),
-                function (resultJSON) { resolve(JSON.parse(resultJSON)); },
+                function (resultJSON) {
+                  console.log("[Host.http.request] resolve 回调触发: " + url);
+                  resolve(JSON.parse(resultJSON));
+                },
                 function (err) {
-                  reject(Host.makeError("NETWORK", String(err || "host http request failed"), { url: (options && options.url) || "" }));
+                  console.log("[Host.http.request] reject 回调触发: " + url + " err=" + err);
+                  reject(Host.makeError("NETWORK", String(err || "host http request failed"), { url: url }));
                 }
               );
             });
@@ -238,13 +248,16 @@ private extension JSRuntime {
             request.httpBody = envelope.body
 
             let task = session.dataTask(with: request) { data, response, error in
-                queue.async {
+                queue.async { [weak context] in
+                    guard let context else { return }
                     if let error {
                         reject.call(withArguments: [error.localizedDescription])
+                        context.evaluateScript("void(0)")
                         return
                     }
                     guard let http = response as? HTTPURLResponse else {
-                        reject.call(withArguments: ["Invalid response"]) 
+                        reject.call(withArguments: ["Invalid response"])
+                        context.evaluateScript("void(0)")
                         return
                     }
 
@@ -278,6 +291,7 @@ private extension JSRuntime {
                     let jsonData = (try? JSONSerialization.data(withJSONObject: result)) ?? Data("{}".utf8)
                     let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
                     resolve.call(withArguments: [jsonString])
+                    context.evaluateScript("void(0)")
                 }
             }
             task.resume()
@@ -426,19 +440,39 @@ private extension JSRuntime {
         return then?.isObject == true
     }
 
-    func awaitPromise(_ promise: JSValue, continuation: CheckedContinuation<Any, Error>) {
+    func awaitPromise(_ promise: JSValue, functionName: String = "", continuation: CheckedContinuation<Any, Error>) {
         nonisolated(unsafe) let continuation = continuation
-        let resolve: @convention(block) (JSValue) -> Void = { value in
+        let pluginId = self.pluginId
+        let context = self.context
+
+        // 用唯一 key 将 promise 和回调注册到 JS 全局空间，
+        // 然后通过 evaluateScript 执行 .then()，确保回调在 JS 引擎内部被调度。
+        let key = "_lp_await_\(UUID().uuidString.replacingOccurrences(of: "-", with: ""))"
+
+        let resolve: @convention(block) (JSValue) -> Void = { [weak context] value in
+            print("[JSRuntime:\(pluginId)] awaitPromise(\(functionName)) resolve 回调触发")
+            // 清理全局变量
+            context?.evaluateScript("delete globalThis.\(key); delete globalThis.\(key)_r; delete globalThis.\(key)_j;")
             do {
-                continuation.resume(returning: try Self.convertToJSONObject(value, in: self.context))
+                let converted = try Self.convertToJSONObject(value, in: context!)
+                continuation.resume(returning: converted)
             } catch {
                 continuation.resume(throwing: error)
             }
         }
-        let reject: @convention(block) (JSValue) -> Void = { value in
+        let reject: @convention(block) (JSValue) -> Void = { [weak context] value in
+            print("[JSRuntime:\(pluginId)] awaitPromise(\(functionName)) reject 回调触发: \(value.toString() ?? "")")
+            context?.evaluateScript("delete globalThis.\(key); delete globalThis.\(key)_r; delete globalThis.\(key)_j;")
             continuation.resume(throwing: LiveParsePluginError.fromJSException(value.toString() ?? "<unknown>"))
         }
-        promise.invokeMethod("then", withArguments: [resolve, reject])
+
+        // 将 promise 和回调注册到 JS 全局空间
+        context.setObject(promise, forKeyedSubscript: key as NSString)
+        context.setObject(resolve, forKeyedSubscript: "\(key)_r" as NSString)
+        context.setObject(reject, forKeyedSubscript: "\(key)_j" as NSString)
+
+        // 通过 evaluateScript 执行 .then()，这样回调会在 JS 引擎的正常执行流中被调度
+        context.evaluateScript("globalThis.\(key).then(globalThis.\(key)_r, globalThis.\(key)_j);")
     }
 
     static func convertToJSONObject(_ value: JSValue, in context: JSContext) throws -> Any {
@@ -498,13 +532,16 @@ private extension JSRuntime {
                             let jsonData = try JSONSerialization.data(withJSONObject: streamInfo)
                             let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
                             resolve.call(withArguments: [jsonString])
+                            context.evaluateScript("void(0)")
                         } catch {
                             reject.call(withArguments: ["YY serialize stream info failed: \(error.localizedDescription)"])
+                            context.evaluateScript("void(0)")
                         }
                     }
                 } catch {
                     queue.async {
                         reject.call(withArguments: [error.localizedDescription])
+                        context.evaluateScript("void(0)")
                     }
                 }
             }

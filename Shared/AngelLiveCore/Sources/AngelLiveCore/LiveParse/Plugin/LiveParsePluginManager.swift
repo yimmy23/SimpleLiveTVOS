@@ -110,9 +110,14 @@ public final class LiveParsePluginManager: @unchecked Sendable {
             return ["ok": true, "managedByHost": true, "hasCookie": false]
         }
 
+        print("[PluginManager] call: pluginId=\(pluginId) function=\(function) 准备 resolve")
         let plugin = try resolve(pluginId: pluginId)
+        print("[PluginManager] call: pluginId=\(pluginId) function=\(function) resolve 成功, 准备 load")
         try await plugin.load()
-        return try await plugin.runtime.callPluginFunction(name: function, payload: payload)
+        print("[PluginManager] call: pluginId=\(pluginId) function=\(function) load 成功, 准备 callPluginFunction")
+        let result = try await plugin.runtime.callPluginFunction(name: function, payload: payload)
+        print("[PluginManager] call: pluginId=\(pluginId) function=\(function) callPluginFunction 返回成功")
+        return result
     }
 
     public func callDecodable<T: Decodable>(

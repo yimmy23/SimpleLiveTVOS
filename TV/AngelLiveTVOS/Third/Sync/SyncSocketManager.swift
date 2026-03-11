@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import AngelLiveCore
 import AngelLiveDependencies
 
 enum SimpleSyncType: CustomStringConvertible {
@@ -96,9 +97,11 @@ class UDPListener: NSObject, GCDAsyncUdpSocketDelegate {
         if let message = String(data: data, encoding: .utf8) {
             print("Received message: \(message)")
             do {
-                let json = try JSON(data: data)
-                if json["type"] == "hello" {
-                    udpSocket?.send(try JSON(["id": UUID().uuidString, "type": "tv", "name": Common.hostName()]).rawData(), toAddress: address, withTimeout: 10, tag: 0)
+                if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   json["type"] as? String == "hello" {
+                    let response: [String: Any] = ["id": UUID().uuidString, "type": "tv", "name": Common.hostName() ?? "Apple TV"]
+                    let responseData = try JSONSerialization.data(withJSONObject: response)
+                    udpSocket?.send(responseData, toAddress: address, withTimeout: 10, tag: 0)
                 }
             }catch {
                 
@@ -118,6 +121,10 @@ final class HTTPHandler: ChannelInboundHandler {
     var requestHeaderT: HTTPRequestHead?
     var syncSuccess: ((SimpleSyncType, Bool, Any) -> Void)?
 
+    private func jsonString(_ dict: [String: Any]) -> String? {
+        (try? JSONSerialization.data(withJSONObject: dict)).flatMap { String(data: $0, encoding: .utf8) }
+    }
+
     func channelRead(context: ChannelHandlerContext, data: NIOAny) {
         let reqPart = self.unwrapInboundIn(data)
         var headers = NIOHTTP1.HTTPHeaders()
@@ -130,14 +137,15 @@ final class HTTPHandler: ChannelInboundHandler {
                 responseBody = HTTPServerResponsePart.body(.byteBuffer(ByteBuffer(string: "Hello, World!")))
                 response = .head(HTTPResponseHead(version: requestHeader.version, status: .ok))
             }else if requestHeader.uri == "/info" {
-                let resp = JSON([
+                let infoDict: [String: Any] = [
                     "id": UUID().uuidString,
                     "type": "tv",
                     "name": Common.hostName() ?? "Apple TV",
                     "version": "1.2.0",
                     "address": Common.getWiFiIPAddress() ?? "127.0.0.1",
                     "port": httpPort
-                ]).rawString()
+                ]
+                let resp = (try? JSONSerialization.data(withJSONObject: infoDict)).flatMap { String(data: $0, encoding: .utf8) }
                 
                 responseBody = HTTPServerResponsePart.body(.byteBuffer(ByteBuffer(string: resp ?? "")))
                 response = .head(HTTPResponseHead(version: requestHeader.version, status: .ok, headers: headers))
@@ -154,10 +162,7 @@ final class HTTPHandler: ChannelInboundHandler {
             if let body = requestBody, let bodyString = body.getString(at: 0, length: body.readableBytes) {
                 print("Request body: \(bodyString)")
                 if requestHeaderT?.uri.contains("sync/follow") == true {
-                    let resp = JSON([
-                        "status": true,
-                        "message": "success",
-                    ]).rawString()
+                    let resp = jsonString(["status": true, "message": "success"])
                     
                     let respList = formatDatas(bodyString: bodyString)
                     let overlay = getOverlayFormat(url: requestHeaderT?.uri ?? "")
@@ -171,10 +176,7 @@ final class HTTPHandler: ChannelInboundHandler {
                     response = .head(HTTPResponseHead(version: requestHeaderT!.version, status: .ok, headers: headers))
                 }
                 if requestHeaderT?.uri.contains("sync/history") == true {
-                    let resp = JSON([
-                        "status": true,
-                        "message": "success",
-                    ]).rawString()
+                    let resp = jsonString(["status": true, "message": "success"])
                     let respList = formatDatas(bodyString: bodyString)
                     let overlay = getOverlayFormat(url: requestHeaderT?.uri ?? "")
                     if self.syncSuccess != nil {
@@ -186,20 +188,14 @@ final class HTTPHandler: ChannelInboundHandler {
                     response = .head(HTTPResponseHead(version: requestHeaderT!.version, status: .ok, headers: headers))
                 }
                 if requestHeaderT?.uri.contains("blocked_word") == true {
-                    let resp = JSON([
-                        "status": false,
-                        "message": "Apple TV 端暂不支持此功能",
-                    ]).rawString()
+                    let resp = jsonString(["status": false, "message": "Apple TV 端暂不支持此功能"])
                     responseBody = HTTPServerResponsePart.body(.byteBuffer(ByteBuffer(string: resp ?? "")))
                     response = .head(HTTPResponseHead(version: requestHeaderT!.version, status: .ok, headers: headers))
                     // 重置为下一个请求
                     requestBody = nil
                 }
                 if requestHeaderT?.uri.contains("account/bilibili") == true {
-                    let resp = JSON([
-                        "status": false,
-                        "message": "Apple TV 端暂不支持此功能",
-                    ]).rawString()
+                    let resp = jsonString(["status": false, "message": "Apple TV 端暂不支持此功能"])
                     responseBody = HTTPServerResponsePart.body(.byteBuffer(ByteBuffer(string: resp ?? "")))
                     response = .head(HTTPResponseHead(version: requestHeaderT!.version, status: .ok, headers: headers))
                     // 重置为下一个请求
@@ -236,15 +232,12 @@ final class HTTPHandler: ChannelInboundHandler {
         }
     
     func formatDatas(bodyString: String) -> [LiveModel] {
-        _ = JSON([
-            "status": true,
-            "message": "success",
-        ]).rawString()
         var tempArray:[LiveModel] = []
-        if let respFollowList = try? JSON(data: bodyString.data(using: .utf8)!) {
-            for item in respFollowList.arrayValue {
+        if let data = bodyString.data(using: .utf8),
+           let respFollowList = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+            for item in respFollowList {
                 var liveType = LiveType.bilibili
-                switch item["siteId"].stringValue {
+                switch item["siteId"] as? String ?? "" {
                     case "bilibili":
                         liveType = .bilibili
                     case "huya":
@@ -256,7 +249,7 @@ final class HTTPHandler: ChannelInboundHandler {
                     default:
                         liveType = .bilibili
                 }
-                tempArray.append(LiveModel(userName: item["userName"].stringValue, roomTitle: "", roomCover: "", userHeadImg: item["face"].stringValue, liveType: liveType, liveState: nil, userId: "", roomId: item["roomId"].stringValue, liveWatchedCount: nil))
+                tempArray.append(LiveModel(userName: item["userName"] as? String ?? "", roomTitle: "", roomCover: "", userHeadImg: item["face"] as? String ?? "", liveType: liveType, liveState: nil, userId: "", roomId: item["roomId"] as? String ?? "", liveWatchedCount: nil))
             }
         }
         return tempArray

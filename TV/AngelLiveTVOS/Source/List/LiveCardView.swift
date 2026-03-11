@@ -47,8 +47,8 @@ struct LiveCardView: View {
         @Bindable var liveModel = liveViewModel
         @State var roomList = liveViewModel.roomList
 
-        if index < roomList.count {
-            let currentLiveModel = self.currentLiveModel == nil ? roomList[index] : self.currentLiveModel!
+        if self.currentLiveModel != nil || index < roomList.count {
+            let currentLiveModel = self.currentLiveModel ?? roomList[index]
             VStack(alignment: .leading, spacing: 12) {
                 // 封面区域
                 coverSection(currentLiveModel: currentLiveModel, liveModel: $liveModel)
@@ -205,7 +205,7 @@ struct LiveCardView: View {
     private func platformAndStatusOverlay(currentLiveModel: LiveModel) -> some View {
         HStack {
             // 平台图标
-            Image(uiImage: .init(named: getImage())!)
+            Image(uiImage: TVPlatformIconProvider.tabImage(for: currentLiveModel.liveType) ?? UIImage())
                 .resizable()
                 .frame(width: 36, height: 36)
                 .clipShape(RoundedRectangle(cornerRadius: 6))
@@ -398,40 +398,6 @@ struct LiveCardView: View {
             await MainActor.run {
                 self.currentLiveModel?.liveState = newState.rawValue
             }
-        }
-    }
-
-    func getImage() -> String {
-        guard index < liveViewModel.roomList.count else { return "live_card_bili" }
-
-        let currentLiveModel: LiveModel
-        if let existingModel = self.currentLiveModel {
-            currentLiveModel = existingModel
-        } else {
-            currentLiveModel = liveViewModel.roomList[index]
-        }
-
-        switch currentLiveModel.liveType {
-            case LiveType.bilibili:
-                return "live_card_bili"
-            case LiveType.douyu:
-                return "live_card_douyu"
-            case LiveType.huya:
-                return "live_card_huya"
-            case LiveType.douyin:
-                return "live_card_douyin"
-            case LiveType.yy:
-                return "live_card_yy"
-            case LiveType.cc:
-                return "live_card_cc"
-            case LiveType.ks:
-                return "live_card_ks"
-            case LiveType.soop:
-                return "live_card_soop"
-            case LiveType.youtube:
-                return "live_card_yy"
-            default:
-                return "live_card_yy"
         }
     }
 }
