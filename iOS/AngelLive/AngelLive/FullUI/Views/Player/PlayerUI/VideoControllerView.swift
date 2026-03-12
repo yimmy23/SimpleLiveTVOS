@@ -228,10 +228,13 @@ struct VideoControllerView: View {
                                     handleBackButton()
                                 } label: {
                                     Image(systemName: "chevron.left")
-                                        .frame(width: 30, height: 30)
                                         .font(.system(size: 18, weight: .semibold))
                                         .foregroundStyle(.white)
+                                        .frame(width: 30, height: 30)
+                                        .padding(10)
+                                        .contentShape(Rectangle())
                                 }
+                                .padding(-10)
                                 .ksBorderlessButton()
                                 Spacer()
                             }

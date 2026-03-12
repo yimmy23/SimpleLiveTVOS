@@ -8,6 +8,7 @@
 import SwiftUI
 import AngelLiveCore
 import AngelLiveDependencies
+import MediaPlayer
 
 struct DetailPlayerView: View {
     @State var viewModel: RoomInfoViewModel
@@ -208,16 +209,25 @@ struct DetailPlayerView: View {
                 break
             }
         }
+        .onChange(of: viewModel.isPlaying) { _, isPlaying in
+            NowPlayingManager.updatePlaybackState(isPlaying: isPlaying)
+        }
         .task {
             await viewModel.loadPlayURL()
         }
         .onAppear {
             // 添加观看历史记录
             historyModel.addHistory(room: viewModel.currentRoom)
+            // 设置 Now Playing 信息
+            NowPlayingManager.update(room: viewModel.currentRoom, isPlaying: false)
+            setupRemoteCommandCenter()
         }
         .onDisappear {
             Logger.debug("[PlayerFlow] Detail onDisappear, roomId=\(viewModel.currentRoom.roomId), kernel=\(viewModel.selectedPlayerKernel.rawValue)", category: .player)
             viewModel.disconnectSocket()
+            // 清除 Now Playing 信息
+            NowPlayingManager.clear()
+            teardownRemoteCommandCenter()
             // iPhone 返回时强制竖屏
             if !AppConstants.Device.isIPad {
                 // 设置支持的方向为竖屏
@@ -372,6 +382,35 @@ struct DetailPlayerView: View {
             viewModel.danmuMessages.removeAll()
             showJumpToLatest = false
         }
+    }
+
+    // MARK: - Remote Command Center
+
+    private func setupRemoteCommandCenter() {
+        let commandCenter = MPRemoteCommandCenter.shared()
+        commandCenter.playCommand.addTarget { _ in
+            playerCoordinator.playerLayer?.play()
+            return .success
+        }
+        commandCenter.pauseCommand.addTarget { _ in
+            playerCoordinator.playerLayer?.pause()
+            return .success
+        }
+        commandCenter.togglePlayPauseCommand.addTarget { _ in
+            if viewModel.isPlaying {
+                playerCoordinator.playerLayer?.pause()
+            } else {
+                playerCoordinator.playerLayer?.play()
+            }
+            return .success
+        }
+    }
+
+    private func teardownRemoteCommandCenter() {
+        let commandCenter = MPRemoteCommandCenter.shared()
+        commandCenter.playCommand.removeTarget(nil)
+        commandCenter.pauseCommand.removeTarget(nil)
+        commandCenter.togglePlayPauseCommand.removeTarget(nil)
     }
 }
 

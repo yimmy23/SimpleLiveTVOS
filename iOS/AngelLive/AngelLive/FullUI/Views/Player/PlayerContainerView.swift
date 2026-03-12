@@ -171,7 +171,7 @@ struct PlayerContentView: View {
                    naturalSize.width > 1.0, naturalSize.height > 1.0 {
                     let ratio = naturalSize.width / naturalSize.height
                     let isPortrait = ratio < 1.0
-                    let isVerticalLive = isPortrait && naturalSize.height >= 960
+                    let isVerticalLive = isPortrait
                     print("📺 [readyToPlay] 视频尺寸: \(naturalSize.width) x \(naturalSize.height)")
                     print("📐 [readyToPlay] 视频比例: \(ratio)")
                     print("📱 [readyToPlay] 视频方向: \(isPortrait ? "竖屏" : "横屏")")
@@ -295,6 +295,7 @@ struct PlayerContentView: View {
                         // 使用异步任务定期检查视频尺寸
                         var retryCount = 0
                         let maxRetries = 40 // 最多重试 40 次（10 秒）
+                        let screenSize = await MainActor.run { UIScreen.main.bounds.size }
 
                         print("🔍 开始检测视频尺寸... URL: \(playURL.absoluteString)")
 
@@ -303,29 +304,24 @@ struct PlayerContentView: View {
                             if hasDetectedSize { break }
 
                             if let naturalSize = playerCoordinator.playerLayer?.player.naturalSize,
-                               naturalSize.width > 0, naturalSize.height > 0 {
+                               naturalSize.width > 1.0, naturalSize.height > 1.0 {
 
-                                // 必须等到 readyToPlay 或之后状态才信任 naturalSize，
-                                // 否则可能拿到视图初始渲染尺寸（如屏幕尺寸 430x932）
-                                let isReady = playerCoordinator.state == .readyToPlay || playerCoordinator.state.isPlaying
-                                // 检查是否为有效尺寸（排除 1.0 x 1.0 等占位符）
-                                let isValidSize = naturalSize.width > 1.0 && naturalSize.height > 1.0
+                                // 排除屏幕/视图初始渲染尺寸：
+                                // 如果 naturalSize 和屏幕尺寸（或其翻转）完全一致，说明还没拿到真实视频尺寸
+                                let isScreenSize =
+                                    (naturalSize.width == screenSize.width && naturalSize.height == screenSize.height) ||
+                                    (naturalSize.width == screenSize.height && naturalSize.height == screenSize.width)
 
-                                if !isValidSize || !isReady {
-                                    print("⚠️ 视频尺寸未就绪: \(naturalSize.width) x \(naturalSize.height), state=\(playerCoordinator.state)，继续等待... (\(retryCount)/\(maxRetries))")
+                                if isScreenSize {
+                                    print("⚠️ 视频尺寸为屏幕尺寸: \(naturalSize.width) x \(naturalSize.height)，继续等待... (\(retryCount)/\(maxRetries))")
                                 } else if !hasDetectedSize {
                                     let ratio = naturalSize.width / naturalSize.height
                                     let isPortrait = ratio < 1.0
-                                    let isVerticalLive = isPortrait && naturalSize.height >= 960
+                                    let isVerticalLive = isPortrait
 
                                     print("📺 视频尺寸: \(naturalSize.width) x \(naturalSize.height)")
                                     print("📐 视频比例: \(ratio)")
                                     print("📱 视频方向: \(isPortrait ? "竖屏" : "横屏")")
-                                    print("🖥️ 设备方向: \(isDeviceLandscape ? "横屏" : "竖屏")")
-
-                                    if isVerticalLive {
-                                        print("🎬 检测到竖屏直播模式！高度: \(naturalSize.height)")
-                                    }
 
                                     await MainActor.run {
                                         applyVideoFillMode(isVerticalLive: isVerticalLive)
@@ -338,9 +334,8 @@ struct PlayerContentView: View {
                                         }
                                     }
 
-                                    break // 获取到后退出循环
+                                    break
                                 } else {
-                                    // 已经检测过，直接退出
                                     break
                                 }
                             }

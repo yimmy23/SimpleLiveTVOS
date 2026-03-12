@@ -69,11 +69,14 @@ struct VerticalLiveControllerView: View {
                 } label: {
                     Image(systemName: "chevron.backward")
                         .fontWeight(.medium)
+                        .foregroundStyle(.white)
                         .frame(width: 40, height: 40)
+                        .background(Color.black.opacity(AppConstants.PlayerUI.Opacity.backplate), in: RoundedRectangle(cornerRadius: 20))
+                        .adaptiveGlassEffect(in: .rect(cornerRadius: 20.0))
+                        .padding(5)
+                        .contentShape(Rectangle())
                 }
-                .frame(width: 40, height: 40)
-                .background(Color.black.opacity(AppConstants.PlayerUI.Opacity.backplate), in: RoundedRectangle(cornerRadius: 20))
-                .adaptiveGlassEffect(in: .rect(cornerRadius: 20.0))
+                .padding(-5)
 
                 // 主播信息
                 HStack(spacing: 10) {

@@ -26,7 +26,11 @@ struct ChatTableView: UIViewRepresentable {
         tableView.keyboardDismissMode = .interactive
         tableView.estimatedRowHeight = 44
         tableView.rowHeight = UITableView.automaticDimension
-        tableView.contentInset = UIEdgeInsets(top: 12, left: 0, bottom: 72, right: 0)
+        tableView.contentInset = UIEdgeInsets(top: 12, left: 0, bottom: 0, right: 0)
+        // 用 footer 占位代替 contentInset.bottom，避免影响底部滚动判断
+        let footer = UIView(frame: CGRect(x: 0, y: 0, width: 0, height: 56))
+        footer.backgroundColor = .clear
+        tableView.tableFooterView = footer
         tableView.dataSource = context.coordinator
         tableView.delegate = context.coordinator
         tableView.register(ChatBubbleCapsuleCell.self, forCellReuseIdentifier: ChatBubbleCapsuleCell.reuseIdentifier)
@@ -57,7 +61,8 @@ struct ChatTableView: UIViewRepresentable {
     final class Coordinator: NSObject, UITableViewDataSource, UITableViewDelegate {
         private var messages: [ChatMessage] = []
         private var messageIDs: [UUID] = []
-        private var isUserAtBottom = true
+        private var userHasScrolledUp = false  // 用户主动上滑了
+        private var isProgrammaticScroll = false  // 正在程序化滚动（非用户触发）
         private var cachedCellTypes: [UUID: Bool] = [:] // true = capsule, false = rounded
         private var lastTableWidth: CGFloat = 0
         var setShowJumpToLatest: ((Bool) -> Void)?
@@ -73,8 +78,9 @@ struct ChatTableView: UIViewRepresentable {
                 messageIDs = newIDs
                 lastTableWidth = tableWidth
                 tableView.reloadData()
-                if isUserAtBottom {
-                    scrollToBottom(in: tableView, animated: false)
+                tableView.layoutIfNeeded()
+                if !userHasScrolledUp {
+                    programmaticScrollToBottom(in: tableView, animated: false)
                 }
                 return
             }
@@ -84,62 +90,42 @@ struct ChatTableView: UIViewRepresentable {
                 return
             }
 
-            if messageIDs.isEmpty {
-                self.messages = messages
-                messageIDs = newIDs
+            let oldCount = messageIDs.count
+            self.messages = messages
+            messageIDs = newIDs
+
+            if oldCount == 0 {
                 tableView.reloadData()
-                scrollToBottom(in: tableView, animated: false)
+                programmaticScrollToBottom(in: tableView, animated: false)
                 return
             }
 
-            let canInsert = newIDs.count >= messageIDs.count && isPrefix(messageIDs, of: newIDs)
-            if canInsert {
-                let insertedRange = messageIDs.count..<newIDs.count
-                if !insertedRange.isEmpty {
-                    self.messages = messages
-                    let indexPaths = insertedRange.map { IndexPath(row: $0, section: 0) }
-                    UIView.performWithoutAnimation {
-                        tableView.performBatchUpdates {
-                            tableView.insertRows(at: indexPaths, with: .none)
-                        }
-                        tableView.layoutIfNeeded()
-                    }
-                    messageIDs = newIDs
-                    if isUserAtBottom {
-                        scrollToBottom(in: tableView, animated: false)
-                        setShowJumpToLatest?(false)
-                    } else {
-                        setShowJumpToLatest?(true)
-                    }
-                    return
-                }
-            }
-
-            self.messages = messages
-            messageIDs = newIDs
+            // 直接 reloadData，简单可靠
             tableView.reloadData()
-            if isUserAtBottom {
-                scrollToBottom(in: tableView, animated: false)
-                setShowJumpToLatest?(false)
+            
+            if !userHasScrolledUp {
+                programmaticScrollToBottom(in: tableView, animated: false)
             } else {
                 setShowJumpToLatest?(true)
             }
         }
 
-        private func isPrefix(_ prefix: [UUID], of array: [UUID]) -> Bool {
-            guard array.count >= prefix.count else { return false }
-            for index in prefix.indices {
-                if prefix[index] != array[index] {
-                    return false
-                }
-            }
-            return true
-        }
-
-        func scrollToBottom(in tableView: UITableView, animated: Bool) {
-            let row = max(0, messages.count - 1)
-            guard messages.indices.contains(row) else { return }
+        /// 程序化滚动到底部（不触发 userHasScrolledUp）
+        private func programmaticScrollToBottom(in tableView: UITableView, animated: Bool) {
+            let row = messages.count - 1
+            guard row >= 0 else { return }
+            isProgrammaticScroll = true
             tableView.scrollToRow(at: IndexPath(row: row, section: 0), at: .bottom, animated: animated)
+            if !animated {
+                isProgrammaticScroll = false
+            }
+            setShowJumpToLatest?(false)
+        }
+        
+        /// 外部请求滚动到底部（点击"查看最新评论"）
+        func scrollToBottom(in tableView: UITableView, animated: Bool) {
+            userHasScrolledUp = false
+            programmaticScrollToBottom(in: tableView, animated: animated)
         }
         
         /// 判断消息是否为单行（使用胶囊样式）
@@ -216,18 +202,48 @@ struct ChatTableView: UIViewRepresentable {
 
         // MARK: - UITableViewDelegate
 
-        func scrollViewDidScroll(_ scrollView: UIScrollView) {
-            let threshold: CGFloat = 60
-            let offsetY = scrollView.contentOffset.y
-            let visibleHeight = scrollView.bounds.height
+        /// 用户开始手动拖拽 → 标记为用户主动滚动
+        func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+            // 只有用户手指触发的拖拽才标记
+            userHasScrolledUp = true
+            setShowJumpToLatest?(true)
+        }
+        
+        func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+            if !decelerate {
+                checkIfAtBottom(scrollView)
+            }
+        }
+        
+        func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+            checkIfAtBottom(scrollView)
+        }
+        
+        func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
+            // 程序化滚动动画结束
+            isProgrammaticScroll = false
+            userHasScrolledUp = false
+            setShowJumpToLatest?(false)
+        }
+        
+        /// 用户拖拽结束后，检查是否已经滚到底部附近，如果是则恢复自动滚动
+        private func checkIfAtBottom(_ scrollView: UIScrollView) {
             let contentHeight = scrollView.contentSize.height
-            let isAtBottom = offsetY + visibleHeight >= contentHeight - threshold
-
-            if isAtBottom != isUserAtBottom {
-                isUserAtBottom = isAtBottom
-                if isAtBottom {
-                    setShowJumpToLatest?(false)
-                }
+            let visibleHeight = scrollView.bounds.height
+            
+            guard contentHeight > visibleHeight else {
+                userHasScrolledUp = false
+                setShowJumpToLatest?(false)
+                return
+            }
+            
+            let threshold: CGFloat = 80
+            let offsetY = scrollView.contentOffset.y
+            let maxOffset = contentHeight - visibleHeight
+            
+            if offsetY >= maxOffset - threshold {
+                userHasScrolledUp = false
+                setShowJumpToLatest?(false)
             }
         }
     }
@@ -347,6 +363,12 @@ class ChatBubbleBaseCell: UITableViewCell {
 final class ChatBubbleCapsuleCell: ChatBubbleBaseCell {
     static let reuseIdentifier = "ChatBubbleCapsuleCell"
     
+    override func configure(with message: ChatMessage) {
+        super.configure(with: message)
+        // 立即设置一次，layoutSubviews 会在布局完成后再次修正
+        bubbleView.layer.cornerRadius = bubbleView.bounds.height / 2
+    }
+    
     override func layoutSubviews() {
         super.layoutSubviews()
         // 胶囊样式：圆角 = 高度/2
@@ -359,9 +381,8 @@ final class ChatBubbleCapsuleCell: ChatBubbleBaseCell {
 final class ChatBubbleRoundedCell: ChatBubbleBaseCell {
     static let reuseIdentifier = "ChatBubbleRoundedCell"
     
-    override func setupUI() {
-        super.setupUI()
-        // 固定圆角 12
+    override func configure(with message: ChatMessage) {
+        super.configure(with: message)
         bubbleView.layer.cornerRadius = 12
     }
 }
