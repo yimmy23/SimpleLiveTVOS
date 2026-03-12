@@ -129,6 +129,8 @@ struct ContentView: View {
         .environment(toastManager)
         .environment(fullscreenPlayerManager)
         .task {
+            // 启动时拉取 key 映射（后台静默，不阻塞 UI）
+            Task { await PluginSourceKeyService.shared.fetchKeys() }
             await pluginAvailability.checkAvailability()
             platformViewModel.refreshPlatforms(installedPluginIds: pluginAvailability.installedPluginIds)
             // 无本地插件时，检查 CloudKit 是否有已保存的插件源

@@ -109,6 +109,45 @@ public final class PluginSourceManager: @unchecked Sendable {
         saveSourceURLs()
     }
 
+    /// 添加订阅源，支持 key 解析：若输入匹配 key，依次尝试访问候选 URL，
+    /// 只将第一个能成功访问的 URL 存入（而非 key 本身）。
+    /// 返回实际添加的 URL 列表。
+    public func addSourceWithKeyResolution(_ input: String) async -> [String] {
+        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+
+        // 确保 keys 已加载
+        await PluginSourceKeyService.shared.fetchKeys()
+
+        // 尝试 key 解析
+        if let candidateURLs = await PluginSourceKeyService.shared.resolveKey(trimmed) {
+            // 依次尝试，只存第一个能成功拉取索引的 URL
+            for candidate in candidateURLs {
+                guard !sourceURLs.contains(candidate),
+                      let url = URL(string: candidate) else { continue }
+                do {
+                    _ = try await fetchIndexWithTimeout(url: url)
+                    // 访问成功，存入这个 URL
+                    addSource(candidate)
+                    return [candidate]
+                } catch {
+                    Logger.warning("Key resolve: \(candidate) 不可用，尝试下一个", category: .plugin)
+                    continue
+                }
+            }
+            // 所有候选 URL 都失败
+            errorMessage = "所有候选源地址均不可用"
+            return []
+        }
+
+        // 非 key，按原样添加
+        if !sourceURLs.contains(trimmed) {
+            addSource(trimmed)
+            return [trimmed]
+        }
+        return []
+    }
+
     public func removeSource(_ urlString: String) {
         let trimmed = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
         sourceURLs.removeAll { $0 == trimmed }

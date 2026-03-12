@@ -218,10 +218,21 @@ private struct AddContentSheet: View {
                 isProcessing = false
             }
         } else {
+            // 非 .json 后缀：先尝试 key 解析
+            inputURL = ""
+            inputTitle = ""
+            isProcessing = true
             Task {
-                await bookmarkService.add(title: inputTitle.isEmpty ? url : inputTitle, url: url)
-                inputURL = ""
-                inputTitle = ""
+                let addedURLs = await pluginSourceManager.addSourceWithKeyResolution(url)
+                if !addedURLs.isEmpty {
+                    showPluginList = true
+                    for added in addedURLs {
+                        await pluginSourceManager.fetchIndex(from: added)
+                    }
+                } else {
+                    await bookmarkService.add(title: inputTitle.isEmpty ? url : inputTitle, url: url)
+                }
+                isProcessing = false
             }
         }
     }

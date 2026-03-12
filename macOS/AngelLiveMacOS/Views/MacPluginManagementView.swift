@@ -217,14 +217,16 @@ struct MacPluginManagementView: View {
     }
 
     private func addSource() {
-        let url = inputURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !url.isEmpty else { return }
+        let input = inputURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !input.isEmpty else { return }
 
-        pluginSourceManager.addSource(url)
         inputURL = ""
         isProcessing = true
         Task {
-            await pluginSourceManager.fetchIndex(from: url)
+            let addedURLs = await pluginSourceManager.addSourceWithKeyResolution(input)
+            if let firstURL = addedURLs.first {
+                await pluginSourceManager.fetchIndex(from: firstURL)
+            }
             await pluginSourceManager.refreshAvailableUpdates()
             isProcessing = false
         }

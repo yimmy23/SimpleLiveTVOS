@@ -158,13 +158,25 @@ struct TVShellConfigView: View {
                 isProcessing = false
             }
         } else {
+            // 非 .json 后缀：先尝试 key 解析，匹配则当订阅源处理
+            inputURL = ""
+            inputTitle = ""
+            isProcessing = true
             Task {
-                await appViewModel.bookmarkService.add(
-                    title: inputTitle.isEmpty ? url : inputTitle,
-                    url: url
-                )
-                inputURL = ""
-                inputTitle = ""
+                let addedURLs = await appViewModel.pluginSourceManager.addSourceWithKeyResolution(url)
+                if !addedURLs.isEmpty {
+                    // key 解析成功，当作订阅源
+                    showContentSheet = true
+                    await appViewModel.pluginSourceManager.fetchAllSourceIndexes()
+                    await appViewModel.pluginSourceManager.refreshAvailableUpdates()
+                } else {
+                    // 非 key，作为视频书签添加
+                    await appViewModel.bookmarkService.add(
+                        title: inputTitle.isEmpty ? url : inputTitle,
+                        url: url
+                    )
+                }
+                isProcessing = false
             }
         }
     }

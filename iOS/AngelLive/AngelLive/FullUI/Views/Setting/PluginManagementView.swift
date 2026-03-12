@@ -163,13 +163,16 @@ struct PluginManagementView: View {
     // MARK: - Actions
 
     private func addSource() {
-        let url = inputURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !url.isEmpty else { return }
+        let input = inputURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !input.isEmpty else { return }
 
-        pluginSourceManager.addSource(url)
         inputURL = ""
         isProcessing = true
         Task {
+            let addedURLs = await pluginSourceManager.addSourceWithKeyResolution(input)
+            for url in addedURLs {
+                await pluginSourceManager.fetchIndex(from: url)
+            }
             await pluginSourceManager.refreshAvailableUpdates()
             isProcessing = false
         }
