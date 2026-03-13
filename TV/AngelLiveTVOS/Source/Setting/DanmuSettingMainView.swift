@@ -20,13 +20,20 @@ struct DanmuSettingMainView: View {
         
         VStack(spacing: 50) {
             Spacer()
-            Toggle("开启弹幕", isOn: $danmuModel.showDanmu)
+            Toggle(isOn: $danmuModel.showDanmu) {
+                Text("开启弹幕")
+                    .foregroundColor(.primary)
+            }
                 .frame(height: 45)
                 .focused($showDanmuView)
-            Toggle("开启彩色弹幕", isOn: $danmuModel.showColorDanmu)
+            Toggle(isOn: $danmuModel.showColorDanmu) {
+                Text("开启彩色弹幕")
+                    .foregroundColor(.primary)
+            }
                 .frame(height: 45)
             HStack {
                 Text("字体大小：")
+                    .foregroundColor(.primary)
                     .multilineTextAlignment(.leading)
                 Spacer()
                 Button {
@@ -76,11 +83,13 @@ struct DanmuSettingMainView: View {
             .frame(height: 45)
             HStack {
                 Text("这是一条测试弹幕")
+                    .foregroundColor(.primary)
                     .font(.system(size: CGFloat(appViewModel.danmuSettingsViewModel.danmuFontSize)))
             }
             .frame(height: 45)
             HStack {
                 Text("    透明度：")
+                    .foregroundColor(.primary)
                 TextField("透明度：(0.1-1.0)", text: $danmuModel.danmuAlphaString)
                     .keyboardType(.decimalPad)
                     .submitLabel(.done)
@@ -97,6 +106,7 @@ struct DanmuSettingMainView: View {
             .frame(height: 45)
             HStack {
                 Text("弹幕速度：")
+                    .foregroundColor(.primary)
                 Picker(selection: Binding(get: {
                     appViewModel.danmuSettingsViewModel.danmuSpeedIndex
                 }, set: { value in
@@ -124,6 +134,7 @@ struct DanmuSettingMainView: View {
             .frame(height: 45)
             HStack {
                 Text("显示区域：")
+                    .foregroundColor(.primary)
                 Menu(content: {
                     ForEach(DanmuSettingModel.danmuAreaArray.indices, id: \.self) { index in
                         Button(DanmuSettingModel.danmuAreaArray[index]) {
@@ -132,6 +143,7 @@ struct DanmuSettingMainView: View {
                     }
                 }, label: {
                     Text("\(DanmuSettingModel.danmuAreaArray[appViewModel.danmuSettingsViewModel.danmuAreaIndex])")
+                        .foregroundColor(.primary)
                         .frame(width: 535, height: 45, alignment: .center)
                 })
                 

@@ -8,11 +8,9 @@ import AngelLiveCore
 
 struct TVShellConfigView: View {
     @Environment(AppState.self) private var appViewModel
-    @Environment(\.dismiss) private var dismiss
 
     @State private var inputURL = ""
     @State private var inputTitle = ""
-    @State private var showContentSheet = false
     @State private var isProcessing = false
     @FocusState private var focusedField: Field?
 
@@ -38,10 +36,10 @@ struct TVShellConfigView: View {
 
             HStack(alignment: .center, spacing: 120) {
                 VStack(alignment: .leading, spacing: 28) {
-                    Text("添加视频或订阅")
+                    Text("配置")
                         .font(.system(size: 48, weight: .heavy))
 
-                    Text("输入视频地址添加到收藏，可在收藏页直接播放")
+                    Text("输入订阅地址安装插件，或输入视频地址添加到收藏。")
                         .font(.system(size: 24, weight: .medium))
                         .lineSpacing(6)
                         .foregroundStyle(.secondary)
@@ -66,6 +64,7 @@ struct TVShellConfigView: View {
                         Button(action: handleAdd) {
                             Label("添加", systemImage: "plus.circle.fill")
                                 .font(.caption)
+                                .foregroundColor(.primary)
                         }
                         .disabled(trimmedURL.isEmpty || isProcessing)
                         .focused($focusedField, equals: .add)
@@ -90,12 +89,6 @@ struct TVShellConfigView: View {
             case .url:   inputURL = event.value
             case .search: break
             }
-        }
-        .fullScreenCover(isPresented: $showContentSheet) {
-            TVSubscriptionContentSheet(
-                pluginSourceManager: appViewModel.pluginSourceManager,
-                pluginAvailability: appViewModel.pluginAvailability
-            )
         }
     }
 
@@ -144,6 +137,7 @@ struct TVShellConfigView: View {
 
     private func handleAdd() {
         let url = trimmedURL
+        let title = inputTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !url.isEmpty else { return }
 
         if isSubscriptionURL {
@@ -151,7 +145,6 @@ struct TVShellConfigView: View {
             inputURL = ""
             inputTitle = ""
             isProcessing = true
-            showContentSheet = true
             Task {
                 await appViewModel.pluginSourceManager.fetchIndex(from: url)
                 await appViewModel.pluginSourceManager.refreshAvailableUpdates()
@@ -165,14 +158,12 @@ struct TVShellConfigView: View {
             Task {
                 let addedURLs = await appViewModel.pluginSourceManager.addSourceWithKeyResolution(url)
                 if !addedURLs.isEmpty {
-                    // key 解析成功，当作订阅源
-                    showContentSheet = true
                     await appViewModel.pluginSourceManager.fetchAllSourceIndexes()
                     await appViewModel.pluginSourceManager.refreshAvailableUpdates()
                 } else {
                     // 非 key，作为视频书签添加
                     await appViewModel.bookmarkService.add(
-                        title: inputTitle.isEmpty ? url : inputTitle,
+                        title: title.isEmpty ? url : title,
                         url: url
                     )
                 }
@@ -182,12 +173,13 @@ struct TVShellConfigView: View {
     }
 }
 
-// MARK: - 订阅内容 Sheet
+// MARK: - 插件管理
 
-private struct TVSubscriptionContentSheet: View {
+struct TVPluginManagementView: View {
     let pluginSourceManager: PluginSourceManager
     let pluginAvailability: PluginAvailabilityService
-    @Environment(\.dismiss) private var dismiss
+    @State private var pluginIdToUninstall: String?
+    @State private var sourceToRemove: String?
 
     var body: some View {
         ZStack {
@@ -196,149 +188,424 @@ private struct TVSubscriptionContentSheet: View {
                 .ignoresSafeArea()
 
             NavigationStack {
-                Group {
-                    if pluginSourceManager.isFetchingIndex {
-                        VStack(spacing: 24) {
-                            ProgressView()
-                                .scaleEffect(2)
-                            Text("正在加载内容...")
-                                .font(.title3)
-                                .foregroundStyle(.secondary)
+                ScrollView {
+                    VStack(spacing: 16) {
+                        if let error = pluginSourceManager.errorMessage {
+                            statusCard(
+                                icon: "exclamationmark.triangle.fill",
+                                title: "插件目录异常",
+                                message: error
+                            )
+                            .padding(.top, 50)
                         }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    } else if pluginSourceManager.remotePlugins.isEmpty {
-                        ContentUnavailableView {
-                            Label("暂无可用内容", systemImage: "tray")
+
+                        actionSection
+
+                        pluginSection
+
+                        if !pluginSourceManager.sourceURLs.isEmpty {
+                            sourceSection
                         }
-                    } else {
-                        List {
-                            Section {
-                                ForEach(pluginSourceManager.remotePlugins) { item in
-                                    HStack {
-                                        Image(systemName: "play.circle.fill")
-                                            .font(.system(size: 36))
-                                            .foregroundStyle(.blue)
-                                        VStack(alignment: .leading, spacing: 4) {
-                                            Text(item.displayName)
-                                                .font(.headline)
-                                            Text("v\(item.item.version)")
-                                                .font(.caption)
-                                                .foregroundStyle(.secondary)
-                                        }
-                                        Spacer()
-                                        cardStateView(item)
-                                    }
-                                    .padding(.vertical, 20)
-                                }
-                            } header: {
-                                HStack {
-                                    Spacer()
-                                    if pluginSourceManager.installTotalCount > 0 {
-                                        HStack(spacing: 12) {
-                                            ProgressView()
-                                            Text("正在安装 \(pluginSourceManager.installCompletedCount)/\(pluginSourceManager.installTotalCount)")
-                                                .font(.caption)
-                                                .foregroundStyle(.secondary)
-                                        }
-                                    } else {
-                                        Button(action: { installAll() }) {
-                                            Text("全部安装")
-                                        }
-                                        .disabled(!canInstallAll)
-                                    }
-                                }
-                                .padding(.bottom, 16)
-                            }
-                        }
+
+                        Spacer(minLength: 60)
                     }
                 }
-                .navigationTitle("订阅内容")
+                .navigationTitle("插件管理")
             }
         }
         .task {
-            await pluginSourceManager.refreshAvailableUpdates()
+            await reloadPluginCatalog()
+        }
+        .confirmationDialog("卸载插件", isPresented: Binding(
+            get: { pluginIdToUninstall != nil },
+            set: { if !$0 { pluginIdToUninstall = nil } }
+        )) {
+            Button("卸载", role: .destructive) {
+                guard let pluginIdToUninstall else { return }
+                Task {
+                    _ = pluginSourceManager.uninstallPlugin(pluginId: pluginIdToUninstall)
+                    await pluginAvailability.refresh()
+                    await pluginSourceManager.refreshAvailableUpdates()
+                    self.pluginIdToUninstall = nil
+                }
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("卸载后需要重新安装才能继续使用该平台。")
+        }
+        .confirmationDialog("删除订阅源", isPresented: Binding(
+            get: { sourceToRemove != nil },
+            set: { if !$0 { sourceToRemove = nil } }
+        )) {
+            Button("删除并卸载关联插件", role: .destructive) {
+                guard let sourceToRemove else { return }
+                Task {
+                    await pluginSourceManager.removeSourceAndAssociatedPlugins(sourceToRemove)
+                    await pluginAvailability.refresh()
+                    await reloadPluginCatalog()
+                    self.sourceToRemove = nil
+                }
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("删除订阅源后，该源安装的插件也会一起移除。")
         }
     }
 
-    private func contentCard(_ item: RemotePluginDisplayItem) -> some View {
+    private var actionSection: some View {
         VStack(spacing: 16) {
-            Image(systemName: "play.circle.fill")
-                .font(.system(size: 44))
-                .foregroundStyle(.blue)
+            sectionHeader("操作", topPadding: 50)
 
-            VStack(spacing: 6) {
-                Text(item.displayName)
-                    .font(.headline)
-                    .lineLimit(1)
-                Text("v\(item.item.version)")
-                    .font(.caption)
+            actionRow(
+                title: "刷新目录",
+                subtitle: pluginSourceManager.sourceURLs.isEmpty ? "当前没有可刷新的订阅源" : "重新读取 \(pluginSourceManager.sourceURLs.count) 个订阅源",
+                iconName: "arrow.clockwise",
+                trailing: pluginSourceManager.isFetchingIndex ? "加载中" : nil,
+                disabled: pluginSourceManager.sourceURLs.isEmpty || pluginSourceManager.isFetchingIndex
+            ) {
+                Task { await reloadPluginCatalog() }
+            }
+
+            if pluginSourceManager.installTotalCount > 0 {
+                infoRow(
+                    title: "正在批量安装",
+                    subtitle: "已完成 \(pluginSourceManager.installCompletedCount)/\(pluginSourceManager.installTotalCount)",
+                    iconName: "square.and.arrow.down.fill",
+                    trailing: nil
+                )
+            } else if canInstallAll {
+                actionRow(
+                    title: "全部安装",
+                    subtitle: "安装当前未安装的插件",
+                    iconName: "square.and.arrow.down.fill"
+                ) {
+                    installAll()
+                }
+            }
+        }
+    }
+
+    private var pluginSection: some View {
+        VStack(spacing: 16) {
+            sectionHeader("插件", topPadding: 18)
+
+            if pluginSourceManager.isFetchingIndex &&
+                pluginSourceManager.remotePlugins.isEmpty &&
+                pluginSourceManager.sourceURLs.isEmpty {
+                statusCard(
+                    icon: "arrow.clockwise",
+                    title: "正在加载内容...",
+                    message: "正在读取插件订阅源，请稍候。"
+                )
+            } else if pluginSourceManager.remotePlugins.isEmpty {
+                statusCard(
+                    icon: "tray.fill",
+                    title: "暂无可用内容",
+                    message: pluginSourceManager.sourceURLs.isEmpty ? "先添加订阅源，再在这里管理插件。" : "当前订阅源暂无可用插件。"
+                )
+            } else {
+                ForEach(pluginSourceManager.remotePlugins) { item in
+                    pluginRow(item)
+                }
+            }
+        }
+    }
+
+    private var sourceSection: some View {
+        VStack(spacing: 16) {
+            sectionHeader("订阅源", topPadding: 18)
+
+            ForEach(pluginSourceManager.sourceURLs, id: \.self) { url in
+                sourceRow(url)
+            }
+        }
+    }
+
+    private func pluginRow(_ item: RemotePluginDisplayItem) -> some View {
+        Button {
+            handlePrimaryAction(for: item)
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "play.circle.fill")
+                    .font(.system(size: 28))
+                    .frame(width: 40)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(item.displayName)
+                        .font(.system(size: 32))
+                        .foregroundColor(.primary)
+                    pluginSubtitle(for: item)
+                }
+
+                Spacer()
+
+                pluginStatusView(for: item)
+
+                if canTriggerPrimaryAction(for: item) {
+                    Image(systemName: "chevron.right")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.vertical, 20)
+        }
+        .padding(.horizontal, 50)
+        .contextMenu {
+            if pluginSourceManager.installedVersion(for: item.id) != nil {
+                Button("卸载插件", role: .destructive) {
+                    pluginIdToUninstall = item.id
+                }
+            }
+        }
+    }
+
+    private func sourceRow(_ url: String) -> some View {
+        Button {
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "link.circle.fill")
+                    .font(.system(size: 28))
+                    .frame(width: 40)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(url)
+                        .font(.system(size: 24))
+                        .lineLimit(1)
+                        .foregroundColor(.primary)
+                    Text("长按可删除订阅源")
+                        .font(.system(size: 20))
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Text("已添加")
+                    .font(.system(size: 28))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 20)
+        }
+        .padding(.horizontal, 50)
+        .contextMenu {
+            Button("删除订阅源", role: .destructive) {
+                sourceToRemove = url
+            }
+        }
+    }
+
+    private func sectionHeader(_ title: String, topPadding: CGFloat) -> some View {
+        HStack {
+            Text(title)
+                .font(.caption)
+                .foregroundColor(.secondary)
+            Spacer()
+        }
+        .padding(.horizontal, 50)
+        .padding(.top, topPadding)
+    }
+
+    private func statusCard(icon: String, title: String, message: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 28))
+                .frame(width: 40)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(size: 32))
+
+                Text(message)
+                    .font(.system(size: 20))
                     .foregroundStyle(.secondary)
             }
 
-            cardStateView(item)
+            Spacer()
         }
-        .padding(24)
-        .frame(maxWidth: .infinity)
-        .adaptiveGlassEffectRoundedRect(cornerRadius: 16)
+        .padding(.vertical, 20)
+        .padding(.horizontal, 50)
+    }
+
+    private func actionRow(
+        title: String,
+        subtitle: String,
+        iconName: String,
+        trailing: String? = nil,
+        disabled: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: iconName)
+                    .font(.system(size: 28))
+                    .frame(width: 40)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.system(size: 32))
+                        .foregroundColor(.primary)
+                    Text(subtitle)
+                        .font(.system(size: 20))
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                if let trailing {
+                    Text(trailing)
+                        .font(.system(size: 26))
+                        .foregroundStyle(.secondary)
+                }
+
+                Image(systemName: "chevron.right")
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 20)
+        }
+        .padding(.horizontal, 50)
+        .disabled(disabled)
+    }
+
+    private func infoRow(
+        title: String,
+        subtitle: String,
+        iconName: String,
+        trailing: String?
+    ) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: iconName)
+                .font(.system(size: 28))
+                .frame(width: 40)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title)
+                    .font(.system(size: 32))
+                    .foregroundColor(.primary)
+                Text(subtitle)
+                    .font(.system(size: 20))
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            if let trailing {
+                Text(trailing)
+                    .font(.system(size: 26))
+                    .foregroundStyle(.secondary)
+            } else {
+                ProgressView()
+            }
+        }
+        .padding(.vertical, 20)
+        .padding(.horizontal, 50)
     }
 
     @ViewBuilder
-    private func cardStateView(_ item: RemotePluginDisplayItem) -> some View {
+    private func pluginSubtitle(for item: RemotePluginDisplayItem) -> some View {
+        if let installedVersion = pluginSourceManager.installedVersion(for: item.id) {
+            if pluginSourceManager.hasUpdate(for: item.id) {
+                Text("已安装 \(installedVersion) · 可更新到 \(item.item.version)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("已安装 \(installedVersion)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        } else {
+            Text("远程版本 \(item.item.version)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private func pluginStatusView(for item: RemotePluginDisplayItem) -> some View {
         switch item.installState {
         case .failed:
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.orange)
+            Text("失败")
+                .font(.system(size: 28))
         case .installing:
             HStack(spacing: 8) {
                 ProgressView()
                 Text("安装中")
-                    .font(.caption)
+                    .font(.system(size: 24))
                     .foregroundStyle(.secondary)
             }
         case .notInstalled:
             if pluginSourceManager.updatingPluginIds.contains(item.id) {
-                ProgressView()
+                HStack(spacing: 8) {
+                    ProgressView()
+                    Text("更新中")
+                        .font(.system(size: 24))
+                        .foregroundStyle(.secondary)
+                }
             } else if pluginSourceManager.hasUpdate(for: item.id) {
-                actionButton("更新", item: item, isUpdate: true)
+                Text("更新")
+                    .font(.system(size: 28))
             } else if pluginSourceManager.installedVersion(for: item.id) != nil {
-                Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                Text("已安装")
+                    .font(.system(size: 28))
+                    .foregroundStyle(.secondary)
             } else {
-                actionButton("安装", item: item, isUpdate: false)
+                Text("安装")
+                    .font(.system(size: 28))
             }
         case .installed:
             if pluginSourceManager.updatingPluginIds.contains(item.id) {
-                ProgressView()
+                HStack(spacing: 8) {
+                    ProgressView()
+                    Text("更新中")
+                        .font(.system(size: 24))
+                        .foregroundStyle(.secondary)
+                }
             } else if pluginSourceManager.hasUpdate(for: item.id) {
-                actionButton("更新", item: item, isUpdate: true)
+                Text("更新")
+                    .font(.system(size: 28))
             } else {
-                Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                Text("已安装")
+                    .font(.system(size: 28))
+                    .foregroundStyle(.secondary)
             }
         }
     }
 
-    private func actionButton(_ title: String, item: RemotePluginDisplayItem, isUpdate: Bool) -> some View {
-        Button {
-            Task {
-                let success: Bool
-                if isUpdate {
-                    success = await pluginSourceManager.updatePlugin(pluginId: item.id)
-                } else {
-                    success = await pluginSourceManager.installPlugin(item)
-                }
-                if success {
-                    await pluginAvailability.refresh()
-                    await pluginSourceManager.refreshAvailableUpdates()
-                }
+    private func canTriggerPrimaryAction(for item: RemotePluginDisplayItem) -> Bool {
+        switch item.installState {
+        case .failed, .installing:
+            return false
+        case .notInstalled:
+            return !pluginSourceManager.updatingPluginIds.contains(item.id) &&
+                (pluginSourceManager.hasUpdate(for: item.id) ||
+                pluginSourceManager.installedVersion(for: item.id) == nil)
+        case .installed:
+            return pluginSourceManager.hasUpdate(for: item.id) && !pluginSourceManager.updatingPluginIds.contains(item.id)
+        }
+    }
+
+    private func handlePrimaryAction(for item: RemotePluginDisplayItem) {
+        guard canTriggerPrimaryAction(for: item) else { return }
+
+        Task {
+            let success: Bool
+            if pluginSourceManager.hasUpdate(for: item.id) {
+                success = await pluginSourceManager.updatePlugin(pluginId: item.id)
+            } else if pluginSourceManager.installedVersion(for: item.id) == nil {
+                success = await pluginSourceManager.installPlugin(item)
+            } else {
+                return
             }
-        } label: {
-            Label(title, systemImage: isUpdate ? "arrow.down.circle.fill" : "plus.circle.fill")
-                .font(.caption)
+
+            if success {
+                await pluginAvailability.refresh()
+                await pluginSourceManager.refreshAvailableUpdates()
+            }
         }
     }
 
     private var canInstallAll: Bool {
         !pluginSourceManager.isInstalling &&
-        pluginSourceManager.remotePlugins.contains { $0.installState == .notInstalled }
+        pluginSourceManager.remotePlugins.contains {
+            $0.installState == .notInstalled && pluginSourceManager.installedVersion(for: $0.id) == nil
+        }
     }
 
     private func installAll() {
@@ -348,6 +615,12 @@ private struct TVSubscriptionContentSheet: View {
             if count > 0 {
                 await pluginAvailability.refresh()
             }
+            await pluginSourceManager.refreshAvailableUpdates()
         }
+    }
+
+    private func reloadPluginCatalog() async {
+        await pluginSourceManager.fetchAllSourceIndexes()
+        await pluginSourceManager.refreshAvailableUpdates()
     }
 }

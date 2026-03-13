@@ -37,6 +37,7 @@ struct HistoryListView: View {
                     Button(action: { showClearAlert = true }) {
                         Label("清空全部", systemImage: "trash")
                             .font(.caption)
+                            .foregroundColor(.primary)
                     }
                     .focused($focusState, equals: .clearButton)
                 }

@@ -25,6 +25,12 @@ struct SettingView: View {
     // 需要在右侧半屏显示的页面索引
     private var halfScreenIndices: Set<Int> { [0, 2, 3] } // 账号管理、通用设置、弹幕设置
 
+    private var canEnterPluginManagement: Bool {
+        appViewModel.pluginAvailability.hasAvailablePlugins ||
+        !appViewModel.pluginSourceManager.sourceURLs.isEmpty ||
+        !appViewModel.pluginSourceManager.remotePlugins.isEmpty
+    }
+
     var body: some View {
         GeometryReader { geometry in
             HStack(spacing: 0) {
@@ -75,7 +81,10 @@ struct SettingView: View {
             if selectedIndex == 0 {
                 selectedIndex = nil
             }
-            if fullScreenIndex == 1 || fullScreenIndex == 4 {
+            if fullScreenIndex == 1 && !canEnterPluginManagement {
+                fullScreenIndex = nil
+            }
+            if fullScreenIndex == 4 {
                 fullScreenIndex = nil
             }
         }
@@ -96,6 +105,7 @@ struct SettingView: View {
                     } label: {
                         HStack {
                             Text(titles[index])
+                                .foregroundColor(.primary)
                             Spacer()
                             if index == 0 {
                                 Text(syncService.loginStatusDescription)
@@ -121,8 +131,11 @@ struct SettingView: View {
         if appViewModel.pluginAvailability.hasAvailablePlugins {
             return true
         }
-        // 无插件时隐藏：账号管理(0)、插件管理(1)、数据同步(4)
-        return index != 0 && index != 1 && index != 4
+        if index == 1 {
+            return canEnterPluginManagement
+        }
+        // 无本地插件时隐藏：账号管理(0)、数据同步(4)
+        return index != 0 && index != 4
     }
 
     // MARK: - 半屏内容视图（账号管理、通用设置、弹幕设置）
@@ -158,8 +171,10 @@ struct SettingView: View {
     private func fullScreenContentView(for index: Int) -> some View {
         switch index {
         case 1: // 插件管理
-            TVShellConfigView()
-                .environment(appViewModel)
+            TVPluginManagementView(
+                pluginSourceManager: appViewModel.pluginSourceManager,
+                pluginAvailability: appViewModel.pluginAvailability
+            )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(.ultraThinMaterial)
                 .onExitCommand {

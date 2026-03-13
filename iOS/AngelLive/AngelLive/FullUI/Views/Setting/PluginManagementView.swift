@@ -79,6 +79,19 @@ struct PluginManagementView: View {
                         pluginStatusView(for: pluginId)
                     }
                     .padding(.vertical, AppConstants.Spacing.xs)
+                    #if !os(tvOS)
+                    .swipeActions(edge: .trailing) {
+                        Button(role: .destructive) {
+                            Task {
+                                _ = pluginSourceManager.uninstallPlugin(pluginId: pluginId)
+                                await pluginAvailability.refresh()
+                                await pluginSourceManager.refreshAvailableUpdates()
+                            }
+                        } label: {
+                            Label("删除", systemImage: "trash")
+                        }
+                    }
+                    #endif
                 }
             }
         } header: {

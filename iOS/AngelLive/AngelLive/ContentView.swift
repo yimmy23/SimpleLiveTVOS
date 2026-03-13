@@ -89,6 +89,10 @@ struct ContentView: View {
         .sheet(isPresented: $manager.showWelcome) {
             WelcomeView {
                 welcomeManager.completeWelcome()
+                // 中国区 iOS 首次启动需要用户授权网络权限，
+                // 此时 .task 中的 fetchKeys 可能已因无权限失败，
+                // 用户点击欢迎页确认后重新拉取一次。
+                Task { await PluginSourceKeyService.shared.fetchKeys() }
             }
             .modifier(WelcomePresentationModifier())
         }

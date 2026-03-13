@@ -121,6 +121,7 @@ struct AccountManagementView: View {
                         .cornerRadius(10)
                         Text("哔哩哔哩")
                             .font(.system(size: 32))
+                            .foregroundColor(.primary)
                         Spacer()
                         Text(syncService.isLoggedIn ? "已登录" : "未登录")
                             .font(.system(size: 28))
@@ -218,6 +219,7 @@ struct BilibiliLoggedInPageView: View {
                             .font(.system(size: 24))
                             .frame(width: 40)
                         Text("验证 Cookie")
+                            .foregroundColor(.primary)
                         Spacer()
                         if isValidating {
                             ProgressView()
@@ -238,6 +240,7 @@ struct BilibiliLoggedInPageView: View {
                             .font(.system(size: 24))
                             .frame(width: 40)
                         Text("退出登录")
+                            .foregroundColor(.primary)
                         Spacer()
                     }
                     .padding(.horizontal, 20)
@@ -276,6 +279,7 @@ struct BilibiliLoggedInPageView: View {
                                 .font(.system(size: 24))
                                 .frame(width: 40)
                             Text("立即从 iCloud 同步")
+                                .foregroundColor(.primary)
                             Spacer()
                         }
                         .padding(.horizontal, 20)
@@ -368,6 +372,7 @@ struct BilibiliLoginOptionsPageView: View {
                             .font(.system(size: 24))
                             .frame(width: 40)
                         Text("局域网同步")
+                            .foregroundColor(.primary)
                         Spacer()
                         Text("推荐")
                             .font(.system(size: 22))
@@ -389,6 +394,7 @@ struct BilibiliLoginOptionsPageView: View {
                             .font(.system(size: 24))
                             .frame(width: 40)
                         Text("手动输入 Cookie")
+                            .foregroundColor(.primary)
                         Spacer()
                         Image(systemName: "chevron.right")
                             .foregroundStyle(.secondary)
@@ -428,6 +434,7 @@ struct BilibiliLoginOptionsPageView: View {
                                 .font(.system(size: 24))
                                 .frame(width: 40)
                             Text("立即从 iCloud 同步")
+                                .foregroundColor(.primary)
                             Spacer()
                         }
                         .padding(.horizontal, 20)
@@ -469,8 +476,11 @@ struct BilibiliLANSyncPageView: View {
                         Text(syncedPlatformSummary.isEmpty ? "登录信息已保存" : syncedPlatformSummary)
                             .font(.subheadline)
                             .foregroundColor(.secondary)
-                        Button("完成") {
+                        Button {
                             onBack()
+                        } label: {
+                            Text("完成")
+                                .foregroundColor(.primary)
                         }
                         .padding(.top, 20)
                     } else {
@@ -566,8 +576,11 @@ struct BilibiliManualInputPageView: View {
                             .foregroundColor(.green)
                         Text("设置成功")
                             .font(.title2.bold())
-                        Button("完成") {
+                        Button {
                             onBack()
+                        } label: {
+                            Text("完成")
+                                .foregroundColor(.primary)
                         }
                         .padding(.top, 20)
                     }
@@ -602,6 +615,7 @@ struct BilibiliManualInputPageView: View {
                                         .frame(width: 40)
                                 }
                                 Text("验证并保存")
+                                    .foregroundColor(.primary)
                                 Spacer()
                             }
                             .padding(.horizontal, 20)
@@ -774,6 +788,7 @@ struct TVOtherPlatformRow: View {
                 .cornerRadius(10)
                 Text(platform.title)
                     .font(.system(size: 32))
+                    .foregroundColor(.primary)
                 Spacer()
                 Text(isLoggedIn ? "已登录" : "未登录")
                     .font(.system(size: 28))

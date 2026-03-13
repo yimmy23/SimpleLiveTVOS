@@ -332,6 +332,7 @@ struct FavoriteView: View {
 
             liveSectionGrid(roomList: section.roomList, screenWidth: screenWidth)
         }
+        .padding(.top, 16)
     }
 
     @ViewBuilder

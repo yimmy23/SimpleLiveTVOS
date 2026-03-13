@@ -380,7 +380,8 @@ public final class PluginSourceManager: @unchecked Sendable {
         latestRemoteItemsByPluginId = merged
     }
 
-    private func uninstallPlugin(pluginId: String) -> Bool {
+    @discardableResult
+    public func uninstallPlugin(pluginId: String) -> Bool {
         let storage = LiveParsePlugins.shared.storage
         let pluginDirectory = storage.pluginDirectory(pluginId: pluginId)
 

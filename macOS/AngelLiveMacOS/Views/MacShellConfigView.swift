@@ -24,40 +24,10 @@ struct MacShellConfigView: View {
     }
 
     var body: some View {
-        List {
-            Section {
-                TextField("标题（可选）", text: $inputTitle)
-
-                TextField("输入地址", text: $inputURL)
-                    .textFieldStyle(.roundedBorder)
-
-                Button {
-                    handleAdd()
-                } label: {
-                    HStack(spacing: 8) {
-                        if isProcessing {
-                            ProgressView()
-                                .controlSize(.small)
-                        } else {
-                            Image(systemName: "plus.circle.fill")
-                                .foregroundStyle(AppConstants.Colors.success.gradient)
-                        }
-                        Text("添加")
-                    }
-                }
-                .disabled(trimmedURL.isEmpty || isProcessing)
-
-                if let error = pluginSourceManager.errorMessage {
-                    Text(error)
-                        .font(.caption)
-                        .foregroundStyle(AppConstants.Colors.error)
-                }
-            } header: {
-                Text("添加视频或订阅")
-            } footer: {
-                Text("输入视频地址添加到收藏，可在收藏页直接播放")
-            }
+        Form {
+            addSection
         }
+        .formStyle(.grouped)
         .navigationTitle("配置")
         .sheet(isPresented: $showContentSheet) {
             MacSubscriptionContentSheet(
@@ -65,6 +35,40 @@ struct MacShellConfigView: View {
                 pluginAvailability: pluginAvailability
             )
             .frame(minWidth: 620, minHeight: 480)
+        }
+    }
+
+    private var addSection: some View {
+        Section {
+            TextField("标题（可选）", text: $inputTitle)
+
+            TextField("输入地址", text: $inputURL)
+
+            Button {
+                handleAdd()
+            } label: {
+                HStack(spacing: 8) {
+                    if isProcessing {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Image(systemName: "plus.circle.fill")
+                            .foregroundStyle(AppConstants.Colors.success.gradient)
+                    }
+                    Text("添加")
+                }
+            }
+            .disabled(trimmedURL.isEmpty || isProcessing)
+
+            if let error = pluginSourceManager.errorMessage {
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(AppConstants.Colors.error)
+            }
+        } header: {
+            Text("添加视频或订阅")
+        } footer: {
+            Text("输入视频地址添加到收藏，可在收藏页直接播放")
         }
     }
 
@@ -110,28 +114,33 @@ private struct MacSubscriptionContentSheet: View {
     let pluginSourceManager: PluginSourceManager
     let pluginAvailability: PluginAvailabilityService
     @Environment(\.dismiss) private var dismiss
+    private let rowInsets = EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16)
 
     var body: some View {
         NavigationStack {
             List {
                 if pluginSourceManager.isFetchingIndex {
-                    Section {
-                        HStack(spacing: 8) {
-                            ProgressView()
-                            Text("正在加载插件...")
-                                .foregroundStyle(AppConstants.Colors.secondaryText)
-                        }
+                    HStack(spacing: 8) {
+                        ProgressView()
+                        Text("正在加载插件...")
+                            .foregroundStyle(AppConstants.Colors.secondaryText)
                     }
+                    .listRowSeparator(.hidden)
+                    .listRowInsets(rowInsets)
                 } else if pluginSourceManager.remotePlugins.isEmpty {
                     ContentUnavailableView {
                         Label("暂无可用内容", systemImage: "tray")
                     }
+                    .listRowSeparator(.hidden)
+                    .listRowInsets(rowInsets)
                 } else {
                     ForEach(pluginSourceManager.remotePlugins) { item in
                         contentRow(item)
                     }
                 }
             }
+            .listStyle(.plain)
+            .environment(\.defaultMinListRowHeight, 1)
             .navigationTitle("订阅内容")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -175,6 +184,8 @@ private struct MacSubscriptionContentSheet: View {
             itemStateView(item)
         }
         .padding(.vertical, 4)
+        .listRowSeparator(.hidden)
+        .listRowInsets(rowInsets)
     }
 
     @ViewBuilder

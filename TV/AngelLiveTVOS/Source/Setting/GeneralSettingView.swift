@@ -23,13 +23,17 @@ struct GeneralSettingView: View {
         VStack(spacing: 50) {
             Spacer()
 
-            Toggle("直播结束后自动退出直播间（不推荐）", isOn: $playerSettingModel.openExitPlayerViewWhenLiveEnd)
+            Toggle(isOn: $playerSettingModel.openExitPlayerViewWhenLiveEnd) {
+                Text("直播结束后自动退出直播间（不推荐）")
+                    .foregroundColor(.primary)
+            }
                 .frame(height: 45)
                 .focused($focused)
 
             if playerSettingModel.openExitPlayerViewWhenLiveEnd {
                 HStack {
                     Text("自动退出直播间时间：")
+                        .foregroundColor(.primary)
                     Spacer()
                     Menu(content: {
                         ForEach(PlayerSettingModel.timeArray.indices, id: \.self) { index in
@@ -39,16 +43,23 @@ struct GeneralSettingView: View {
                         }
                     }, label: {
                         Text("\(PlayerSettingModel.timeArray[playerSettingModel.openExitPlayerViewWhenLiveEndSecondIndex])")
+                            .foregroundColor(.primary)
                             .frame(width: 250, alignment: .center)
                     })
                 }
                 .frame(height: 45)
             }
 
-            Toggle("匹配系统帧率", isOn: $settingStore.syncSystemRate)
+            Toggle(isOn: $settingStore.syncSystemRate) {
+                Text("匹配系统帧率")
+                    .foregroundColor(.primary)
+            }
                 .frame(height: 45)
 
-            Toggle("禁用渐变背景", isOn: $generalSettingModel.generalDisableMaterialBackground)
+            Toggle(isOn: $generalSettingModel.generalDisableMaterialBackground) {
+                Text("禁用渐变背景")
+                    .foregroundColor(.primary)
+            }
                 .frame(height: 45)
 
             Text("如果您的页面部分背景不正常（如页面背景透明）,请尝试打开这个选项。")
@@ -60,4 +71,3 @@ struct GeneralSettingView: View {
         }
     }
 }
-

@@ -62,6 +62,18 @@ struct MacPluginManagementView: View {
                         Spacer()
 
                         pluginStatusView(for: pluginId)
+
+                        Button(role: .destructive) {
+                            Task {
+                                _ = pluginSourceManager.uninstallPlugin(pluginId: pluginId)
+                                await pluginAvailability.refresh()
+                                await pluginSourceManager.refreshAvailableUpdates()
+                            }
+                        } label: {
+                            Image(systemName: "trash")
+                                .foregroundStyle(.red)
+                        }
+                        .buttonStyle(.plain)
                     }
                     .padding(.vertical, 2)
                 }

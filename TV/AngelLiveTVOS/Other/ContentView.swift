@@ -62,7 +62,7 @@ struct ContentView: View {
                 
                 PlatformView()
                     .tabItem {
-                        Text(appViewModel.pluginAvailability.hasAvailablePlugins ? "平台" : "配置")
+                        Text("配置")
                     }
                     .tag(1)
                     .environment(appViewModel)
