@@ -130,9 +130,13 @@ struct DirectURLPlayerView: View {
                     .compactMap({ $0 as? UIWindowScene })
                     .first else { return }
                 let prefs = UIWindowScene.GeometryPreferences.iOS(interfaceOrientations: .portrait)
-                windowScene.requestGeometryUpdate(prefs) { _ in }
+                // 先通知 ViewController 刷新支持的方向
                 if let rootVC = windowScene.windows.first(where: { $0.isKeyWindow })?.rootViewController {
                     rootVC.setNeedsUpdateOfSupportedInterfaceOrientations()
+                }
+                // 延迟到下一个 run loop，确保 VC 已刷新支持的方向
+                DispatchQueue.main.async {
+                    windowScene.requestGeometryUpdate(prefs) { _ in }
                 }
             }
         }

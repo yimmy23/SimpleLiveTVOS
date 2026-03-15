@@ -14,9 +14,12 @@ import AVKit
 struct MoreActionsButton: View {
     let room: LiveModel
     var onClearChat: () -> Void
+    var showQualityOption: Bool = false
 
+    @Environment(RoomInfoViewModel.self) private var viewModel
     @State private var showActionSheet = false
     @State private var showStreamerInfo = false
+    @State private var showQualitySheet = false
     @State private var buttonPressed = false
 
     var body: some View {
@@ -45,6 +48,12 @@ struct MoreActionsButton: View {
                 showStreamerInfo = true
             }
 
+            if showQualityOption {
+                Button("清晰度 - \(viewModel.currentPlayQualityString)") {
+                    showQualitySheet = true
+                }
+            }
+
             Button("清屏") {
                 onClearChat()
             }
@@ -61,28 +70,84 @@ struct MoreActionsButton: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
+        .sheet(isPresented: $showQualitySheet) {
+            QualitySelectionSheet(viewModel: viewModel)
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
+        }
         .tint(.primary)
     }
 }
 
+// MARK: - 清晰度选择 Sheet
+
+/// 竖屏模式下的清晰度选择面板
+private struct QualitySelectionSheet: View {
+    let viewModel: RoomInfoViewModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if let playArgs = viewModel.currentRoomPlayArgs {
+                    ForEach(Array(playArgs.enumerated()), id: \.offset) { cdnIndex, cdn in
+                        Section(cdn.cdn.isEmpty ? "线路 \(cdnIndex + 1)" : cdn.cdn) {
+                            ForEach(Array(cdn.qualitys.enumerated()), id: \.offset) { urlIndex, quality in
+                                Button {
+                                    viewModel.changePlayUrl(cdnIndex: cdnIndex, urlIndex: urlIndex)
+                                    dismiss()
+                                } label: {
+                                    HStack {
+                                        Text(quality.title)
+                                            .foregroundStyle(.primary)
+                                        Spacer()
+                                        if viewModel.currentCdnIndex == cdnIndex && viewModel.currentPlayQualityQn == quality.qn {
+                                            Image(systemName: "checkmark")
+                                                .foregroundStyle(.blue)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    Text("暂无可用清晰度")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .navigationTitle("清晰度")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("关闭") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+}
+
 #Preview {
+    let room = LiveModel(
+        userName: "测试主播",
+        roomTitle: "测试直播间",
+        roomCover: "",
+        userHeadImg: "",
+        liveType: .bilibili,
+        liveState: "1",
+        userId: "123",
+        roomId: "456",
+        liveWatchedCount: "1000"
+    )
     ZStack {
         Color.black
         MoreActionsButton(
-            room: LiveModel(
-                userName: "测试主播",
-                roomTitle: "测试直播间",
-                roomCover: "",
-                userHeadImg: "",
-                liveType: .bilibili,
-                liveState: "1",
-                userId: "123",
-                roomId: "456",
-                liveWatchedCount: "1000"
-            ),
+            room: room,
             onClearChat: {
                 print("清屏")
             }
         )
     }
+    .environment(RoomInfoViewModel(room: room))
 }

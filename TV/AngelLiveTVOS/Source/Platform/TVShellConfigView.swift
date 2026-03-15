@@ -40,7 +40,7 @@ struct TVShellConfigView: View {
                     Text("配置")
                         .font(.system(size: 48, weight: .heavy))
 
-                    Text("输入订阅地址安装插件，或输入视频地址添加到收藏。")
+                    Text("输入订阅地址或视频地址，添加到收藏。")
                         .font(.system(size: 24, weight: .medium))
                         .lineSpacing(6)
                         .foregroundStyle(.secondary)

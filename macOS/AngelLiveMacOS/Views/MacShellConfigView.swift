@@ -122,7 +122,7 @@ private struct MacSubscriptionContentSheet: View {
                 if pluginSourceManager.isFetchingIndex {
                     HStack(spacing: 8) {
                         ProgressView()
-                        Text("正在加载插件...")
+                        Text("正在加载订阅...")
                             .foregroundStyle(AppConstants.Colors.secondaryText)
                     }
                     .listRowSeparator(.hidden)

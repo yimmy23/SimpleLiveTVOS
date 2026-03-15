@@ -148,12 +148,15 @@ struct VideoControllerView: View {
                     interfaceOrientations: .portrait
                 )
 
-                windowScene.requestGeometryUpdate(geometryPreferences) { error in
-                    print("❌ 退出全屏失败: \(error)")
-                }
-
+                // 先通知 ViewController 刷新支持的方向
                 if let rootVC = windowScene.windows.first(where: { $0.isKeyWindow })?.rootViewController {
                     rootVC.setNeedsUpdateOfSupportedInterfaceOrientations()
+                }
+                // 延迟到下一个 run loop，确保 VC 已刷新支持的方向
+                DispatchQueue.main.async {
+                    windowScene.requestGeometryUpdate(geometryPreferences) { error in
+                        print("❌ 退出全屏失败: \(error)")
+                    }
                 }
             } else {
                 // iOS 16 以下降级方案

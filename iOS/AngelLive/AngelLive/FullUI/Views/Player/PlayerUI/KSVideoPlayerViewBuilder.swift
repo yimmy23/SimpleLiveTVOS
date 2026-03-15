@@ -334,23 +334,18 @@ public enum KSVideoPlayerViewBuilder {
         // 更新 KSOptions
         KSOptions.supportedInterfaceOrientations = targetOrientation
         
-        // 使用 GeometryPreferences 请求方向更新
-        let geometryPreferences = UIWindowScene.GeometryPreferences.iOS(
-            interfaceOrientations: targetOrientation
-        )
-        
-        windowScene.requestGeometryUpdate(geometryPreferences) { error in
-            print("❌ 方向更新失败: \(error)")
-        }
-        
-        // 通知系统刷新方向
-        if let rootVC = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .flatMap({ $0.windows })
-            .first(where: { $0.isKeyWindow })?
-            .rootViewController {
-            // Ask the active view controller to update supported orientations
+        // 先通知 ViewController 刷新支持的方向
+        if let rootVC = windowScene.windows.first(where: { $0.isKeyWindow })?.rootViewController {
             rootVC.setNeedsUpdateOfSupportedInterfaceOrientations()
+        }
+        // 延迟到下一个 run loop，确保 VC 已刷新支持的方向
+        DispatchQueue.main.async {
+            let geometryPreferences = UIWindowScene.GeometryPreferences.iOS(
+                interfaceOrientations: targetOrientation
+            )
+            windowScene.requestGeometryUpdate(geometryPreferences) { error in
+                print("❌ 方向更新失败: \(error)")
+            }
         }
     }
 
@@ -382,23 +377,18 @@ public enum KSVideoPlayerViewBuilder {
             // 更新 KSOptions
             KSOptions.supportedInterfaceOrientations = .portrait
 
-            // 使用 GeometryPreferences 请求方向更新
-            let geometryPreferences = UIWindowScene.GeometryPreferences.iOS(
-                interfaceOrientations: .portrait
-            )
-
-            windowScene.requestGeometryUpdate(geometryPreferences) { error in
-                print("❌ 方向更新失败: \(error)")
-            }
-
-            // 通知系统刷新方向
-            if let rootVC = UIApplication.shared.connectedScenes
-                .compactMap({ $0 as? UIWindowScene })
-                .flatMap({ $0.windows })
-                .first(where: { $0.isKeyWindow })?
-                .rootViewController {
-                // Ask the active view controller to update supported orientations
+            // 先通知 ViewController 刷新支持的方向
+            if let rootVC = windowScene.windows.first(where: { $0.isKeyWindow })?.rootViewController {
                 rootVC.setNeedsUpdateOfSupportedInterfaceOrientations()
+            }
+            // 延迟到下一个 run loop，确保 VC 已刷新支持的方向
+            DispatchQueue.main.async {
+                let geometryPreferences = UIWindowScene.GeometryPreferences.iOS(
+                    interfaceOrientations: .portrait
+                )
+                windowScene.requestGeometryUpdate(geometryPreferences) { error in
+                    print("❌ 方向更新失败: \(error)")
+                }
             }
 
         } else {

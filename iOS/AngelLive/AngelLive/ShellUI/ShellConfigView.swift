@@ -140,7 +140,7 @@ struct SubscriptionContentSheet: View {
                     Section {
                         HStack(spacing: AppConstants.Spacing.sm) {
                             ProgressView()
-                            Text("正在加载插件...")
+                            Text("正在加载订阅...")
                                 .foregroundStyle(AppConstants.Colors.secondaryText)
                         }
                         .padding(.vertical, AppConstants.Spacing.xs)
@@ -237,7 +237,7 @@ struct SubscriptionContentSheet: View {
                         .foregroundStyle(.white)
                         .clipShape(Capsule())
                 }
-                .accessibilityLabel("更新插件")
+                .accessibilityLabel("更新订阅")
             } else if pluginSourceManager.installedVersion(for: item.id) != nil {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundStyle(AppConstants.Colors.success)

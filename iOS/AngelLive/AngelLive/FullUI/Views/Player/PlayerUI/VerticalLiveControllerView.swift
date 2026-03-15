@@ -204,7 +204,8 @@ struct VerticalLiveControllerView: View {
                         withAnimation {
                             viewModel.danmuMessages.removeAll()
                         }
-                    }
+                    },
+                    showQualityOption: true
                 )
             }
             .padding(.trailing, 16)

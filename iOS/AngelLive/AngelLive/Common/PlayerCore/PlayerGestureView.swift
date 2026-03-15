@@ -195,16 +195,18 @@ struct PlayerGestureView: View {
                 .compactMap({ $0 as? UIWindowScene })
                 .first else { return }
 
-            let geometryPreferences = UIWindowScene.GeometryPreferences.iOS(
-                interfaceOrientations: targetOrientation
-            )
-
-            windowScene.requestGeometryUpdate(geometryPreferences) { error in
-                print("❌ 切换屏幕方向失败: \(error)")
-            }
-
+            // 先通知 ViewController 刷新支持的方向
             if let rootVC = windowScene.windows.first(where: { $0.isKeyWindow })?.rootViewController {
                 rootVC.setNeedsUpdateOfSupportedInterfaceOrientations()
+            }
+            // 延迟到下一个 run loop，确保 VC 已刷新支持的方向
+            DispatchQueue.main.async {
+                let geometryPreferences = UIWindowScene.GeometryPreferences.iOS(
+                    interfaceOrientations: targetOrientation
+                )
+                windowScene.requestGeometryUpdate(geometryPreferences) { error in
+                    print("❌ 切换屏幕方向失败: \(error)")
+                }
             }
         } else {
             let orientation: UIInterfaceOrientation = isCurrentlyLandscape ? .portrait : .landscapeRight

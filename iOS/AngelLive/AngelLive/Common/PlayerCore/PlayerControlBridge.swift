@@ -5,6 +5,7 @@
 
 import Foundation
 import SwiftUI
+import AngelLiveCore
 
 /// 播放控制兼容层：UI 只依赖这个桥接结构，不直接依赖具体播放器内核。
 struct PlayerControlBridge {
@@ -14,6 +15,11 @@ struct PlayerControlBridge {
     var togglePlayPause: () -> Void
     var refreshPlayback: () -> Void
     var togglePictureInPicture: () -> Void
+
+    // MARK: - 画面缩放
+
+    /// 应用画面缩放模式
+    var applyScaleMode: ((VideoScaleMode) -> Void)?
 
     // MARK: - 控制层状态
 

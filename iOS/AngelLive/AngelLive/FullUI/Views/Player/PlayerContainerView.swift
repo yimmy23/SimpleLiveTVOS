@@ -498,6 +498,17 @@ struct PlayerContentView: View {
                         }
                     }
                 },
+                applyScaleMode: { mode in
+                    guard let player = playerCoordinator.playerLayer?.player else { return }
+                    switch mode {
+                    case .fit:
+                        player.contentMode = .scaleAspectFit
+                    case .stretch:
+                        player.contentMode = .scaleToFill
+                    case .fill:
+                        player.contentMode = .scaleAspectFill
+                    }
+                },
                 isMaskShow: Binding(
                     get: { playerModel.config.isMaskShow },
                     set: { playerModel.config.isMaskShow = $0 }

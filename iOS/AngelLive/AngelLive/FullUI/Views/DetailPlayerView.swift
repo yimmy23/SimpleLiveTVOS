@@ -239,16 +239,18 @@ struct DetailPlayerView: View {
                     return
                 }
 
-                let geometryPreferences = UIWindowScene.GeometryPreferences.iOS(
-                    interfaceOrientations: .portrait
-                )
-
-                windowScene.requestGeometryUpdate(geometryPreferences) { error in
-                    Logger.error("[PlayerFlow] 强制竖屏失败: \(error.localizedDescription)", category: .player)
-                }
-
+                // 先通知 ViewController 刷新支持的方向
                 if let rootVC = windowScene.windows.first(where: { $0.isKeyWindow })?.rootViewController {
                     rootVC.setNeedsUpdateOfSupportedInterfaceOrientations()
+                }
+                // 延迟到下一个 run loop，确保 VC 已刷新支持的方向
+                DispatchQueue.main.async {
+                    let geometryPreferences = UIWindowScene.GeometryPreferences.iOS(
+                        interfaceOrientations: .portrait
+                    )
+                    windowScene.requestGeometryUpdate(geometryPreferences) { error in
+                        Logger.error("[PlayerFlow] 强制竖屏失败: \(error.localizedDescription)", category: .player)
+                    }
                 }
             }
         }
@@ -332,6 +334,7 @@ struct DetailPlayerView: View {
                 room: viewModel.currentRoom,
                 onClearChat: clearChat
             )
+            .environment(viewModel)
             .padding(.trailing, 16)
             .padding(.bottom, 16)
         }
