@@ -183,6 +183,7 @@ public enum LiveParseJSPlatformManager {
             ])
         )
         print("[JSPlatformManager] getLiveLastestInfo: pluginId=\(platform.pluginId) roomId=\(roomId) callWithFallback 返回成功")
+        print("[JSPlatformManager] getLiveLastestInfo: DTO -> userName=\(room.userName) roomId=\(room.roomId) liveState=\(room.liveState ?? "nil")")
         return room.toLiveModel(liveType: platform.liveType)
     }
 

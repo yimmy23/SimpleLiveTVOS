@@ -134,7 +134,7 @@ public class WebSocketConnection {
                 "YY Danmaku connect: ws=\(request.url?.absoluteString ?? "") sid=\(parameters?["sid"] ?? "") ssid=\(parameters?["ssid"] ?? "")"
             )
         }else if liveType == .soop {
-            request = URLRequest(url: URL(string: parameters?["ws_url"] ?? "")!)
+            request = URLRequest(url: URL(string: parameters?["ws_url"] ?? "") ?? url)
             request.headers = ["user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"]
         }
 

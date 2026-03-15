@@ -385,8 +385,14 @@ struct ListMainView: View {
                 }
             }
         }
-        .sheet(isPresented: $showCapabilitySheet) {
+        .fullScreenCover(isPresented: $showCapabilitySheet) {
             TVPlatformCapabilitySheet(liveType: liveType)
+                .environment(appViewModel)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(.ultraThinMaterial)
+                .onExitCommand {
+                    showCapabilitySheet = false
+                }
         }
     }
 }

@@ -63,9 +63,15 @@ public enum ApiManager {
             throw LiveParseError.liveParseError("不支持的平台", "\(liveModel.liveType)")
         }
         print("[ApiManager] fetchLastestLiveInfo: 找到平台 pluginId=\(platform.pluginId), 准备调用 getLiveLastestInfo")
-        let result = try await LiveParseJSPlatformManager.getLiveLastestInfo(platform: platform, roomId: liveModel.roomId, userId: liveModel.userId)
-        print("[ApiManager] fetchLastestLiveInfo: getLiveLastestInfo 返回成功 \(liveModel.userName)")
-        return result
+        do {
+            let result = try await LiveParseJSPlatformManager.getLiveLastestInfo(platform: platform, roomId: liveModel.roomId, userId: liveModel.userId)
+            print("[ApiManager] fetchLastestLiveInfo: getLiveLastestInfo 返回成功 \(liveModel.userName)")
+            return result
+        }catch {
+            print("[ApiManager] fetchLastestLiveInfo: getLiveLastestInfo 返回失败 \(liveModel.userName)：\(error)")
+            throw error
+        }
+        
     }
 
     /// 轻量版房间信息获取，用于收藏同步场景

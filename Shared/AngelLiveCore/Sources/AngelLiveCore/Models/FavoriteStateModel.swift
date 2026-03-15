@@ -122,7 +122,7 @@ public actor FavoriteStateModel {
         }
 
         let overallDuration = CFAbsoluteTimeGetCurrent() - overallStart
-        favoriteSyncLog("Favorite sync total time \(formatSeconds(overallDuration))s")
+        favoriteSyncLog("Favorite sync tox xtal time \(formatSeconds(overallDuration))s")
         
         // 使用抽取的排序和分组方法，消除重复代码
         let sortedModels = fetchedModels.sortedByLiveState()
@@ -150,7 +150,11 @@ private func deduplicateFavoriteRooms(_ rooms: [LiveModel]) -> [LiveModel] {
 
     for room in rooms {
         let key = favoriteUniqueKey(for: room)
-        guard !seen.contains(key) else { continue }
+        if seen.contains(key) {
+            print("[FavoriteDedup] 碰撞! key=\(key) 被丢弃: \(room.userName) liveType=\(room.liveType.rawValue) userId=\(room.userId) roomId=\(room.roomId) liveState=\(room.liveState ?? "nil")")
+            continue
+        }
+        print("[FavoriteDedup] 保留: key=\(key) \(room.userName) liveType=\(room.liveType.rawValue) userId=\(room.userId) roomId=\(room.roomId) liveState=\(room.liveState ?? "nil")")
         seen.insert(key)
         result.append(room)
     }

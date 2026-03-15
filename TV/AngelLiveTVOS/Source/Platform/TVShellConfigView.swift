@@ -12,6 +12,7 @@ struct TVShellConfigView: View {
     @State private var inputURL = ""
     @State private var inputTitle = ""
     @State private var isProcessing = false
+    @State private var showPluginManagement = false
     @FocusState private var focusedField: Field?
 
     enum Field { case title, url, add }
@@ -90,6 +91,17 @@ struct TVShellConfigView: View {
             case .search: break
             }
         }
+        .fullScreenCover(isPresented: $showPluginManagement) {
+            TVPluginManagementView(
+                pluginSourceManager: appViewModel.pluginSourceManager,
+                pluginAvailability: appViewModel.pluginAvailability
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(.ultraThinMaterial)
+            .onExitCommand {
+                showPluginManagement = false
+            }
+        }
     }
 
     // MARK: - 远程输入二维码面板
@@ -145,6 +157,7 @@ struct TVShellConfigView: View {
             inputURL = ""
             inputTitle = ""
             isProcessing = true
+            showPluginManagement = true
             Task {
                 await appViewModel.pluginSourceManager.fetchIndex(from: url)
                 await appViewModel.pluginSourceManager.refreshAvailableUpdates()
@@ -158,7 +171,10 @@ struct TVShellConfigView: View {
             Task {
                 let addedURLs = await appViewModel.pluginSourceManager.addSourceWithKeyResolution(url)
                 if !addedURLs.isEmpty {
-                    await appViewModel.pluginSourceManager.fetchAllSourceIndexes()
+                    showPluginManagement = true
+                    for added in addedURLs {
+                        await appViewModel.pluginSourceManager.fetchIndex(from: added)
+                    }
                     await appViewModel.pluginSourceManager.refreshAvailableUpdates()
                 } else {
                     // 非 key，作为视频书签添加

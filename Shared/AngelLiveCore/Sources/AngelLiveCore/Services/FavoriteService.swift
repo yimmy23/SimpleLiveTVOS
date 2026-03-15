@@ -96,22 +96,11 @@ public final class FavoriteService: NSObject {
     public static func deleteRecord(liveModel: LiveModel) async throws {
         let container = CKContainer(identifier: CloudFavoriteFields.containerIdentifier)
         let database = container.privateCloudDatabase
-        let trimmedUserId = liveModel.userId.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedRoomId = liveModel.roomId.trimmingCharacters(in: .whitespacesAndNewlines)
-        let predicate: NSPredicate
-        if !trimmedUserId.isEmpty {
-            predicate = NSPredicate(
-                format: "%K = %@ AND %K = %@",
-                CloudFavoriteFields.userId, trimmedUserId,
-                CloudFavoriteFields.liveType, liveModel.liveType.rawValue
-            )
-        } else {
-            predicate = NSPredicate(
-                format: "%K = %@ AND %K = %@",
-                CloudFavoriteFields.roomId, trimmedRoomId,
-                CloudFavoriteFields.liveType, liveModel.liveType.rawValue
-            )
-        }
+        let predicate = NSPredicate(
+            format: "%K = %@",
+            CloudFavoriteFields.roomId, trimmedRoomId
+        )
         let query = CKQuery(recordType: "favorite_streamers", predicate: predicate)
         let recordArray = try await database.records(matching: query)
         let recordsToDelete = recordArray.matchResults.compactMap { try? $0.1.get() }

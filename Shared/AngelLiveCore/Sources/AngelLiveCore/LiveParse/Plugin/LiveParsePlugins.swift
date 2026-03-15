@@ -14,9 +14,20 @@ public enum LiveParsePlugins {
         config.httpShouldSetCookies = false
         let session = URLSession(configuration: config)
 
-        return try! LiveParsePluginManager(session: session, logHandler: { msg in
+        let logHandler: LiveParsePluginManager.LogHandler = { msg in
             print("[LiveParse:JS] \(msg)")
-        })
+        }
+
+        do {
+            return try LiveParsePluginManager(session: session, logHandler: logHandler)
+        } catch {
+            print("[LiveParse] Failed to init plugin manager with default storage: \(error). Falling back to caches directory.")
+            // 回退到 Caches 目录（tvOS 等平台对 Application Support 目录权限可能受限）
+            let fallbackDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
+                .appendingPathComponent("LiveParse", isDirectory: true)
+            let storage = try! LiveParsePluginStorage(baseDirectory: fallbackDir)
+            return LiveParsePluginManager(storage: storage, session: session, logHandler: logHandler)
+        }
     }()
 
     public static func updatePlatformSession(platformId: String, cookie: String, uid: String? = nil) {
