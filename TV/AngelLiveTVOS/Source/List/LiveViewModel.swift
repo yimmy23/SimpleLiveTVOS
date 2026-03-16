@@ -32,7 +32,7 @@ class LiveViewModel {
         get { isSidebarExpanded }
         set { isSidebarExpanded = newValue }
     }
-    var menuTitleIcon: String = ""
+    var menuTitleIcon: UIImage?
 
     //房间列表分类
     var roomListType: LiveRoomListType
@@ -106,7 +106,7 @@ class LiveViewModel {
         self.liveType = liveType
         self.roomListType = roomListType
         self.appViewModel = appViewModel
-        menuTitleIcon = Common.getImage(liveType)
+        menuTitleIcon = TVPlatformIconProvider.tabImage(for: liveType)
         guard shouldLoadData else { return }
         switch roomListType {
             case .live:

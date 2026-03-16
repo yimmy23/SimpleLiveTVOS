@@ -8,10 +8,10 @@
 import Foundation
 
 public extension UserDefaults {
-    nonisolated(unsafe) static let shared = UserDefaults(suiteName: "group.dev.idog.simplelivetvos")!
+    nonisolated(unsafe) static let shared = UserDefaults(suiteName: "group.dev.idog.angellivetvos")!
 
     func synchronized() -> UserDefaults {
-        return UserDefaults(suiteName: "group.dev.idog.simplelivetvos")!
+        return UserDefaults(suiteName: "group.dev.idog.angellivetvos")!
     }
 
     func set(_ value: (some Sendable)?, forKey key: String, synchronize: Bool) {

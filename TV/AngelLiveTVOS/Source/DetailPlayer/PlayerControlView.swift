@@ -65,8 +65,9 @@ struct PlayerControlView: View {
         
         ZStack {
             if roomInfoViewModel.showTop {
-                VStack(spacing: 50) {
-                    VStack {
+                VStack {
+                    VStack(spacing: 105) {
+                        // 顶部 Tab 栏（固定 55pt）
                         HStack {
                             Spacer()
                             HStack(spacing: 12) {
@@ -93,6 +94,7 @@ struct PlayerControlView: View {
                             Spacer()
                         }
                         .foregroundColor(.white)
+                        .frame(height: 55)
                         .focusSection()
                         .onChange(of: topState) { oldValue, newValue in
                             switch newValue {
@@ -103,37 +105,38 @@ struct PlayerControlView: View {
                             }
                         }
                         
+                        // 卡片区域（占满剩余高度）
                         ScrollView(.horizontal) {
-                            LazyHGrid(rows: [GridItem(.fixed(192))], content: {
+                            LazyHGrid(rows: [GridItem(.flexible())], content: {
                                 ForEach(sectionList.indices, id: \.self) { index in
                                     PlayerControlCardView() { liveModel in
                                         changeRoom(liveModel)
                                     }
-                                        .environment(PlayerControlCardViewModel(liveModel: sectionList[index], cardIndex: index, selectIndex: selectIndex))
+                                    .environment(PlayerControlCardViewModel(liveModel: sectionList[index], cardIndex: index, selectIndex: selectIndex))
                                 }
                             })
                             .padding()
                         }
-                        .frame(height: 192)
                         .padding([.leading, .trailing], 55)
-                        .padding(.top, 80)
+                        .padding(.top, 65)
                         .scrollClipDisabled()
                         .focusSection()
+                        
                         Spacer()
                     }
                     .background(.black.opacity(0.6))
-                    .frame(height: 390)
+                    .frame(width: 1920, height: 390)
+                    .padding(.top, 30)
+                    .transition(.move(edge: .top))
+                    .onExitCommand(perform: {
+                        withAnimation {
+                            roomInfoViewModel.showTop = false
+                        }
+                        state = roomInfoViewModel.lastOptionState
+                    })
+                    
                     Spacer()
                 }
-                .frame(width: 1920)
-                .padding(.top, 30)
-                .transition(.move(edge: .top))
-                .onExitCommand(perform: {
-                    withAnimation {
-                        roomInfoViewModel.showTop = false
-                    }
-                    state = roomInfoViewModel.lastOptionState
-                })
             }else {
                 VStack {
                     HStack {

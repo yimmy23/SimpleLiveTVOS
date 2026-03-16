@@ -240,6 +240,7 @@ struct TVPluginManagementView: View {
                 guard let pluginIdToUninstall else { return }
                 Task {
                     _ = pluginSourceManager.uninstallPlugin(pluginId: pluginIdToUninstall)
+                    PluginAppGroupSync.syncToAppGroup()
                     await pluginAvailability.refresh()
                     await pluginSourceManager.refreshAvailableUpdates()
                     self.pluginIdToUninstall = nil
@@ -611,6 +612,7 @@ struct TVPluginManagementView: View {
             }
 
             if success {
+                PluginAppGroupSync.syncToAppGroup()
                 await pluginAvailability.refresh()
                 await pluginSourceManager.refreshAvailableUpdates()
             }
@@ -629,6 +631,7 @@ struct TVPluginManagementView: View {
         Task {
             let count = await pluginSourceManager.installAll()
             if count > 0 {
+                PluginAppGroupSync.syncToAppGroup()
                 await pluginAvailability.refresh()
             }
             await pluginSourceManager.refreshAvailableUpdates()

@@ -202,7 +202,7 @@ public final class PluginSourceManager: @unchecked Sendable {
             }
             mergeLatestRemoteItems(index.plugins)
         } catch {
-            errorMessage = "拉取插件索引失败: \(error.localizedDescription)"
+            errorMessage = "拉取插件索引失败: \(Self.detailedErrorDescription(error))"
         }
     }
 
@@ -237,7 +237,7 @@ public final class PluginSourceManager: @unchecked Sendable {
                 }
             } catch {
                 // 单个源失败不影响其它源；保留最后一次错误用于页面提示
-                errorMessage = "检查更新失败: \(error.localizedDescription)"
+                errorMessage = "检查更新失败: \(Self.detailedErrorDescription(error))"
             }
         }
 
@@ -269,7 +269,7 @@ public final class PluginSourceManager: @unchecked Sendable {
                 }
                 mergeLatestRemoteItems(index.plugins)
             } catch {
-                errorMessage = "拉取插件索引失败: \(error.localizedDescription)"
+                errorMessage = "拉取插件索引失败: \(Self.detailedErrorDescription(error))"
             }
         }
 
@@ -418,6 +418,47 @@ public final class PluginSourceManager: @unchecked Sendable {
             item.installState = .notInstalled
         }
         return true
+    }
+
+    // MARK: - Error Description Helper
+
+    /// 将错误转为更具体的描述，方便排查问题
+    static func detailedErrorDescription(_ error: Error) -> String {
+        if let decodingError = error as? DecodingError {
+            switch decodingError {
+            case .typeMismatch(let type, let context):
+                let path = context.codingPath.map(\.stringValue).joined(separator: ".")
+                return "类型不匹配: 期望 \(type), 路径 \(path)"
+            case .valueNotFound(let type, let context):
+                let path = context.codingPath.map(\.stringValue).joined(separator: ".")
+                return "缺少值: \(type), 路径 \(path)"
+            case .keyNotFound(let key, let context):
+                let path = context.codingPath.map(\.stringValue).joined(separator: ".")
+                return "缺少字段: \(key.stringValue), 路径 \(path)"
+            case .dataCorrupted(let context):
+                let path = context.codingPath.map(\.stringValue).joined(separator: ".")
+                return "数据损坏: \(context.debugDescription), 路径 \(path)"
+            @unknown default:
+                return decodingError.localizedDescription
+            }
+        }
+
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .timedOut:
+                return "请求超时"
+            case .notConnectedToInternet:
+                return "无网络连接"
+            case .cannotFindHost:
+                return "无法解析域名"
+            case .secureConnectionFailed:
+                return "SSL 连接失败"
+            default:
+                return "网络错误(\(urlError.code.rawValue)): \(urlError.localizedDescription)"
+            }
+        }
+
+        return error.localizedDescription
     }
 
     // MARK: - Timeout Helper

@@ -285,7 +285,7 @@ struct PlayerControlView: View {
                                                 } label: {
                                                     HStack {
                                                         Text(quality.title)
-                                                        if viewModel.currentCdnIndex == cdnIndex && viewModel.currentPlayQualityQn == quality.qn {
+                                                        if viewModel.currentCdnIndex == cdnIndex && viewModel.currentQualityIndex == urlIndex {
                                                             Image(systemName: "checkmark")
                                                         }
                                                     }

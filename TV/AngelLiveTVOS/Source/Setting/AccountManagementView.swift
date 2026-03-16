@@ -46,18 +46,82 @@ private extension BilibiliUserInfoTV {
     }
 }
 
+// MARK: - 统一平台模型
+
+enum TVPlatformItem: String, CaseIterable, Identifiable, Equatable {
+    case bilibili
+    case douyin
+    case kuaishou
+    case soop
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .bilibili: return "哔哩哔哩"
+        case .douyin: return "抖音"
+        case .kuaishou: return "快手"
+        case .soop: return "SOOP"
+        }
+    }
+
+    var sessionID: PlatformSessionID {
+        switch self {
+        case .bilibili: return .bilibili
+        case .douyin: return .douyin
+        case .kuaishou: return .kuaishou
+        case .soop: return .soop
+        }
+    }
+
+    var liveType: LiveType {
+        switch self {
+        case .bilibili: return .bilibili
+        case .douyin: return .douyin
+        case .kuaishou: return .ks
+        case .soop: return .soop
+        }
+    }
+
+    /// 是否支持 HTTP 级别的 Cookie 验证（Bilibili 通过 API 验证，其他平台仅正则校验）
+    var supportsHTTPValidation: Bool {
+        self == .bilibili
+    }
+
+    /// 手动输入帮助文本中的网站域名
+    var websiteHost: String {
+        switch self {
+        case .bilibili: return "bilibili.com"
+        case .douyin: return "douyin.com"
+        case .kuaishou: return "kuaishou.com"
+        case .soop: return "sooplive.co.kr"
+        }
+    }
+
+    /// Cookie 格式提示
+    var requiredCookieHint: String {
+        switch self {
+        case .bilibili: return "需包含 SESSDATA"
+        case .douyin: return "需包含 ttwid"
+        case .kuaishou: return "需包含 key=value 格式"
+        case .soop: return "需包含 AuthTicket"
+        }
+    }
+}
+
 // MARK: - 账号管理主视图
 
 struct AccountManagementView: View {
     @StateObject private var syncService = BilibiliCookieSyncService.shared
 
     @State private var currentPage: AccountPage = .main
+    @State private var platformLoginStatus: [PlatformSessionID: Bool] = [:]
 
-    enum AccountPage {
+    enum AccountPage: Equatable {
         case main
-        case bilibiliDetail
+        case platformDetail(TVPlatformItem)
         case lanSync
-        case manualInput
+        case manualInput(TVPlatformItem)
     }
 
     var body: some View {
@@ -66,253 +130,274 @@ struct AccountManagementView: View {
             case .main:
                 accountMainView
                     .transition(.opacity)
-            case .bilibiliDetail:
-                if syncService.isLoggedIn {
-                    BilibiliLoggedInPageView(onBack: { currentPage = .main })
-                        .transition(.move(edge: .trailing).combined(with: .opacity))
-                } else {
-                    BilibiliLoginOptionsPageView(
-                        onBack: { currentPage = .main },
-                        onLanSync: { currentPage = .lanSync },
-                        onManualInput: { currentPage = .manualInput }
-                    )
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
-                }
+            case .platformDetail(let platform):
+                PlatformDetailPageView(
+                    platform: platform,
+                    onBack: {
+                        currentPage = .main
+                    },
+                    onManualInput: { p in
+                        currentPage = .manualInput(p)
+                    }
+                )
+                .transition(.move(edge: .trailing).combined(with: .opacity))
             case .lanSync:
-                BilibiliLANSyncPageView(onBack: { currentPage = .bilibiliDetail })
+                BilibiliLANSyncPageView(onBack: { currentPage = .main })
                     .transition(.move(edge: .trailing).combined(with: .opacity))
-            case .manualInput:
-                BilibiliManualInputPageView(onBack: { currentPage = .bilibiliDetail })
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
+            case .manualInput(let platform):
+                PlatformManualInputPageView(
+                    platform: platform,
+                    onBack: { currentPage = .platformDetail(platform) }
+                )
+                .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
         .animation(.easeInOut(duration: 0.25), value: currentPage)
     }
 
-    // MARK: - 主页面（平台列表）
-    private var accountMainView: some View {
-        ScrollView {
-            VStack(spacing: 16) {
-                HStack {
-                    Text("直播平台")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    Spacer()
-                }
-                .padding(.horizontal, 50)
-                .padding(.top, 50)
+    // MARK: - 主页面
 
+    private var accountMainView: some View {
+        VStack(spacing: 15) {
+            Spacer()
+
+            // 同步区域
+            Button {
+                currentPage = .lanSync
+            } label: {
+                HStack(spacing: 15) {
+                    Text("局域网同步")
+                        .foregroundColor(.primary)
+                    Spacer()
+                    Text("推荐")
+                        .font(.system(size: 30))
+                        .foregroundStyle(.green)
+                    Image(systemName: "chevron.right")
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Toggle(isOn: $syncService.iCloudSyncEnabled) {
+                Text("iCloud 自动同步")
+            }
+
+            if syncService.iCloudSyncEnabled {
                 Button {
-                    currentPage = .bilibiliDetail
+                    Task {
+                        _ = await syncService.syncFromICloud()
+                        await syncService.syncAllPlatformsFromICloud()
+                        await refreshAllLoginStatuses()
+                    }
                 } label: {
-                    HStack(spacing: 12) {
-                        Group {
-                            if let image = TVPlatformIconProvider.tabImage(for: .bilibili) {
-                                Image(uiImage: image)
-                                    .resizable()
-                                    .scaledToFit()
-                            } else {
-                                Image(systemName: "play.tv.fill")
-                                    .font(.system(size: 28))
-                                    .foregroundStyle(Color.pink.gradient)
-                            }
-                        }
-                        .frame(width: 50, height: 50)
-                        .cornerRadius(10)
-                        Text("哔哩哔哩")
-                            .font(.system(size: 32))
+                    HStack(spacing: 15) {
+                        Text("立即从 iCloud 同步")
                             .foregroundColor(.primary)
                         Spacer()
-                        Text(syncService.isLoggedIn ? "已登录" : "未登录")
-                            .font(.system(size: 28))
-                            .foregroundStyle(syncService.isLoggedIn ? .green : .gray)
+                    }
+                }
+            }
+
+
+            // 平台列表
+            ForEach(TVPlatformItem.allCases) { platform in
+                Button {
+                    currentPage = .platformDetail(platform)
+                } label: {
+                    HStack(spacing: 15) {
+                        Text(platform.title)
+                            .foregroundColor(.primary)
+                        Spacer()
+                        Text(loginStatusText(for: platform))
+                            .font(.system(size: 30))
+                            .foregroundStyle(loginStatusColor(for: platform))
                         Image(systemName: "chevron.right")
                             .foregroundStyle(.secondary)
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 20)
                 }
-                .buttonStyle(.card)
-                .padding(.horizontal, 50)
-
-                ForEach(TVOtherPlatformItem.allCases) { platform in
-                    TVOtherPlatformRow(platform: platform)
-                        .padding(.horizontal, 50)
-                }
-
-                Spacer()
             }
+
+            Spacer(minLength: 200)
+        }
+        .task {
+            await refreshAllLoginStatuses()
+        }
+    }
+
+    // MARK: - 登录状态辅助方法
+
+    private func loginStatusText(for platform: TVPlatformItem) -> String {
+        if platform == .bilibili {
+            return syncService.isLoggedIn ? "已登录" : "未登录"
+        }
+        return (platformLoginStatus[platform.sessionID] ?? false) ? "已登录" : "未登录"
+    }
+
+    private func loginStatusColor(for platform: TVPlatformItem) -> Color {
+        if platform == .bilibili {
+            return syncService.isLoggedIn ? .green : .gray
+        }
+        return (platformLoginStatus[platform.sessionID] ?? false) ? .green : .gray
+    }
+
+    private func refreshAllLoginStatuses() async {
+        for platform in TVPlatformItem.allCases where platform != .bilibili {
+            let session = await PlatformSessionManager.shared.getSession(platformId: platform.sessionID)
+            platformLoginStatus[platform.sessionID] = session?.state == .authenticated
         }
     }
 }
 
-// MARK: - 已登录页面视图
+// MARK: - 平台详情页面
 
-struct BilibiliLoggedInPageView: View {
-    @StateObject private var syncService = BilibiliCookieSyncService.shared
+struct PlatformDetailPageView: View {
+    let platform: TVPlatformItem
     let onBack: () -> Void
+    let onManualInput: (TVPlatformItem) -> Void
 
-    @State private var userInfo: BilibiliUserInfoTV?
+    @StateObject private var syncService = BilibiliCookieSyncService.shared
+    @State private var isLoggedIn = false
     @State private var isValidating = false
-    @State private var validationError: String?
+    @State private var validationMessage: String?
+    @State private var bilibiliUserInfo: BilibiliUserInfoTV?
     @State private var showLogoutConfirm = false
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 20) {
-                // 用户信息卡片
-                VStack(spacing: 16) {
-                    if isValidating {
-                        ProgressView()
-                            .scaleEffect(1.5)
-                        Text("正在验证...")
-                            .font(.headline)
-                    } else if let user = userInfo {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 60))
-                            .foregroundStyle(.green)
-                        Text(user.displayName)
-                            .font(.title2.bold())
-                        if let mid = user.mid {
-                            Text("UID: \(mid)")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
-                    } else if let error = validationError {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.system(size: 60))
-                            .foregroundStyle(.orange)
-                        Text("验证失败")
-                            .font(.title2)
-                        Text(error)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        Image(systemName: "person.circle.fill")
-                            .font(.system(size: 60))
-                            .foregroundStyle(.blue)
-                        Text("已登录")
-                            .font(.title2)
-                    }
-                }
+        VStack(spacing: 15) {
+            Spacer()
+
+            // 状态显示区域
+            statusSection
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 40)
-                .background(Color.white.opacity(0.05))
-                .cornerRadius(16)
-                .padding(.horizontal, 50)
-                .padding(.top, 50)
 
-                HStack {
-                    Text("账号操作")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    Spacer()
-                }
-                .padding(.horizontal, 50)
-                .padding(.top, 10)
-
-                Button {
-                    Task { await validateCookie() }
-                } label: {
-                    HStack {
-                        Image(systemName: "checkmark.shield")
-                            .font(.system(size: 24))
-                            .frame(width: 40)
-                        Text("验证 Cookie")
-                            .foregroundColor(.primary)
-                        Spacer()
-                        if isValidating {
-                            ProgressView()
+            // 已登录时的操作
+            if isLoggedIn {
+                // Bilibili 专属：验证 Cookie
+                if platform.supportsHTTPValidation {
+                    Button {
+                        Task { await validateBilibiliCookie() }
+                    } label: {
+                        HStack {
+                            Text("验证 Cookie")
+                                .foregroundColor(.primary)
+                            Spacer()
+                            if isValidating {
+                                ProgressView()
+                            }
                         }
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 16)
+                    .disabled(isValidating)
                 }
-                .buttonStyle(.card)
-                .padding(.horizontal, 50)
-                .disabled(isValidating)
 
+                // 退出登录
                 Button {
                     showLogoutConfirm = true
                 } label: {
                     HStack {
-                        Image(systemName: "rectangle.portrait.and.arrow.right")
-                            .font(.system(size: 24))
-                            .frame(width: 40)
                         Text("退出登录")
                             .foregroundColor(.primary)
                         Spacer()
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 16)
                 }
-                .buttonStyle(.card)
-                .padding(.horizontal, 50)
-
-                Divider()
-                    .padding(.horizontal, 50)
-                    .padding(.vertical, 20)
-
-                HStack {
-                    Text("iCloud 同步")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    Spacer()
-                }
-                .padding(.horizontal, 50)
-
-                Toggle(isOn: $syncService.iCloudSyncEnabled) {
-                    Text("iCloud 自动同步")
-                }
-                .padding(.horizontal, 50)
-                .frame(height: 60)
-
-                if syncService.iCloudSyncEnabled {
-                    Button {
-                        Task {
-                            _ = await syncService.syncFromICloud()
-                            await validateCookie()
-                        }
-                    } label: {
-                        HStack {
-                            Image(systemName: "icloud.and.arrow.down")
-                                .font(.system(size: 24))
-                                .frame(width: 40)
-                            Text("立即从 iCloud 同步")
-                                .foregroundColor(.primary)
-                            Spacer()
-                        }
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 16)
-                    }
-                    .buttonStyle(.card)
-                    .padding(.horizontal, 50)
-                }
-
-                Spacer()
             }
+
+            // 手动输入 Cookie（始终可用）
+            Button {
+                onManualInput(platform)
+            } label: {
+                HStack {
+                    Text("手动输入 Cookie")
+                        .foregroundColor(.primary)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Spacer(minLength: 200)
         }
-        .onExitCommand {
-            onBack()
-        }
+        .onExitCommand { onBack() }
         .alert("退出登录", isPresented: $showLogoutConfirm) {
             Button("取消", role: .cancel) {}
             Button("确定", role: .destructive) { logout() }
         } message: {
-            Text("确定要退出哔哩哔哩登录吗？")
+            Text("确定要退出\(platform.title)登录吗？")
         }
         .task {
-            await validateCookie()
+            await refreshStatus()
         }
     }
 
-    private func validateCookie() async {
+    // MARK: - 状态显示
+
+    @ViewBuilder
+    private var statusSection: some View {
+        VStack(spacing: 16) {
+            if isValidating {
+                ProgressView()
+                    .scaleEffect(1.5)
+                Text("正在验证...")
+                    .font(.headline)
+            } else if platform == .bilibili, let user = bilibiliUserInfo {
+                // Bilibili 已登录且有用户信息
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 60))
+                    .foregroundStyle(.green)
+                Text(user.displayName)
+                    .font(.title2.bold())
+                if let mid = user.mid {
+                    Text("UID: \(mid)")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            } else if let error = validationMessage {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 60))
+                    .foregroundStyle(.orange)
+                Text("验证失败")
+                    .font(.title2)
+                Text(error)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            } else if isLoggedIn {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 60))
+                    .foregroundStyle(.green)
+                Text("已登录")
+                    .font(.title2)
+            } else {
+                Image(systemName: "person.circle.fill")
+                    .font(.system(size: 60))
+                    .foregroundStyle(.secondary)
+                Text("未登录")
+                    .font(.title2)
+            }
+        }
+    }
+
+    // MARK: - 状态刷新
+
+    private func refreshStatus() async {
+        if platform == .bilibili {
+            isLoggedIn = syncService.isLoggedIn
+            if isLoggedIn {
+                await validateBilibiliCookie()
+            }
+        } else {
+            let session = await PlatformSessionManager.shared.getSession(platformId: platform.sessionID)
+            isLoggedIn = session?.state == .authenticated
+        }
+    }
+
+    // MARK: - Bilibili Cookie 验证
+
+    private func validateBilibiliCookie() async {
         isValidating = true
-        validationError = nil
+        validationMessage = nil
 
         let cookie = syncService.getCurrentCookie()
         guard !cookie.isEmpty else {
-            validationError = "Cookie 为空"
+            validationMessage = "Cookie 为空"
             isValidating = false
             return
         }
@@ -324,132 +409,161 @@ struct BilibiliLoggedInPageView: View {
 
         switch result {
         case .success(let info):
-            userInfo = BilibiliUserInfoTV(from: info)
-            validationError = nil
+            bilibiliUserInfo = BilibiliUserInfoTV(from: info)
+            validationMessage = nil
             if let mid = info.mid {
                 syncService.setCookie(cookie, uid: "\(mid)", source: .local, save: false)
             }
         case .failure(let error):
-            userInfo = nil
-            validationError = error.localizedDescription
+            bilibiliUserInfo = nil
+            validationMessage = error.localizedDescription
         }
 
         isValidating = false
     }
 
+    // MARK: - 退出登录
+
     private func logout() {
-        syncService.clearCookie()
-        userInfo = nil
-        validationError = nil
+        if platform == .bilibili {
+            syncService.clearCookie()
+            bilibiliUserInfo = nil
+        }
+        Task {
+            await PlatformSessionManager.shared.clearSession(platformId: platform.sessionID)
+        }
+        isLoggedIn = false
+        validationMessage = nil
     }
 }
 
-// MARK: - 登录选项页面视图
+// MARK: - 通用手动输入页面
 
-struct BilibiliLoginOptionsPageView: View {
-    @StateObject private var syncService = BilibiliCookieSyncService.shared
+struct PlatformManualInputPageView: View {
+    let platform: TVPlatformItem
     let onBack: () -> Void
-    let onLanSync: () -> Void
-    let onManualInput: () -> Void
+
+    @StateObject private var syncService = BilibiliCookieSyncService.shared
+    @State private var cookieInput = ""
+    @State private var isValidating = false
+    @State private var validationMessage: String?
+    @State private var isSuccess = false
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 16) {
-                HStack {
-                    Text("登录方式")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    Spacer()
-                }
-                .padding(.horizontal, 50)
-                .padding(.top, 50)
+        VStack(spacing: 15) {
+            Spacer()
 
-                Button {
-                    onLanSync()
-                } label: {
-                    HStack {
-                        Image(systemName: "wifi")
-                            .font(.system(size: 24))
-                            .frame(width: 40)
-                        Text("局域网同步")
-                            .foregroundColor(.primary)
-                        Spacer()
-                        Text("推荐")
-                            .font(.system(size: 22))
-                            .foregroundStyle(.green)
-                        Image(systemName: "chevron.right")
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 16)
-                }
-                .buttonStyle(.card)
-                .padding(.horizontal, 50)
-
-                Button {
-                    onManualInput()
-                } label: {
-                    HStack {
-                        Image(systemName: "keyboard")
-                            .font(.system(size: 24))
-                            .frame(width: 40)
-                        Text("手动输入 Cookie")
-                            .foregroundColor(.primary)
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 16)
-                }
-                .buttonStyle(.card)
-                .padding(.horizontal, 50)
-
-                Divider()
-                    .padding(.horizontal, 50)
-                    .padding(.vertical, 20)
-
-                HStack {
-                    Text("iCloud 同步")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    Spacer()
-                }
-                .padding(.horizontal, 50)
-
-                Toggle(isOn: $syncService.iCloudSyncEnabled) {
-                    Text("iCloud 自动同步")
-                }
-                .padding(.horizontal, 50)
-                .frame(height: 60)
-
-                if syncService.iCloudSyncEnabled {
+            if isSuccess {
+                VStack(spacing: 20) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 80))
+                        .foregroundColor(.green)
+                    Text("设置成功")
+                        .font(.title2.bold())
                     Button {
-                        Task {
-                            _ = await syncService.syncFromICloud()
-                        }
+                        onBack()
                     } label: {
-                        HStack {
-                            Image(systemName: "icloud.and.arrow.down")
-                                .font(.system(size: 24))
-                                .frame(width: 40)
-                            Text("立即从 iCloud 同步")
-                                .foregroundColor(.primary)
-                            Spacer()
-                        }
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 16)
+                        Text("完成")
+                            .foregroundColor(.primary)
                     }
-                    .buttonStyle(.card)
-                    .padding(.horizontal, 50)
+                    .padding(.top, 20)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 40)
+            } else {
+                TextField("请输入 \(platform.title) Cookie 字符串", text: $cookieInput)
+
+                if let message = validationMessage {
+                    Text(message)
+                        .font(.subheadline)
+                        .foregroundColor(.orange)
                 }
 
-                Spacer()
+                Button {
+                    Task { await validateAndSave() }
+                } label: {
+                    HStack {
+                        Text("验证并保存")
+                            .foregroundColor(.primary)
+                        Spacer()
+                        if isValidating {
+                            ProgressView()
+                        }
+                    }
+                }
+                .disabled(cookieInput.isEmpty || isValidating)
+
+                // 帮助信息
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("如何获取 Cookie")
+                        .font(.headline)
+
+                    Text("1. 在电脑浏览器中登录 \(platform.websiteHost)")
+                        .font(.callout)
+                        .foregroundColor(.secondary)
+                    Text("2. 按 F12 打开开发者工具")
+                        .font(.callout)
+                        .foregroundColor(.secondary)
+                    Text("3. 切换到 Network (网络) 标签")
+                        .font(.callout)
+                        .foregroundColor(.secondary)
+                    Text("4. 刷新页面，点击任意请求")
+                        .font(.callout)
+                        .foregroundColor(.secondary)
+                    Text("5. 在 Headers 中找到 Cookie 字段并复制")
+                        .font(.callout)
+                        .foregroundColor(.secondary)
+                    Text("提示：\(platform.requiredCookieHint)")
+                        .font(.callout)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.top, 20)
             }
+
+            Spacer(minLength: 200)
         }
         .onExitCommand {
             onBack()
         }
+    }
+
+    private func validateAndSave() async {
+        isValidating = true
+        validationMessage = nil
+
+        if platform == .bilibili {
+            // Bilibili 使用专用的 setManualCookie 保持缓存同步
+            let result = await syncService.setManualCookie(cookieInput)
+            switch result {
+            case .valid:
+                isSuccess = true
+            case .invalid(let reason):
+                validationMessage = "Cookie 无效: \(reason)"
+            case .expired:
+                validationMessage = "Cookie 已过期"
+            case .networkError(let error):
+                validationMessage = "网络错误: \(error.localizedDescription)"
+            }
+        } else {
+            // 其他平台使用 PlatformSessionManager
+            let result = await PlatformSessionManager.shared.loginWithCookie(
+                platformId: platform.sessionID,
+                cookie: cookieInput,
+                source: .manual
+            )
+            switch result {
+            case .valid:
+                isSuccess = true
+            case .invalid(let reason):
+                validationMessage = "Cookie 无效: \(reason)"
+            case .expired:
+                validationMessage = "Cookie 已过期"
+            case .networkError(let message):
+                validationMessage = "网络错误: \(message)"
+            }
+        }
+
+        isValidating = false
     }
 }
 
@@ -463,58 +577,64 @@ struct BilibiliLANSyncPageView: View {
     @State private var syncedPlatformSummary = ""
 
     var body: some View {
-        ScrollView {
+        VStack(spacing: 15) {
+            Spacer()
+
+            // 状态区域
             VStack(spacing: 20) {
-                // 状态区域
-                VStack(spacing: 20) {
-                    if isSuccess {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 80))
-                            .foregroundColor(.green)
-                        Text("同步成功")
-                            .font(.title2.bold())
-                        Text(syncedPlatformSummary.isEmpty ? "登录信息已保存" : syncedPlatformSummary)
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                        Button {
-                            onBack()
-                        } label: {
-                            Text("完成")
-                                .foregroundColor(.primary)
-                        }
-                        .padding(.top, 20)
-                    } else {
-                        Image(systemName: "wifi")
-                            .font(.system(size: 80))
-                            .foregroundColor(.blue)
-                        Text("等待连接...")
-                            .font(.title2.bold())
-                        ProgressView()
-                            .scaleEffect(1.2)
+                if isSuccess {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 80))
+                        .foregroundColor(.green)
+                    Text("同步成功")
+                        .font(.title2.bold())
+                    Text(syncedPlatformSummary.isEmpty ? "登录信息已保存" : syncedPlatformSummary)
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    Button {
+                        onBack()
+                    } label: {
+                        Text("完成")
+                            .foregroundColor(.primary)
                     }
+                    .padding(.top, 20)
+                } else {
+                    Image(systemName: "wifi")
+                        .font(.system(size: 80))
+                        .foregroundColor(.blue)
+                    Text("等待连接...")
+                        .font(.title2.bold())
+                    ProgressView()
+                        .scaleEffect(1.2)
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 50)
-                .background(Color.white.opacity(0.05))
-                .cornerRadius(16)
-                .padding(.horizontal, 50)
-                .padding(.top, 50)
-
-                // 操作步骤
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("操作步骤")
-                        .font(.headline)
-
-                    StepRow(number: 1, text: "确保 Apple TV 和 iOS 在同一 Wi-Fi 网络")
-                    StepRow(number: 2, text: "在 iOS/macOS 端 Angel Live 中登录平台账号")
-                    StepRow(number: 3, text: "点击「同步到 tvOS」按钮")
-                    StepRow(number: 4, text: "选择此 Apple TV 设备")
-                }
-                .padding(.horizontal, 50)
-                .padding(.top, 20)
-
-                Spacer()
             }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 40)
+
+            // 操作步骤
+            VStack(alignment: .leading, spacing: 16) {
+                Text("操作步骤")
+                    .font(.headline)
+
+                StepRow(number: 1, text: "确保 Apple TV 和 iOS 在同一 Wi-Fi 网络")
+                StepRow(number: 2, text: "在 iOS/macOS 端 Angel Live 中登录平台账号")
+                StepRow(number: 3, text: "点击「同步到 tvOS」按钮")
+                StepRow(number: 4, text: "选择此 Apple TV 设备")
+            }
+            .padding(.top, 20)
+
+            Button {
+                onBack()
+            } label: {
+                HStack {
+                    Text("返回")
+                        .foregroundColor(.primary)
+                    Spacer()
+                }
+            }
+            .padding(.top, 10)
+
+            Spacer(minLength: 200)
         }
         .onExitCommand {
             onBack()
@@ -555,134 +675,6 @@ struct BilibiliLANSyncPageView: View {
     }
 }
 
-// MARK: - 手动输入页面视图
-
-struct BilibiliManualInputPageView: View {
-    @StateObject private var syncService = BilibiliCookieSyncService.shared
-    let onBack: () -> Void
-
-    @State private var cookieInput = ""
-    @State private var isValidating = false
-    @State private var validationMessage: String?
-    @State private var isSuccess = false
-
-    var body: some View {
-        ScrollView {
-            VStack(spacing: 20) {
-                if isSuccess {
-                    VStack(spacing: 20) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 80))
-                            .foregroundColor(.green)
-                        Text("设置成功")
-                            .font(.title2.bold())
-                        Button {
-                            onBack()
-                        } label: {
-                            Text("完成")
-                                .foregroundColor(.primary)
-                        }
-                        .padding(.top, 20)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 50)
-                    .background(Color.white.opacity(0.05))
-                    .cornerRadius(16)
-                    .padding(.horizontal, 50)
-                    .padding(.top, 50)
-                } else {
-                    // 输入区域
-                    VStack(alignment: .leading, spacing: 16) {
-                        TextField("请输入 Cookie 字符串", text: $cookieInput)
-                            .padding(.top, 50)
-
-                        if let message = validationMessage {
-                            Text(message)
-                                .font(.subheadline)
-                                .foregroundColor(.orange)
-                        }
-
-                        Button {
-                            Task { await validateAndSave() }
-                        } label: {
-                            HStack {
-                                if isValidating {
-                                    ProgressView()
-                                        .frame(width: 40)
-                                } else {
-                                    Image(systemName: "checkmark.circle")
-                                        .font(.system(size: 24))
-                                        .frame(width: 40)
-                                }
-                                Text("验证并保存")
-                                    .foregroundColor(.primary)
-                                Spacer()
-                            }
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 16)
-                        }
-                        .buttonStyle(.card)
-                        .disabled(cookieInput.isEmpty || isValidating)
-                    }
-                    .padding(.horizontal, 50)
-
-                    Divider()
-                        .padding(.horizontal, 50)
-                        .padding(.vertical, 20)
-
-                    // 帮助信息
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("如何获取 Cookie")
-                            .font(.headline)
-
-                        Text("1. 在电脑浏览器中登录 bilibili.com")
-                            .font(.callout)
-                            .foregroundColor(.secondary)
-                        Text("2. 按 F12 打开开发者工具")
-                            .font(.callout)
-                            .foregroundColor(.secondary)
-                        Text("3. 切换到 Network (网络) 标签")
-                            .font(.callout)
-                            .foregroundColor(.secondary)
-                        Text("4. 刷新页面，点击任意请求")
-                            .font(.callout)
-                            .foregroundColor(.secondary)
-                        Text("5. 在 Headers 中找到 Cookie 字段并复制")
-                            .font(.callout)
-                            .foregroundColor(.secondary)
-                    }
-                    .padding(.horizontal, 50)
-                }
-
-                Spacer()
-            }
-        }
-        .onExitCommand {
-            onBack()
-        }
-    }
-
-    private func validateAndSave() async {
-        isValidating = true
-        validationMessage = nil
-
-        let result = await syncService.setManualCookie(cookieInput)
-
-        switch result {
-        case .valid:
-            isSuccess = true
-        case .invalid(let reason):
-            validationMessage = "Cookie 无效: \(reason)"
-        case .expired:
-            validationMessage = "Cookie 已过期"
-        case .networkError(let error):
-            validationMessage = "网络错误: \(error.localizedDescription)"
-        }
-
-        isValidating = false
-    }
-}
-
 // MARK: - 辅助视图
 
 struct StepRow: View {
@@ -703,109 +695,6 @@ struct StepRow: View {
 
             Spacer()
         }
-    }
-}
-
-// MARK: - 其他平台模型与行视图
-
-enum TVOtherPlatformItem: String, CaseIterable, Identifiable {
-    case douyin
-    case kuaishou
-    case soop
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .douyin: return "抖音"
-        case .kuaishou: return "快手"
-        case .soop: return "SOOP"
-        }
-    }
-
-    var iconName: String {
-        switch self {
-        case .douyin: return "live_card_douyin"
-        case .kuaishou: return "live_card_ks"
-        case .soop: return "live_card_soop"
-        }
-    }
-
-    var iconSystemName: String {
-        switch self {
-        case .douyin: return "music.note.tv"
-        case .kuaishou: return "bolt.circle.fill"
-        case .soop: return "globe.asia.australia.fill"
-        }
-    }
-
-    var iconTint: Color {
-        switch self {
-        case .douyin: return .orange
-        case .kuaishou: return .blue
-        case .soop: return .purple
-        }
-    }
-
-    var sessionID: PlatformSessionID {
-        switch self {
-        case .douyin: return .douyin
-        case .kuaishou: return .kuaishou
-        case .soop: return .soop
-        }
-    }
-
-    var liveType: LiveType {
-        switch self {
-        case .douyin: return .douyin
-        case .kuaishou: return .ks
-        case .soop: return .soop
-        }
-    }
-}
-
-struct TVOtherPlatformRow: View {
-    let platform: TVOtherPlatformItem
-    @State private var isLoggedIn = false
-
-    var body: some View {
-        Button {
-            // 暂无操作，仅展示状态
-        } label: {
-            HStack(spacing: 12) {
-                Group {
-                    if let image = TVPlatformIconProvider.tabImage(for: platform.liveType) {
-                        Image(uiImage: image)
-                            .resizable()
-                            .scaledToFit()
-                    } else {
-                        Image(systemName: platform.iconSystemName)
-                            .font(.system(size: 28))
-                            .foregroundStyle(platform.iconTint.gradient)
-                    }
-                }
-                .frame(width: 50, height: 50)
-                .cornerRadius(10)
-                Text(platform.title)
-                    .font(.system(size: 32))
-                    .foregroundColor(.primary)
-                Spacer()
-                Text(isLoggedIn ? "已登录" : "未登录")
-                    .font(.system(size: 28))
-                    .foregroundStyle(isLoggedIn ? .green : .gray)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 20)
-        }
-        .buttonStyle(.card)
-        .task {
-            await refreshLoginStatus()
-        }
-    }
-
-    private func refreshLoginStatus() async {
-        let session = await PlatformSessionManager.shared.getSession(platformId: platform.sessionID)
-        isLoggedIn = session?.state == .authenticated
     }
 }
 

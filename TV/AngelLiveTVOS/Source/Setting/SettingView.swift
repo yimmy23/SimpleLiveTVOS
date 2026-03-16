@@ -93,7 +93,6 @@ struct SettingView: View {
     // MARK: - 菜单列表
     private var menuListView: some View {
         VStack(spacing: 15) {
-            Spacer()
             ForEach(titles.indices, id: \.self) { index in
                 if shouldShowMenuItem(index) {
                     Button {
@@ -103,7 +102,7 @@ struct SettingView: View {
                             fullScreenIndex = index
                         }
                     } label: {
-                        HStack {
+                        HStack(spacing: 15) {
                             Text(titles[index])
                                 .foregroundColor(.primary)
                             Spacer()
@@ -123,7 +122,6 @@ struct SettingView: View {
                     .focused($focusedIndex, equals: index)
                 }
             }
-            Spacer(minLength: 200)
         }
     }
 

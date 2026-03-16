@@ -16,6 +16,9 @@ struct SimpleLiveTVOSApp: App {
     var appViewModel = AppState()
 
     init() {
+        // 启动时将 Caches 中的插件同步到 App Group 容器（供 TopShelf 使用）
+        PluginAppGroupSync.syncToAppGroup()
+
         KingfisherManager.shared.defaultOptions += [
             .processor(WebPProcessor.default),
             .cacheSerializer(WebPSerializer.default)

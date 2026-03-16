@@ -32,14 +32,14 @@ public final class LiveParseTools {
     ]
 
     private static let builtInDescriptions: [String: String] = [
-        LiveType.bilibili.rawValue: "超清直播须在设置扫码",
+        LiveType.bilibili.rawValue: "列表返回352、超清直播须在设置扫码",
         LiveType.huya.rawValue: "竞技由我，玩在虎牙",
-        LiveType.douyin.rawValue: "无法使用请在PC浏览器扫码登录",
+        LiveType.douyin.rawValue: "抖音 - 记录美好生活",
         LiveType.douyu.rawValue: "每个人的直播平台",
-        LiveType.cc.rawValue: "网易游戏直播(暂无弹幕)",
-        LiveType.ks.rawValue: "无法播放请手动打开任意直播间通过滑块验证码(暂无弹幕)",
+        LiveType.cc.rawValue: "网易游戏直播",
+        LiveType.ks.rawValue: "无法播放请手动打开任意直播间通过滑块验证码",
         LiveType.yy.rawValue: "全民娱乐的互动直播平台",
-        LiveType.youtube.rawValue: "全球视频平台直播(已支持直播弹幕轮询)",
+        LiveType.youtube.rawValue: "全球视频平台直播",
         LiveType.soop.rawValue: "韩国直播平台(原AfreecaTV)"
     ]
 

@@ -66,12 +66,14 @@ struct PlayerControlCardView: View {
                     }
                     if playControlCardViewModel.selectIndex != 2 { // 如果不为直播页面，则展示对应平台和直播状态
                         HStack {
-                            Image(uiImage: .init(named: Common.getImage(playControlCardViewModel.liveModel.liveType))!)
-                                .resizable()
-                                .frame(width: 40, height: 40)
-                                .cornerRadius(5)
-                                .padding(.top, 5)
-                                .padding(.leading, 5)
+                            if let platformImage = TVPlatformIconProvider.tabImage(for: playControlCardViewModel.liveModel.liveType) {
+                                Image(uiImage: platformImage)
+                                    .resizable()
+                                    .frame(width: 40, height: 40)
+                                    .cornerRadius(5)
+                                    .padding(.top, 5)
+                                    .padding(.leading, 5)
+                            }
                             Spacer()
                             if playControlCardViewModel.liveStateLoading == true {
                                 HStack {

@@ -93,7 +93,7 @@ struct SidebarView: View {
                 ForEach(liveViewModel.categories.indices, id: \.self) { index in
                     SidebarMenuItem(
                         focusState: $focusState,
-                        icon: liveViewModel.categories[index].icon.isEmpty ? liveViewModel.menuTitleIcon : liveViewModel.categories[index].icon,
+                        icon: liveViewModel.categories[index].icon,
                         title: liveViewModel.categories[index].title,
                         index: index,
                         subItems: liveViewModel.categories[index].subList
@@ -148,16 +148,20 @@ struct SidebarView: View {
     @ViewBuilder
     private var currentCategoryIcon: some View {
         let icon = currentSelectedIcon
-        if icon.isEmpty || icon == liveViewModel.menuTitleIcon {
-            Image(liveViewModel.menuTitleIcon)
-                .resizable()
-                .scaledToFit()
+        if icon.isEmpty || !icon.hasPrefix("http") {
+            if let uiImage = liveViewModel.menuTitleIcon {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .scaledToFit()
+            }
         } else {
             KFImage(URL(string: icon))
                 .placeholder {
-                    Image(liveViewModel.menuTitleIcon)
-                        .resizable()
-                        .scaledToFit()
+                    if let uiImage = liveViewModel.menuTitleIcon {
+                        Image(uiImage: uiImage)
+                            .resizable()
+                            .scaledToFit()
+                    }
                 }
                 .resizable()
                 .scaledToFit()
@@ -206,8 +210,8 @@ struct SidebarMenuItem: View {
                             .resizable()
                             .frame(width: 40, height: 40)
                             .cornerRadius(20)
-                    } else {
-                        Image(icon)
+                    } else if let uiImage = liveViewModel.menuTitleIcon {
+                        Image(uiImage: uiImage)
                             .resizable()
                             .frame(width: 40, height: 40)
                             .cornerRadius(20)
@@ -241,7 +245,7 @@ struct SidebarMenuItem: View {
                     ForEach(Array(subItems.enumerated()), id: \.element.id) { subIndex, item in
                         SidebarSubMenuItem(
                             focusState: $focusState,
-                            icon: item.icon.isEmpty ? liveViewModel.menuTitleIcon : item.icon,
+                            icon: item.icon,
                             title: item.title,
                             subIndex: subIndex,
                             parentIndex: index
@@ -285,13 +289,13 @@ struct SidebarSubMenuItem: View {
                     .frame(width: 5, height: 30)
 
                 // 图标
-                if icon == "douyin" || !icon.hasPrefix("http") {
-                    Image(icon.isEmpty ? "placeholder" : icon)
+                if icon.hasPrefix("http") {
+                    KFImage(URL(string: icon))
                         .resizable()
                         .frame(width: 32, height: 32)
                         .cornerRadius(16)
-                } else {
-                    KFImage(URL(string: icon))
+                } else if let uiImage = liveViewModel.menuTitleIcon {
+                    Image(uiImage: uiImage)
                         .resizable()
                         .frame(width: 32, height: 32)
                         .cornerRadius(16)

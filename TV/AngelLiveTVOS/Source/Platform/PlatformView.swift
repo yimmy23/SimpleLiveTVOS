@@ -7,14 +7,18 @@
 
 import SwiftUI
 import AngelLiveDependencies
+import AngelLiveCore
+
+extension LiveType: @retroactive Identifiable {
+    public var id: String { rawValue }
+}
 
 struct PlatformView: View {
     let column = Array(repeating: GridItem(.fixed(380), spacing: 50), count: 4)
     @State private var platformViewModel = PlatformViewModel()
     @FocusState private var focusIndex: Int?
     @Environment(AppState.self) private var appViewModel
-    @State private var show = false
-    @State private var selectedIndex = 0
+    @State private var selectedLiveType: LiveType?
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
@@ -33,7 +37,7 @@ struct PlatformView: View {
         .onChange(of: appViewModel.pluginAvailability.installedPluginIds) { _, installedPluginIds in
             platformViewModel.refreshPlatforms(installedPluginIds: installedPluginIds)
             if installedPluginIds.isEmpty {
-                show = false
+                selectedLiveType = nil
             }
         }
     }
@@ -43,8 +47,7 @@ struct PlatformView: View {
             LazyVGrid(columns: column, alignment: .center, spacing: 50) {
                 ForEach(platformViewModel.platformInfo.indices, id: \.self) { index in
                     Button {
-                        selectedIndex = index
-                        show = true
+                        selectedLiveType = platformViewModel.platformInfo[index].liveType
                     } label: {
                         ZStack {
                             Image("platform-bg")
@@ -117,24 +120,19 @@ struct PlatformView: View {
             .frame(maxWidth: .infinity, alignment: .center)
             .padding(.top, 40)
         }
-        .fullScreenCover(isPresented: $show, content: {
-            if platformViewModel.platformInfo.indices.contains(selectedIndex) {
-                if appViewModel.generalSettingsViewModel.generalDisableMaterialBackground {
-                    ListMainView(liveType: platformViewModel.platformInfo[selectedIndex].liveType, appViewModel: appViewModel)
-                        .background(
-                            Color("sl-background", bundle: nil)
-                        )
-                        .safeAreaPadding(.all)
-                        .id(platformViewModel.platformInfo[selectedIndex].liveType)
-
-                } else {
-                    ListMainView(liveType: platformViewModel.platformInfo[selectedIndex].liveType, appViewModel: appViewModel)
-                        .id(platformViewModel.platformInfo[selectedIndex].liveType)
-                }
+        .fullScreenCover(item: $selectedLiveType) { liveType in
+            if appViewModel.generalSettingsViewModel.generalDisableMaterialBackground {
+                ListMainView(liveType: liveType, appViewModel: appViewModel)
+                    .background(
+                        Color("sl-background", bundle: nil)
+                    )
+                    .safeAreaPadding(.all)
+                    .id(liveType)
             } else {
-                EmptyView()
+                ListMainView(liveType: liveType, appViewModel: appViewModel)
+                    .id(liveType)
             }
-        })
+        }
     }
 }
 

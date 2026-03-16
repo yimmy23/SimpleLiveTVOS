@@ -33,7 +33,13 @@ public final class LiveParsePluginUpdater: @unchecked Sendable {
     }
 
     public func fetchIndex(url: URL) async throws -> LiveParseRemotePluginIndex {
-        let (data, _) = try await session.data(from: url)
+        let (data, response) = try await session.data(from: url)
+        if let httpResponse = response as? HTTPURLResponse,
+           !(200...299).contains(httpResponse.statusCode) {
+            throw URLError(.badServerResponse, userInfo: [
+                NSLocalizedDescriptionKey: "HTTP \(httpResponse.statusCode)"
+            ])
+        }
         return try JSONDecoder().decode(LiveParseRemotePluginIndex.self, from: data)
     }
 

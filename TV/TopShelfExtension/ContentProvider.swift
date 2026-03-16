@@ -15,8 +15,78 @@ class ContentProvider: TVTopShelfContentProvider {
     /// 单个请求超时时间（秒）
     private let singleRequestTimeout: TimeInterval = 8
 
+    private static let appGroupIdentifier = "group.dev.idog.angellivetvos"
+
+    /// 从 App Group 容器复制插件到 TopShelf 的 Caches 目录，
+    /// 使 LiveParsePlugins.shared 能加载到沙盒插件。
+    private func syncPluginsFromAppGroup() {
+        let fm = FileManager.default
+
+        guard let containerURL = fm.containerURL(forSecurityApplicationGroupIdentifier: Self.appGroupIdentifier) else {
+            print("[TopShelf] App Group container not available.")
+            return
+        }
+
+        let sourcePluginsDir = containerURL
+            .appendingPathComponent("LiveParse", isDirectory: true)
+            .appendingPathComponent("plugins", isDirectory: true)
+        let sourceState = containerURL
+            .appendingPathComponent("LiveParse", isDirectory: true)
+            .appendingPathComponent("state.json")
+
+        guard fm.fileExists(atPath: sourcePluginsDir.path) else {
+            print("[TopShelf] No plugins in App Group container.")
+            return
+        }
+
+        // 复制到 LiveParsePlugins.shared.storage 实际使用的目录
+        let destLiveParseDir = LiveParsePlugins.shared.storage.baseDirectory
+        let destPluginsDir = destLiveParseDir.appendingPathComponent("plugins", isDirectory: true)
+        let destState = destLiveParseDir.appendingPathComponent("state.json")
+
+        print("[TopShelf] Syncing plugins to: \(destLiveParseDir.path)")
+
+        do {
+            try fm.createDirectory(at: destLiveParseDir, withIntermediateDirectories: true)
+
+            if fm.fileExists(atPath: destPluginsDir.path) {
+                try fm.removeItem(at: destPluginsDir)
+            }
+            try fm.copyItem(at: sourcePluginsDir, to: destPluginsDir)
+
+            if fm.fileExists(atPath: sourceState.path) {
+                if fm.fileExists(atPath: destState.path) {
+                    try fm.removeItem(at: destState)
+                }
+                try fm.copyItem(at: sourceState, to: destState)
+            }
+
+            print("[TopShelf] Synced plugins from App Group to local Caches.")
+        } catch {
+            print("[TopShelf] Failed to sync plugins: \(error)")
+        }
+    }
+
     override func loadTopShelfContent() async -> (any TVTopShelfContent)? {
         print("[TopShelf] loadTopShelfContent() called")
+
+        // 打印 App Group 插件目录内容
+        let fm = FileManager.default
+        if let container = fm.containerURL(forSecurityApplicationGroupIdentifier: Self.appGroupIdentifier) {
+            let pluginsDir = container.appendingPathComponent("LiveParse/plugins", isDirectory: true)
+            print("[TopShelf] App Group plugins dir: \(pluginsDir.path)")
+            print("[TopShelf] Exists: \(fm.fileExists(atPath: pluginsDir.path))")
+            if let contents = try? fm.contentsOfDirectory(atPath: pluginsDir.path) {
+                print("[TopShelf] Plugin count: \(contents.count)")
+                print("[TopShelf] Plugins: \(contents)")
+            }
+        }
+
+        // 从 App Group 同步插件到本地 Caches，供 LiveParsePlugins.shared 使用
+        syncPluginsFromAppGroup()
+
+        // 同步完成后重新加载插件（LiveParsePlugins.shared 是 static let，首次访问时 Caches 还为空）
+        try? LiveParsePlugins.shared.reload()
 
         do {
             // 1. 从 CloudKit 读取收藏列表

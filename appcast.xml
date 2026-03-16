@@ -6,6 +6,25 @@
         <description>Angel Live macOS 应用更新</description>
         <language>zh-cn</language>
         <item>
+            <title>Version 2.0.0 (Build 21)</title>
+            <sparkle:version>21</sparkle:version>
+            <sparkle:shortVersionString>2.0.0</sparkle:shortVersionString>
+            <description><![CDATA[
+                <h2>更新内容</h2>
+                <ul>
+                    <li>修复：清晰度 checkmark 选中状态错乱</li>
+                </ul>
+                <p><strong>如遇到自动更新失败，请手动下载：</strong><a href="https://github.com/pcccccc/AngelLive/releases/download/v2.0.0/Angel.Live.2.0.0.universal.ver21.dmg">点击下载</a></p>
+                <p>使用中遇到问题？欢迎加入 <a href="https://t.me/angelliveapp">Telegram 群组</a> 反馈交流</p>
+            ]]></description>
+            <pubDate>Sun, 16 Mar 2026 18:00:00 +0800</pubDate>
+            <enclosure url="https://github.com/pcccccc/AngelLive/releases/download/v2.0.0/Angel.Live.2.0.0.universal.ver21.dmg"
+                       sparkle:edSignature="baS8JHbmoai0UtyO9WmmhBqqI8ytj22QKvD0YINZDB9elaRfcjmMdpguiuwbevEmMQ7rxyyFYj6FiOD6UJtJCQ=="
+                       length="40986988"
+                       type="application/octet-stream"/>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+        </item>
+        <item>
             <title>Version 2.0.0 (Build 20)</title>
             <sparkle:version>20</sparkle:version>
             <sparkle:shortVersionString>2.0.0</sparkle:shortVersionString>
