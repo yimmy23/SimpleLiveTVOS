@@ -276,11 +276,14 @@ private extension JSRuntime {
 
                     let bodyText = data.flatMap { String(data: $0, encoding: .utf8) }
                     let bodyBase64 = data?.base64EncodedString()
+                    let responseURL = http.url?.absoluteString ?? envelope.urlString
+                    let rawBodyLog = debugHTTPResponseBody(bodyText: bodyText, bodyBase64: bodyBase64)
+                    print("[JSRuntime][HTTP] pluginId=\(pluginId) method=\(envelope.method) status=\(http.statusCode) url=\(responseURL) headers=\(headersDict) rawBody=\(rawBodyLog)")
 
                     let result: [String: Any] = [
                         "status": http.statusCode,
                         "headers": headersDict,
-                        "url": http.url?.absoluteString ?? envelope.urlString,
+                        "url": responseURL,
                         "bodyText": bodyText ?? NSNull(),
                         "bodyBase64": bodyBase64 ?? NSNull()
                     ]
@@ -386,6 +389,23 @@ private extension JSRuntime {
             return body.data(using: .utf8)
         }
         return nil
+    }
+
+    private static func debugHTTPResponseBody(bodyText: String?, bodyBase64: String?) -> String {
+        let limit = 4_000
+        if let bodyText, !bodyText.isEmpty {
+            if bodyText.count > limit {
+                return String(bodyText.prefix(limit)) + "...(truncated)"
+            }
+            return bodyText
+        }
+        if let bodyBase64, !bodyBase64.isEmpty {
+            if bodyBase64.count > limit {
+                return "<base64> " + String(bodyBase64.prefix(limit)) + "...(truncated)"
+            }
+            return "<base64> \(bodyBase64)"
+        }
+        return "<empty>"
     }
 
     private static func normalizedHeaders(_ raw: Any?) -> [String: String] {

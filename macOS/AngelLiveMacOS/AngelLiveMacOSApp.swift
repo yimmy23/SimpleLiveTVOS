@@ -13,6 +13,14 @@ import AppKit
 import Sparkle
 import Combine
 
+@inline(__always)
+func print(_ items: Any..., separator: String = " ", terminator: String = "\n") {
+#if DEBUG
+    let message = items.map { String(describing: $0) }.joined(separator: separator)
+    Swift.print(message, terminator: terminator)
+#endif
+}
+
 // Sparkle 更新控制器
 final class UpdaterViewModel: ObservableObject {
     private let updaterController: SPUStandardUpdaterController

@@ -10,6 +10,14 @@ import AngelLiveCore
 import AngelLiveDependencies
 internal import AVFoundation
 
+@inline(__always)
+func print(_ items: Any..., separator: String = " ", terminator: String = "\n") {
+#if DEBUG
+    let message = items.map { String(describing: $0) }.joined(separator: separator)
+    Swift.print(message, terminator: terminator)
+#endif
+}
+
 @main
 struct AngelLiveApp: App {
     // 连接 AppDelegate 以支持屏幕方向控制
@@ -40,8 +48,9 @@ struct AngelLiveApp: App {
 class AppDelegate: NSObject, UIApplicationDelegate {
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // 配置音频会话以支持后台播放
-        configureAudioSession()
+        // 仅预配置播放类别，避免应用启动时立刻打断其他 App 的音频。
+        configureAudioSessionForPlayback()
+        logPluginInstallLocation()
 
         Task {
             await PlatformSessionLiveParseBridge.syncFromPersistedSessionsOnLaunch()
@@ -61,15 +70,20 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         return true
     }
 
-    /// 配置音频会话以支持后台播放
-    private func configureAudioSession() {
+    /// 预配置音频会话类别，真正播放时再由系统激活会话。
+    private func configureAudioSessionForPlayback() {
         do {
             let audioSession = AVAudioSession.sharedInstance()
             try audioSession.setCategory(.playback, mode: .moviePlayback, options: [.allowAirPlay])
-            try audioSession.setActive(true)
         } catch {
             print("配置音频会话失败: \(error)")
         }
+    }
+
+    private func logPluginInstallLocation() {
+        let storage = LiveParsePlugins.shared.storage
+        print("[iOS] 插件根目录: \(storage.pluginsRootDirectory.path)")
+        print("[iOS] 插件状态文件: \(storage.stateFileURL.path)")
     }
 
     // MARK: - Orientation Support
