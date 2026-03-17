@@ -102,6 +102,67 @@ public final class PluginSourceManager: @unchecked Sendable {
     }
 
     public func addSource(_ urlString: String) {
+        persistSourceIfNeeded(urlString)
+    }
+
+    /// 添加用户输入的订阅源：支持 key 解析和直接 URL，只有校验成功后才会持久化并同步到 CloudKit。
+    /// 返回实际添加或重新加载成功的 URL 列表。
+    public func addSourceFromInput(_ input: String) async -> [String] {
+        await validateAndLoadSource(input, allowDirectInput: true)
+    }
+
+    /// 仅处理 key 形式的订阅源输入。
+    /// 若输入不是 key，则返回空数组，交由调用方按普通视频链接处理。
+    public func addSourceWithKeyResolution(_ input: String) async -> [String] {
+        await validateAndLoadSource(input, allowDirectInput: false)
+    }
+
+    private func validateAndLoadSource(_ input: String, allowDirectInput: Bool) async -> [String] {
+        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+
+        errorMessage = nil
+        await PluginSourceKeyService.shared.fetchKeys()
+
+        let resolvedCandidates = await PluginSourceKeyService.shared.resolveKey(trimmed)
+        if resolvedCandidates == nil, !allowDirectInput {
+            return []
+        }
+
+        let candidates = resolvedCandidates ?? [trimmed]
+        var lastError: Error?
+
+        isFetchingIndex = true
+        defer { isFetchingIndex = false }
+
+        for candidate in candidates {
+            guard let url = URL(string: candidate) else {
+                lastError = URLError(.badURL)
+                continue
+            }
+
+            do {
+                let index = try await fetchIndexWithTimeout(url: url)
+                persistSourceIfNeeded(candidate)
+                applyFetchedIndex(index, sourceURL: candidate)
+                return [candidate]
+            } catch {
+                lastError = error
+                Logger.warning("Source validation failed for \(candidate): \(Self.detailedErrorDescription(error))", category: .plugin)
+            }
+        }
+
+        if let lastError {
+            errorMessage = "拉取插件索引失败: \(Self.detailedErrorDescription(lastError))"
+        } else if resolvedCandidates != nil {
+            errorMessage = "所有候选源地址均不可用"
+        } else if allowDirectInput {
+            errorMessage = "无效的 URL"
+        }
+        return []
+    }
+
+    private func persistSourceIfNeeded(_ urlString: String) {
         let trimmed = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !sourceURLs.contains(trimmed) else { return }
         sourceURLs.append(trimmed)
@@ -109,43 +170,19 @@ public final class PluginSourceManager: @unchecked Sendable {
         saveSourceURLs()
     }
 
-    /// 添加订阅源，支持 key 解析：若输入匹配 key，依次尝试访问候选 URL，
-    /// 只将第一个能成功访问的 URL 存入（而非 key 本身）。
-    /// 返回实际添加的 URL 列表。
-    public func addSourceWithKeyResolution(_ input: String) async -> [String] {
-        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return [] }
+    private func applyFetchedIndex(_ index: LiveParseRemotePluginIndex, sourceURL: String) {
+        let trimmed = sourceURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        sourcePluginIds[trimmed] = Set(index.plugins.map(\.pluginId))
+        remotePlugins = index.plugins.map(makeRemoteDisplayItem)
+        mergeLatestRemoteItems(index.plugins)
+    }
 
-        // 确保 keys 已加载
-        await PluginSourceKeyService.shared.fetchKeys()
-
-        // 尝试 key 解析
-        if let candidateURLs = await PluginSourceKeyService.shared.resolveKey(trimmed) {
-            // 依次尝试，只存第一个能成功拉取索引的 URL
-            for candidate in candidateURLs {
-                guard !sourceURLs.contains(candidate),
-                      let url = URL(string: candidate) else { continue }
-                do {
-                    _ = try await fetchIndexWithTimeout(url: url)
-                    // 访问成功，存入这个 URL
-                    addSource(candidate)
-                    return [candidate]
-                } catch {
-                    Logger.warning("Key resolve: \(candidate) 不可用，尝试下一个", category: .plugin)
-                    continue
-                }
-            }
-            // 所有候选 URL 都失败
-            errorMessage = "所有候选源地址均不可用"
-            return []
+    private func makeRemoteDisplayItem(from item: LiveParseRemotePluginItem) -> RemotePluginDisplayItem {
+        let displayItem = RemotePluginDisplayItem(item: item)
+        if installedVersion(for: item.pluginId) != nil {
+            displayItem.installState = .installed
         }
-
-        // 非 key，按原样添加
-        if !sourceURLs.contains(trimmed) {
-            addSource(trimmed)
-            return [trimmed]
-        }
-        return []
+        return displayItem
     }
 
     public func removeSource(_ urlString: String) {
@@ -192,15 +229,7 @@ public final class PluginSourceManager: @unchecked Sendable {
 
         do {
             let index = try await fetchIndexWithTimeout(url: url)
-            sourcePluginIds[trimmed] = Set(index.plugins.map(\.pluginId))
-            remotePlugins = index.plugins.map { item in
-                let displayItem = RemotePluginDisplayItem(item: item)
-                if installedVersion(for: item.pluginId) != nil {
-                    displayItem.installState = .installed
-                }
-                return displayItem
-            }
-            mergeLatestRemoteItems(index.plugins)
+            applyFetchedIndex(index, sourceURL: trimmed)
         } catch {
             errorMessage = "拉取插件索引失败: \(Self.detailedErrorDescription(error))"
         }
@@ -273,13 +302,7 @@ public final class PluginSourceManager: @unchecked Sendable {
             }
         }
 
-        remotePlugins = allItems.map { item in
-            let displayItem = RemotePluginDisplayItem(item: item)
-            if installedVersion(for: item.pluginId) != nil {
-                displayItem.installState = .installed
-            }
-            return displayItem
-        }
+        remotePlugins = allItems.map(makeRemoteDisplayItem)
     }
 
     public func installPlugin(_ displayItem: RemotePluginDisplayItem) async -> Bool {
@@ -424,23 +447,17 @@ public final class PluginSourceManager: @unchecked Sendable {
 
     /// 将错误转为更具体的描述，方便排查问题
     static func detailedErrorDescription(_ error: Error) -> String {
-        if let decodingError = error as? DecodingError {
-            switch decodingError {
-            case .typeMismatch(let type, let context):
-                let path = context.codingPath.map(\.stringValue).joined(separator: ".")
-                return "类型不匹配: 期望 \(type), 路径 \(path)"
-            case .valueNotFound(let type, let context):
-                let path = context.codingPath.map(\.stringValue).joined(separator: ".")
-                return "缺少值: \(type), 路径 \(path)"
-            case .keyNotFound(let key, let context):
-                let path = context.codingPath.map(\.stringValue).joined(separator: ".")
-                return "缺少字段: \(key.stringValue), 路径 \(path)"
-            case .dataCorrupted(let context):
-                let path = context.codingPath.map(\.stringValue).joined(separator: ".")
-                return "数据损坏: \(context.debugDescription), 路径 \(path)"
-            @unknown default:
-                return decodingError.localizedDescription
+        if let fetchError = error as? LiveParsePluginIndexFetchError {
+            switch fetchError {
+            case .nonJSONResponse(let diagnostics):
+                return "返回的不是 JSON。\(responseDiagnosticsDescription(diagnostics))"
+            case .decodingFailed(let diagnostics, let decodingError):
+                return "\(detailedDecodingErrorDescription(decodingError))。\(responseDiagnosticsDescription(diagnostics))"
             }
+        }
+
+        if let decodingError = error as? DecodingError {
+            return detailedDecodingErrorDescription(decodingError)
         }
 
         if let urlError = error as? URLError {
@@ -459,6 +476,32 @@ public final class PluginSourceManager: @unchecked Sendable {
         }
 
         return error.localizedDescription
+    }
+
+    private static func detailedDecodingErrorDescription(_ decodingError: DecodingError) -> String {
+        switch decodingError {
+        case .typeMismatch(let type, let context):
+            return "类型不匹配: 期望 \(type), 路径 \(codingPathDescription(context.codingPath))"
+        case .valueNotFound(let type, let context):
+            return "缺少值: \(type), 路径 \(codingPathDescription(context.codingPath))"
+        case .keyNotFound(let key, let context):
+            return "缺少字段: \(key.stringValue), 路径 \(codingPathDescription(context.codingPath))"
+        case .dataCorrupted(let context):
+            return "数据损坏: \(context.debugDescription), 路径 \(codingPathDescription(context.codingPath))"
+        @unknown default:
+            return decodingError.localizedDescription
+        }
+    }
+
+    private static func responseDiagnosticsDescription(_ diagnostics: LiveParsePluginIndexResponseDiagnostics) -> String {
+        let statusText = diagnostics.statusCode.map(String.init) ?? "n/a"
+        let contentTypeText = diagnostics.contentType ?? "unknown"
+        return "URL \(diagnostics.url.absoluteString), HTTP \(statusText), Content-Type \(contentTypeText), 响应片段 \(diagnostics.bodyPreview)"
+    }
+
+    private static func codingPathDescription(_ codingPath: [CodingKey]) -> String {
+        let path = codingPath.map(\.stringValue).joined(separator: ".")
+        return path.isEmpty ? "<root>" : path
     }
 
     // MARK: - Timeout Helper

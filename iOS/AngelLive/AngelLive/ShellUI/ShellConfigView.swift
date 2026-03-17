@@ -77,9 +77,7 @@ struct ShellConfigView: View {
             .disabled(trimmedURL.isEmpty || isProcessing)
 
             if let error = pluginSourceManager.errorMessage {
-                Text(error)
-                    .font(.caption)
-                    .foregroundStyle(AppConstants.Colors.error)
+                PluginSourceErrorCard(title: "插件源异常", message: error)
             }
         } header: {
             Text("添加视频或订阅")
@@ -90,37 +88,32 @@ struct ShellConfigView: View {
 
     private func handleAdd() {
         let url = trimmedURL
+        let title = inputTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        let shouldTreatAsSubscription = isSubscriptionURL
         guard !url.isEmpty else { return }
 
-        if isSubscriptionURL {
-            // 订阅地址
-            pluginSourceManager.addSource(url)
-            inputURL = ""
-            inputTitle = ""
-            isProcessing = true
-            showContentList = true
-            Task {
-                await pluginSourceManager.fetchIndex(from: url)
-                isProcessing = false
-            }
-        } else {
-            // 非 .json 后缀：先尝试 key 解析
-            inputURL = ""
-            inputTitle = ""
-            isProcessing = true
-            Task {
+        isProcessing = true
+        Task {
+            if shouldTreatAsSubscription {
+                let addedURLs = await pluginSourceManager.addSourceFromInput(url)
+                if !addedURLs.isEmpty {
+                    inputURL = ""
+                    inputTitle = ""
+                    showContentList = true
+                }
+            } else {
                 let addedURLs = await pluginSourceManager.addSourceWithKeyResolution(url)
                 if !addedURLs.isEmpty {
+                    inputURL = ""
+                    inputTitle = ""
                     showContentList = true
-                    for added in addedURLs {
-                        await pluginSourceManager.fetchIndex(from: added)
-                    }
-                } else {
-                    // 非 key，作为视频链接
-                    await bookmarkService.add(title: inputTitle.isEmpty ? url : inputTitle, url: url)
+                } else if pluginSourceManager.errorMessage == nil {
+                    await bookmarkService.add(title: title.isEmpty ? url : title, url: url)
+                    inputURL = ""
+                    inputTitle = ""
                 }
-                isProcessing = false
             }
+            isProcessing = false
         }
     }
 
@@ -136,6 +129,12 @@ struct SubscriptionContentSheet: View {
     var body: some View {
         NavigationStack {
             List {
+                if let error = pluginSourceManager.errorMessage {
+                    Section {
+                        PluginSourceErrorCard(title: "插件源异常", message: error)
+                    }
+                }
+
                 if pluginSourceManager.isFetchingIndex {
                     Section {
                         HStack(spacing: AppConstants.Spacing.sm) {

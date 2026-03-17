@@ -174,9 +174,7 @@ private struct AddContentSheet: View {
                     .disabled(trimmedURL.isEmpty || isProcessing)
 
                     if let error = pluginSourceManager.errorMessage {
-                        Text(error)
-                            .font(.caption)
-                            .foregroundStyle(AppConstants.Colors.error)
+                        PluginSourceErrorCard(title: "插件源异常", message: error)
                     }
                 } header: {
                     Text("添加视频或订阅")
@@ -205,35 +203,32 @@ private struct AddContentSheet: View {
 
     private func handleAdd() {
         let url = trimmedURL
+        let title = inputTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        let shouldTreatAsSubscription = isSubscriptionURL
         guard !url.isEmpty else { return }
 
-        if isSubscriptionURL {
-            pluginSourceManager.addSource(url)
-            inputURL = ""
-            inputTitle = ""
-            isProcessing = true
-            showPluginList = true
-            Task {
-                await pluginSourceManager.fetchIndex(from: url)
-                isProcessing = false
-            }
-        } else {
-            // 非 .json 后缀：先尝试 key 解析
-            inputURL = ""
-            inputTitle = ""
-            isProcessing = true
-            Task {
+        isProcessing = true
+        Task {
+            if shouldTreatAsSubscription {
+                let addedURLs = await pluginSourceManager.addSourceFromInput(url)
+                if !addedURLs.isEmpty {
+                    inputURL = ""
+                    inputTitle = ""
+                    showPluginList = true
+                }
+            } else {
                 let addedURLs = await pluginSourceManager.addSourceWithKeyResolution(url)
                 if !addedURLs.isEmpty {
+                    inputURL = ""
+                    inputTitle = ""
                     showPluginList = true
-                    for added in addedURLs {
-                        await pluginSourceManager.fetchIndex(from: added)
-                    }
-                } else {
-                    await bookmarkService.add(title: inputTitle.isEmpty ? url : inputTitle, url: url)
+                } else if pluginSourceManager.errorMessage == nil {
+                    await bookmarkService.add(title: title.isEmpty ? url : title, url: url)
+                    inputURL = ""
+                    inputTitle = ""
                 }
-                isProcessing = false
             }
+            isProcessing = false
         }
     }
 }

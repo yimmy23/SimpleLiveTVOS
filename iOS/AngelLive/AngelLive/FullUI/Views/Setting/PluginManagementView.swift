@@ -162,9 +162,7 @@ struct PluginManagementView: View {
             .disabled(inputURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isProcessing)
 
             if let error = pluginSourceManager.errorMessage {
-                Text(error)
-                    .font(.caption)
-                    .foregroundStyle(AppConstants.Colors.error)
+                PluginSourceErrorCard(title: "插件源异常", message: error)
             }
         } header: {
             Text("添加订阅源")
@@ -179,14 +177,13 @@ struct PluginManagementView: View {
         let input = inputURL.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !input.isEmpty else { return }
 
-        inputURL = ""
         isProcessing = true
         Task {
-            let addedURLs = await pluginSourceManager.addSourceWithKeyResolution(input)
-            for url in addedURLs {
-                await pluginSourceManager.fetchIndex(from: url)
+            let addedURLs = await pluginSourceManager.addSourceFromInput(input)
+            if !addedURLs.isEmpty {
+                inputURL = ""
+                await pluginSourceManager.refreshAvailableUpdates()
             }
-            await pluginSourceManager.refreshAvailableUpdates()
             isProcessing = false
         }
     }

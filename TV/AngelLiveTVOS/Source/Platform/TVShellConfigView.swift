@@ -54,9 +54,8 @@ struct TVShellConfigView: View {
                         .frame(maxWidth: 600, alignment: .leading)
 
                     if let error = appViewModel.pluginSourceManager.errorMessage {
-                        Text(error)
-                            .font(.system(size: 20, weight: .medium))
-                            .foregroundStyle(.red)
+                        PluginSourceErrorCard(title: "插件源异常", message: error)
+                            .frame(maxWidth: 600, alignment: .leading)
                     }
 
                     Spacer()
@@ -150,41 +149,35 @@ struct TVShellConfigView: View {
     private func handleAdd() {
         let url = trimmedURL
         let title = inputTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        let shouldTreatAsSubscription = isSubscriptionURL
         guard !url.isEmpty else { return }
 
-        if isSubscriptionURL {
-            appViewModel.pluginSourceManager.addSource(url)
-            inputURL = ""
-            inputTitle = ""
-            isProcessing = true
-            showPluginManagement = true
-            Task {
-                await appViewModel.pluginSourceManager.fetchIndex(from: url)
-                await appViewModel.pluginSourceManager.refreshAvailableUpdates()
-                isProcessing = false
-            }
-        } else {
-            // 非 .json 后缀：先尝试 key 解析，匹配则当订阅源处理
-            inputURL = ""
-            inputTitle = ""
-            isProcessing = true
-            Task {
+        isProcessing = true
+        Task {
+            if shouldTreatAsSubscription {
+                let addedURLs = await appViewModel.pluginSourceManager.addSourceFromInput(url)
+                if !addedURLs.isEmpty {
+                    inputURL = ""
+                    inputTitle = ""
+                    showPluginManagement = true
+                }
+            } else {
                 let addedURLs = await appViewModel.pluginSourceManager.addSourceWithKeyResolution(url)
                 if !addedURLs.isEmpty {
+                    inputURL = ""
+                    inputTitle = ""
                     showPluginManagement = true
-                    for added in addedURLs {
-                        await appViewModel.pluginSourceManager.fetchIndex(from: added)
-                    }
-                    await appViewModel.pluginSourceManager.refreshAvailableUpdates()
-                } else {
+                } else if appViewModel.pluginSourceManager.errorMessage == nil {
                     // 非 key，作为视频书签添加
                     await appViewModel.bookmarkService.add(
                         title: title.isEmpty ? url : title,
                         url: url
                     )
+                    inputURL = ""
+                    inputTitle = ""
                 }
-                isProcessing = false
             }
+            isProcessing = false
         }
     }
 }
@@ -207,12 +200,9 @@ struct TVPluginManagementView: View {
                 ScrollView {
                     VStack(spacing: 16) {
                         if let error = pluginSourceManager.errorMessage {
-                            statusCard(
-                                icon: "exclamationmark.triangle.fill",
-                                title: "插件目录异常",
-                                message: error
-                            )
-                            .padding(.top, 50)
+                            PluginSourceErrorCard(title: "插件源异常", message: error)
+                                .padding(.top, 50)
+                                .padding(.horizontal, 50)
                         }
 
                         actionSection
