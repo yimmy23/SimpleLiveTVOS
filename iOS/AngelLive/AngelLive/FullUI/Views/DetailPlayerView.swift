@@ -341,17 +341,11 @@ struct DetailPlayerView: View {
     }
 
     private var chatListView: some View {
-        Group {
-            if scenePhase == .active {
-                ChatTableView(
-                    messages: viewModel.danmuMessages,
-                    showJumpToLatest: $showJumpToLatest,
-                    scrollToBottomRequest: $scrollToBottomRequest
-                )
-            } else {
-                EmptyView()
-            }
-        }
+        ChatTableView(
+            messages: viewModel.danmuMessages,
+            showJumpToLatest: $showJumpToLatest,
+            scrollToBottomRequest: $scrollToBottomRequest
+        )
     }
 
     private var jumpToLatestButton: some View {

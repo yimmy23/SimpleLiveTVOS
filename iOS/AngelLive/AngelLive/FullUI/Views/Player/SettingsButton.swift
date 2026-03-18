@@ -106,11 +106,11 @@ struct SettingsButton: View {
             PlayerSettingsSheet(playerSettingModel: $playerSettingModel)
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
+                .tint(AppConstants.Colors.accent)
         }
         .onChange(of: isAnyPopupOpen) { _, isOpen in
             onPopupStateChanged?(isOpen)
         }
-        .tint(.primary)
     }
 }
 

@@ -250,7 +250,6 @@ class FavoriteListViewController: UIViewController {
                 showSearchEmptyView()
             }
         } else {
-            collectionView.isHidden = false
             collectionView.reloadData()
         }
     }
@@ -269,8 +268,6 @@ class FavoriteListViewController: UIViewController {
         emptyHostingController?.view.removeFromSuperview()
         emptyHostingController?.removeFromParent()
         emptyHostingController = nil
-
-        collectionView.isHidden = true
     }
 
     private func showSkeletonView() {

@@ -6,8 +6,45 @@
 //
 
 import SwiftUI
+import UIKit
 import AngelLiveCore
 import AngelLiveDependencies
+
+/// 使用 UILabel 实现的标题，避免 SwiftUI Text 的自动平衡换行
+private struct RoomTitleLabel: UIViewRepresentable {
+    let text: String
+
+    func makeUIView(context: Context) -> UILabel {
+        let label = UILabel()
+        label.font = UIFont.preferredFont(forTextStyle: .title2).withTraits(.traitBold)
+        label.textColor = UIColor(white: 0.95, alpha: 1)
+        label.numberOfLines = 2
+        label.lineBreakMode = .byCharWrapping
+        label.lineBreakStrategy = []
+        label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        label.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        return label
+    }
+
+    func updateUIView(_ uiView: UILabel, context: Context) {
+        uiView.text = text
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: UILabel, context: Context) -> CGSize? {
+        let width = proposal.width ?? UIScreen.main.bounds.width
+        let fittingSize = uiView.sizeThatFits(CGSize(width: width, height: CGFloat.greatestFiniteMagnitude))
+        return CGSize(width: width, height: fittingSize.height)
+    }
+}
+
+private extension UIFont {
+    func withTraits(_ traits: UIFontDescriptor.SymbolicTraits) -> UIFont {
+        guard let descriptor = fontDescriptor.withSymbolicTraits(traits) else {
+            return self
+        }
+        return UIFont(descriptor: descriptor, size: 0)
+    }
+}
 
 /// 主播信息视图
 struct StreamerInfoView: View {
@@ -30,10 +67,7 @@ struct StreamerInfoView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             // 直播间标题（置顶，加大加粗）
-            Text(viewModel.currentRoom.roomTitle)
-                .font(.title2.bold())
-                .foregroundStyle(Color(white: 0.95))
-                .lineLimit(2)
+            RoomTitleLabel(text: viewModel.currentRoom.roomTitle)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             // 主播信息行
