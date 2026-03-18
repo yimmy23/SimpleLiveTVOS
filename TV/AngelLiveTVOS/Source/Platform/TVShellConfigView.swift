@@ -232,6 +232,7 @@ struct TVPluginManagementView: View {
                     _ = pluginSourceManager.uninstallPlugin(pluginId: pluginIdToUninstall)
                     PluginAppGroupSync.syncToAppGroup()
                     await pluginAvailability.refresh()
+                    await pluginSourceManager.fetchAllSourceIndexes()
                     await pluginSourceManager.refreshAvailableUpdates()
                     self.pluginIdToUninstall = nil
                 }

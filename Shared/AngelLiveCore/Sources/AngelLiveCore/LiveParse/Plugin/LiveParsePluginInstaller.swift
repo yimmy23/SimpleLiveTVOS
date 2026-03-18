@@ -49,10 +49,12 @@ public enum LiveParsePluginInstaller {
     }
 
     private static func sanitize(relativePath: String) throws -> String {
-        if relativePath.hasPrefix("/") {
+        // 兼容 Windows 风格的反斜杠路径分隔符
+        let normalized = relativePath.replacingOccurrences(of: "\\", with: "/")
+        if normalized.hasPrefix("/") {
             throw LiveParsePluginError.zipSlipDetected(relativePath)
         }
-        let components = relativePath.split(separator: "/").map(String.init)
+        let components = normalized.split(separator: "/").map(String.init)
         if components.contains("..") {
             throw LiveParsePluginError.zipSlipDetected(relativePath)
         }

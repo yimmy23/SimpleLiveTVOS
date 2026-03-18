@@ -29,7 +29,7 @@ private struct RoomTitleLabel: UIViewRepresentable {
     func updateUIView(_ uiView: UILabel, context: Context) {
         uiView.text = text
     }
-
+ 
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: UILabel, context: Context) -> CGSize? {
         let width = proposal.width ?? UIScreen.main.bounds.width
         let fittingSize = uiView.sizeThatFits(CGSize(width: width, height: CGFloat.greatestFiniteMagnitude))

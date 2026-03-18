@@ -14,11 +14,15 @@ struct PluginManagementView: View {
 
     @State private var inputURL = ""
     @State private var isProcessing = false
+    @State private var showAvailablePlugins = false
 
     var body: some View {
         List {
             // 已安装插件
             installedPluginsSection
+
+            // 可安装插件（内联显示）
+            availablePluginsInlineSection
 
             // 订阅源管理
             subscriptionSourcesSection
@@ -30,12 +34,16 @@ struct PluginManagementView: View {
         .navigationTitle("插件管理")
         .navigationBarTitleDisplayMode(.large)
         .task {
+            await pluginSourceManager.fetchAllSourceIndexes()
             await pluginSourceManager.refreshAvailableUpdates()
         }
         .onChange(of: pluginAvailability.installedPluginIds) { _, _ in
             Task {
                 await pluginSourceManager.refreshAvailableUpdates()
             }
+        }
+        .sheet(isPresented: $showAvailablePlugins) {
+            availablePluginsSheet
         }
     }
 
@@ -85,6 +93,7 @@ struct PluginManagementView: View {
                             Task {
                                 _ = pluginSourceManager.uninstallPlugin(pluginId: pluginId)
                                 await pluginAvailability.refresh()
+                                await pluginSourceManager.fetchAllSourceIndexes()
                                 await pluginSourceManager.refreshAvailableUpdates()
                             }
                         } label: {
@@ -99,6 +108,41 @@ struct PluginManagementView: View {
         } footer: {
             if !pluginAvailability.installedPluginIds.isEmpty {
                 Text("共 \(pluginAvailability.installedPluginIds.count) 个插件")
+            }
+        }
+    }
+
+    // MARK: - 可安装插件（内联）
+
+    @ViewBuilder
+    private var availablePluginsInlineSection: some View {
+        let notInstalled = pluginSourceManager.remotePlugins.filter {
+            pluginSourceManager.installedVersion(for: $0.id) == nil
+        }
+        if !notInstalled.isEmpty {
+            Section {
+                ForEach(notInstalled) { displayItem in
+                    HStack {
+                        Image(systemName: "puzzlepiece.extension")
+                            .frame(width: 32, height: 32)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(displayItem.displayName)
+                                .font(.body)
+                                .foregroundStyle(AppConstants.Colors.primaryText)
+                            Text("版本 \(displayItem.item.version)")
+                                .font(.caption)
+                                .foregroundStyle(AppConstants.Colors.secondaryText)
+                        }
+
+                        Spacer()
+
+                        remotePluginActionView(for: displayItem)
+                    }
+                    .padding(.vertical, AppConstants.Spacing.xs)
+                }
+            } header: {
+                Text("可安装插件")
             }
         }
     }
@@ -123,6 +167,7 @@ struct PluginManagementView: View {
                             Task {
                                 await pluginSourceManager.removeSourceAndAssociatedPlugins(url)
                                 await pluginAvailability.refresh()
+                                await pluginSourceManager.fetchAllSourceIndexes()
                                 await pluginSourceManager.refreshAvailableUpdates()
                             }
                         } label: {
@@ -183,6 +228,7 @@ struct PluginManagementView: View {
             if !addedURLs.isEmpty {
                 inputURL = ""
                 await pluginSourceManager.refreshAvailableUpdates()
+                showAvailablePlugins = true
             }
             isProcessing = false
         }
@@ -247,6 +293,113 @@ struct PluginManagementView: View {
         } else {
             Image(systemName: "checkmark.circle.fill")
                 .foregroundStyle(AppConstants.Colors.success)
+        }
+    }
+
+    // MARK: - 可安装插件 Sheet
+
+    private var availablePluginsSheet: some View {
+        NavigationStack {
+            List {
+                if pluginSourceManager.remotePlugins.isEmpty {
+                    Text("没有可用的插件")
+                        .font(.body)
+                        .foregroundStyle(AppConstants.Colors.secondaryText)
+                } else {
+                    Section {
+                        ForEach(pluginSourceManager.remotePlugins) { displayItem in
+                            HStack {
+                                Image(systemName: "puzzlepiece.extension")
+                                    .frame(width: 32, height: 32)
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(displayItem.displayName)
+                                        .font(.body)
+                                        .foregroundStyle(AppConstants.Colors.primaryText)
+                                    Text("版本 \(displayItem.item.version)")
+                                        .font(.caption)
+                                        .foregroundStyle(AppConstants.Colors.secondaryText)
+                                }
+
+                                Spacer()
+
+                                remotePluginActionView(for: displayItem)
+                            }
+                            .padding(.vertical, AppConstants.Spacing.xs)
+                        }
+                    } header: {
+                        Text("共 \(pluginSourceManager.remotePlugins.count) 个插件")
+                    }
+                }
+            }
+            .listStyle(.insetGrouped)
+            .navigationTitle("可安装插件")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("关闭") {
+                        showAvailablePlugins = false
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    if pluginSourceManager.remotePlugins.contains(where: { $0.installState == .notInstalled }) {
+                        Button {
+                            Task {
+                                _ = await pluginSourceManager.installAll()
+                                await pluginAvailability.refresh()
+                                await pluginSourceManager.refreshAvailableUpdates()
+                            }
+                        } label: {
+                            if pluginSourceManager.isInstalling {
+                                ProgressView()
+                                    .scaleEffect(0.8)
+                            } else {
+                                Text("全部安装")
+                            }
+                        }
+                        .disabled(pluginSourceManager.isInstalling)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func remotePluginActionView(for displayItem: RemotePluginDisplayItem) -> some View {
+        switch displayItem.installState {
+        case .notInstalled:
+            Button {
+                Task {
+                    let success = await pluginSourceManager.installPlugin(displayItem)
+                    if success {
+                        await pluginAvailability.refresh()
+                        await pluginSourceManager.refreshAvailableUpdates()
+                    }
+                }
+            } label: {
+                Text("安装")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(AppConstants.Colors.link, in: Capsule())
+            }
+            .buttonStyle(.plain)
+        case .installing:
+            ProgressView()
+                .scaleEffect(0.8)
+        case .installed:
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(AppConstants.Colors.success)
+        case .failed(let message):
+            VStack(alignment: .trailing, spacing: 2) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.red)
+                Text(message)
+                    .font(.caption2)
+                    .foregroundStyle(.red)
+                    .lineLimit(1)
+            }
         }
     }
 
