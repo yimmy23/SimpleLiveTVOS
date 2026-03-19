@@ -36,6 +36,7 @@ struct PlayerControlView: View {
 
     @State var sectionList: [LiveModel] = []
     @State var selectIndex = 0
+    @State private var showStatisticsPanel = false
 
     @FocusState var state: PlayControlFocusableField?
     @FocusState var topState: PlayControlTopField?
@@ -177,6 +178,22 @@ struct PlayerControlView: View {
                         }
                     }
                 }
+
+                if showStatisticsPanel {
+                    GeometryReader { geometry in
+                        HStack {
+                            Spacer()
+                            TVPlayerStatisticsPanel(playerCoordinator: playerCoordinator) {
+                                hideStatisticsPanel()
+                            }
+                            .frame(width: min(geometry.size.width * 0.4, 640), height: geometry.size.height - 80)
+                            .padding(.vertical, 40)
+                            .padding(.trailing, 48)
+                            .transition(.move(edge: .trailing).combined(with: .opacity))
+                        }
+                    }
+                    .zIndex(5)
+                }
                 
                 VStack() {
                     ZStack {
@@ -226,8 +243,10 @@ struct PlayerControlView: View {
                                 })
                                 .clipShape(.circle)
                                 .contextMenu(menuItems: {
-                                    Button("debug mode") {
-                //                        roomInfoViewModel.toggleTimer()
+                                    Button {
+                                        showStatisticsAction()
+                                    } label: {
+                                        Label("视频信息统计", systemImage: "chart.bar.xaxis")
                                     }
                                 })
                                 .focused($state, equals: .playPause)
@@ -403,6 +422,10 @@ struct PlayerControlView: View {
                 .transition(.opacity)
                 .opacity(roomInfoViewModel.showControl ? 1 : 0)
                 .onExitCommand {
+                    if showStatisticsPanel {
+                        hideStatisticsPanel()
+                        return
+                    }
                     if roomInfoViewModel.showControl == true {
                         roomInfoViewModel.showControl = false
                         return
@@ -440,6 +463,27 @@ struct PlayerControlView: View {
                 }
             }
         })
+    }
+
+    private func showStatisticsAction() {
+        guard ensureControlVisible() else { return }
+        roomInfoViewModel.lastOptionState = state ?? .playPause
+        state = nil
+        withAnimation(.easeInOut(duration: 0.28)) {
+            showStatisticsPanel = true
+            roomInfoViewModel.showControl = false
+        }
+    }
+
+    private func hideStatisticsPanel() {
+        withAnimation(.easeInOut(duration: 0.28)) {
+            showStatisticsPanel = false
+            roomInfoViewModel.showControl = true
+        }
+
+        DispatchQueue.main.async {
+            state = roomInfoViewModel.lastOptionState ?? .playPause
+        }
     }
     
     func favoriteAction() {

@@ -17,6 +17,7 @@ struct TVDirectURLPlayerView: View {
     @State private var showControls = true
     @State private var isPlaying = false
     @State private var isBuffering = false
+    @State private var showStatisticsPanel = false
     @State private var autoHideTask: Task<Void, Never>?
 
     var body: some View {
@@ -39,6 +40,22 @@ struct TVDirectURLPlayerView: View {
                 controlsOverlay
                     .transition(.opacity)
             }
+
+            if showStatisticsPanel {
+                GeometryReader { geometry in
+                    HStack {
+                        Spacer()
+                        TVPlayerStatisticsPanel(playerCoordinator: playerCoordinator) {
+                            hideStatisticsPanel()
+                        }
+                        .frame(width: min(geometry.size.width * 0.4, 640), height: geometry.size.height - 80)
+                        .padding(.vertical, 40)
+                        .padding(.trailing, 48)
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                    }
+                }
+                .zIndex(2)
+            }
         }
         .onAppear {
             configurePlayer()
@@ -48,12 +65,17 @@ struct TVDirectURLPlayerView: View {
             autoHideTask?.cancel()
         }
         .onExitCommand {
+            if showStatisticsPanel {
+                hideStatisticsPanel()
+                return
+            }
             dismiss()
         }
         .onPlayPauseCommand {
             togglePlayPause()
         }
         .onMoveCommand { direction in
+            guard !showStatisticsPanel else { return }
             if direction == .down || direction == .up {
                 withAnimation(.easeInOut(duration: 0.25)) {
                     showControls.toggle()
@@ -121,6 +143,13 @@ struct TVDirectURLPlayerView: View {
                     .foregroundStyle(.white)
                     .frame(width: 60, height: 60)
             }
+            .contextMenu {
+                Button {
+                    showStatisticsAction()
+                } label: {
+                    Label("视频信息统计", systemImage: "chart.bar.xaxis")
+                }
+            }
 
             // 刷新
             Button {
@@ -179,9 +208,26 @@ struct TVDirectURLPlayerView: View {
         resetAutoHide()
     }
 
+    private func showStatisticsAction() {
+        autoHideTask?.cancel()
+        withAnimation(.easeInOut(duration: 0.28)) {
+            showControls = false
+            showStatisticsPanel = true
+        }
+    }
+
+    private func hideStatisticsPanel() {
+        withAnimation(.easeInOut(duration: 0.28)) {
+            showStatisticsPanel = false
+            showControls = true
+        }
+        scheduleAutoHide()
+    }
+
     // MARK: - 自动隐藏
 
     private func scheduleAutoHide() {
+        guard !showStatisticsPanel else { return }
         autoHideTask?.cancel()
         autoHideTask = Task {
             try? await Task.sleep(nanoseconds: 5_000_000_000)
@@ -196,6 +242,7 @@ struct TVDirectURLPlayerView: View {
     }
 
     private func resetAutoHide() {
+        guard !showStatisticsPanel else { return }
         withAnimation(.easeInOut(duration: 0.25)) {
             showControls = true
         }
