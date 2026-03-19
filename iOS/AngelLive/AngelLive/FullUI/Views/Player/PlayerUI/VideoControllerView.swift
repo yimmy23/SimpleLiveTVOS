@@ -52,17 +52,92 @@ struct VideoControllerView: View {
         isLandscape && !AppConstants.Device.isIPad
     }
 
-    /// 控制层基础内边距，横屏时适当增大，避免过贴边
+    /// 控制层基础内边距。iPhone 横屏使用更统一的角落留白，避免和圆角节奏打架。
     private var controlPadding: CGFloat {
-        isLandscape ? 20 : 12
+        if isLandscape {
+            return AppConstants.Device.isIPad ? 20 : 16
+        }
+        return 12
     }
 
-    /// iPhone 横屏时，状态栏内容向左内收，避免被圆角/刘海区域遮挡
-    private var statusBarTrailingInset: CGFloat {
-        guard isLandscape && !AppConstants.Device.isIPad else { return 0 }
-        let currentTrailingInset = controlPadding / 2
-        let targetTrailingInset = safeAreaInsets.trailing + 8
-        return max(0, targetTrailingInset - currentTrailingInset)
+    /// 锁屏按钮单独按左侧安全区收进去，其余四角控制统一先试 25pt。
+    private var iPhoneLandscapeLockInset: CGFloat {
+        shouldIgnoreSafeArea ? safeAreaInsets.leading + 5 : 0
+    }
+
+    private var iPhoneLandscapeCornerInset: CGFloat {
+        shouldIgnoreSafeArea ? 25 : 0
+    }
+
+    /// 顶部一排控制的目标高度，和返回按钮的 50pt 点击区对齐。
+    private let topControlRowHeight: CGFloat = 50
+
+    /// 顶部状态信息仅在全屏时显示，并放在屏幕宽度中心。
+    private var showsCenteredStatusBar: Bool {
+        isLandscape || isIPadFullscreen.wrappedValue
+    }
+
+    /// iPadOS 26 窗口控制按钮的参考几何：x=20, y=20, width=38, height=20。
+    private var windowControlsFrame: CGRect? {
+        guard AppConstants.Device.isIPad else { return nil }
+        guard #available(iOS 26.0, *) else { return nil }
+        return CGRect(x: 20, y: 20, width: 38, height: 20)
+    }
+
+    /// 仅在 iPad 窗口化运行时，为左上返回按钮预留红绿灯空间。
+    private var shouldOffsetBackButtonForWindowControls: Bool {
+        guard windowControlsFrame != nil else { return false }
+        guard #available(iOS 26.0, *) else { return false }
+        guard let windowScene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first(where: { $0.activationState == .foregroundActive }) else {
+            return false
+        }
+
+        let sceneBounds = windowScene.effectiveGeometry.coordinateSpace.bounds
+        let screenBounds = windowScene.screen.coordinateSpace.bounds
+        let tolerance: CGFloat = 2
+
+        return abs(sceneBounds.width - screenBounds.width) > tolerance ||
+            abs(sceneBounds.height - screenBounds.height) > tolerance
+    }
+
+    private var windowControlsLeadingInset: CGFloat {
+        guard shouldOffsetBackButtonForWindowControls, let frame = windowControlsFrame else { return 0 }
+        return frame.maxX + 12
+    }
+
+    /// 顶部返回按钮与右上角控制层都使用 50pt 行高，统一下移 2pt 后继续保持 centerY 对齐。
+    private var topControlPadding: CGFloat {
+        guard windowControlsFrame != nil else { return controlPadding }
+        return 7
+    }
+
+    private var centeredStatusBarTopPadding: CGFloat {
+        5
+    }
+
+    /// 顶部阴影覆盖时间、电池和控制按钮，提升花屏背景下的可读性。
+    private var topShadowHeight: CGFloat {
+        (max(topControlPadding + topControlRowHeight, centeredStatusBarTopPadding + 20) + 32) * 0.75
+    }
+
+    private var topShadowGradient: some View {
+        VStack(spacing: 0) {
+            LinearGradient(
+                colors: [
+                    .black.opacity(AppConstants.PlayerUI.Opacity.overlayStrong),
+                    .black.opacity(AppConstants.PlayerUI.Opacity.overlayLight),
+                    .clear
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: topShadowHeight)
+            Spacer()
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
     }
 
     init(model: KSVideoPlayerModel) {
@@ -178,8 +253,11 @@ struct VideoControllerView: View {
             VerticalLiveControllerView(model: model)
         } else {
             ZStack {
-                // 底部渐变背景（锁定时隐藏）
+                // 顶/底部渐变背景（锁定时隐藏）
                 if !model.isLocked {
+                    topShadowGradient
+                        .opacity(model.config.isMaskShow ? 1 : 0)
+
                     VStack {
                         Spacer()
                         LinearGradient(
@@ -191,7 +269,7 @@ struct VideoControllerView: View {
                             startPoint: .top,
                             endPoint: .bottom
                         )
-                        .frame(height: 120)
+                        .frame(height: 80)
                     }
                     .ignoresSafeArea()
                     .opacity(model.config.isMaskShow ? 1 : 0)
@@ -215,8 +293,7 @@ struct VideoControllerView: View {
                                     .adaptiveCircleGlassEffect()
                             }
                             .ksBorderlessButton()
-                            // 横屏时增加左侧内边距避开刘海
-                            .padding(.leading, isLandscape ? 30 : 0)
+                            .padding(.leading, iPhoneLandscapeLockInset)
                             Spacer()
                         }
                         Spacer()
@@ -238,66 +315,74 @@ struct VideoControllerView: View {
                                         .contentShape(Rectangle())
                                 }
                                 .padding(-10)
+                                .padding(.leading, windowControlsLeadingInset + iPhoneLandscapeCornerInset)
                                 .ksBorderlessButton()
                                 Spacer()
                             }
                             Spacer()
                         }
+                        .padding(.top, topControlPadding)
                         .transition(.opacity)
                     }
 
-                    // 右上角：投屏、画面平铺、画中画、设置按钮（锁定时隐藏）
                     if !model.isLocked {
+                        if showsCenteredStatusBar {
+                            VStack {
+                                statusBarContent
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.top, centeredStatusBarTopPadding)
+                                Spacer()
+                            }
+                            .ignoresSafeArea(edges: .top)
+                            .allowsHitTesting(false)
+                            .transition(.opacity)
+                        }
+
+                        // 右上角：投屏、画面平铺、画中画、设置按钮（锁定时隐藏）
                         VStack(spacing: 0) {
                             HStack {
                                 Spacer()
-                                VStack(alignment: .trailing, spacing: 2) {
-                                    // 状态栏（仅横屏/全屏时显示，放在控制按钮正上方的空隙中）
+                                HStack(spacing: 16) {
+                                    // AirPlay 和画面缩放仅在横屏/全屏时显示
+                                    // AirPlay 仅在 HLS 流时可用（FLV 投屏只有音频）
                                     if isLandscape || isIPadFullscreen.wrappedValue {
-                                        statusBarContent
-                                            .padding(.trailing, statusBarTrailingInset)
-                                    }
-                                    HStack(spacing: 16) {
-                                        // AirPlay 和画面缩放仅在横屏/全屏时显示
-                                        // AirPlay 仅在 HLS 流时可用（FLV 投屏只有音频）
-                                        if isLandscape || isIPadFullscreen.wrappedValue {
-                                            if viewModel.isHLSStream && model.config.playerLayer?.player.allowsExternalPlayback == true {
-                                                AirPlayView()
-                                                    .frame(width: 30, height: 30)
-                                            }
-                                            KSVideoPlayerViewBuilder.scaleModeMenuButton(
-                                                config: model.config,
-                                                currentMode: $videoScaleMode,
-                                                onModeChange: { mode in
-                                                    applyVideoScaleMode(mode)
-                                                }
-                                            )
+                                        if viewModel.isHLSStream && model.config.playerLayer?.player.allowsExternalPlayback == true {
+                                            AirPlayView()
+                                                .frame(width: 30, height: 30)
                                         }
-                                        KSVideoPlayerViewBuilder.pipButton(config: model.config)
-                                        SettingsButton(
-                                            showVideoSetting: $model.showVideoSetting,
-                                            showDanmakuSettings: $showDanmakuSettings,
-                                            onDismiss: { dismiss() },
-                                            onPopupStateChanged: { isOpen in
-                                                isSettingsPopupOpen = isOpen
-                                                if isOpen {
-                                                    cancelAutoHideTimer()
-                                                } else if model.config.isMaskShow {
-                                                    startAutoHideTimer()
-                                                }
+                                        KSVideoPlayerViewBuilder.scaleModeMenuButton(
+                                            config: model.config,
+                                            currentMode: $videoScaleMode,
+                                            onModeChange: { mode in
+                                                applyVideoScaleMode(mode)
                                             }
                                         )
                                     }
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .adaptiveGlassEffect()
+                                    KSVideoPlayerViewBuilder.pipButton(config: model.config)
+                                    SettingsButton(
+                                        showVideoSetting: $model.showVideoSetting,
+                                        showDanmakuSettings: $showDanmakuSettings,
+                                        onDismiss: { dismiss() },
+                                        onPopupStateChanged: { isOpen in
+                                            isSettingsPopupOpen = isOpen
+                                            if isOpen {
+                                                cancelAutoHideTimer()
+                                            } else if model.config.isMaskShow {
+                                                startAutoHideTimer()
+                                            }
+                                        }
+                                    )
                                 }
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .adaptiveGlassEffect()
+                                .frame(height: topControlRowHeight)
+                                .padding(.trailing, iPhoneLandscapeCornerInset)
                             }
-                            // 横屏时贴顶，右侧稍微内收
-                            .padding(.top, isLandscape ? -controlPadding : 0)
-                            .padding(.trailing, isLandscape ? -controlPadding / 2 : 0)
                             Spacer()
                         }
+                        .padding(.top, topControlPadding)
+                        .transition(.opacity)
                     }
 
                     // 中间：播放/暂停按钮（播放时隐藏，锁定时隐藏）
@@ -319,6 +404,7 @@ struct VideoControllerView: View {
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
                                 .adaptiveGlassEffect()
+                                .padding(.leading, iPhoneLandscapeCornerInset)
                                 Spacer()
                             }
                         }
@@ -349,11 +435,14 @@ struct VideoControllerView: View {
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
                                 .adaptiveGlassEffect()
+                                .padding(.trailing, iPhoneLandscapeCornerInset)
                             }
                         }
                     }
                 }
-                .padding(controlPadding)
+                .padding(.leading, controlPadding)
+                .padding(.trailing, controlPadding)
+                .padding(.bottom, controlPadding)
                 .opacity(model.config.isMaskShow ? 1 : 0)
                 .ignoresSafeArea(shouldIgnoreSafeArea ? .all : [])
                 // 捕获控制层上的任何触摸，重置自动隐藏计时器

@@ -49,17 +49,92 @@ struct UnifiedPlayerControlOverlay: View {
         isLandscape && !AppConstants.Device.isIPad
     }
 
-    /// 控制层基础内边距
+    /// 控制层基础内边距。iPhone 横屏使用更统一的角落留白，避免和圆角节奏打架。
     private var controlPadding: CGFloat {
-        isLandscape ? 20 : 12
+        if isLandscape {
+            return AppConstants.Device.isIPad ? 20 : 16
+        }
+        return 12
     }
 
-    /// iPhone 横屏时，状态栏内容右侧内收
-    private var statusBarTrailingInset: CGFloat {
-        guard isLandscape && !AppConstants.Device.isIPad else { return 0 }
-        let currentTrailingInset = controlPadding / 2
-        let targetTrailingInset = safeAreaInsets.trailing + 8
-        return max(0, targetTrailingInset - currentTrailingInset)
+    /// 锁屏按钮单独按左侧安全区收进去，其余四角控制统一先试 25pt。
+    private var iPhoneLandscapeLockInset: CGFloat {
+        shouldIgnoreSafeArea ? safeAreaInsets.leading + 5 : 0
+    }
+
+    private var iPhoneLandscapeCornerInset: CGFloat {
+        shouldIgnoreSafeArea ? 25 : 0
+    }
+
+    /// 顶部一排控制的目标高度，和返回按钮的 50pt 点击区对齐。
+    private let topControlRowHeight: CGFloat = 50
+
+    /// 顶部状态信息仅在全屏时显示，并放在屏幕宽度中心。
+    private var showsCenteredStatusBar: Bool {
+        isFullscreen
+    }
+
+    /// iPadOS 26 窗口控制按钮的参考几何：x=20, y=20, width=38, height=20。
+    private var windowControlsFrame: CGRect? {
+        guard AppConstants.Device.isIPad else { return nil }
+        guard #available(iOS 26.0, *) else { return nil }
+        return CGRect(x: 20, y: 20, width: 38, height: 20)
+    }
+
+    /// 仅在 iPad 窗口化运行时，为左上返回按钮预留红绿灯空间。
+    private var shouldOffsetBackButtonForWindowControls: Bool {
+        guard windowControlsFrame != nil else { return false }
+        guard #available(iOS 26.0, *) else { return false }
+        guard let windowScene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first(where: { $0.activationState == .foregroundActive }) else {
+            return false
+        }
+
+        let sceneBounds = windowScene.effectiveGeometry.coordinateSpace.bounds
+        let screenBounds = windowScene.screen.coordinateSpace.bounds
+        let tolerance: CGFloat = 2
+
+        return abs(sceneBounds.width - screenBounds.width) > tolerance ||
+            abs(sceneBounds.height - screenBounds.height) > tolerance
+    }
+
+    private var windowControlsLeadingInset: CGFloat {
+        guard shouldOffsetBackButtonForWindowControls, let frame = windowControlsFrame else { return 0 }
+        return frame.maxX + 12
+    }
+
+    /// 顶部返回按钮与右上角控制层都使用 50pt 行高，统一下移 2pt 后继续保持 centerY 对齐。
+    private var topControlPadding: CGFloat {
+        guard windowControlsFrame != nil else { return controlPadding }
+        return 7
+    }
+
+    private var centeredStatusBarTopPadding: CGFloat {
+        5
+    }
+
+    /// 顶部阴影覆盖时间、电池和控制按钮，提升花屏背景下的可读性。
+    private var topShadowHeight: CGFloat {
+        (max(topControlPadding + topControlRowHeight, centeredStatusBarTopPadding + 20) + 32) * 0.75
+    }
+
+    private var topShadowGradient: some View {
+        VStack(spacing: 0) {
+            LinearGradient(
+                colors: [
+                    .black.opacity(AppConstants.PlayerUI.Opacity.overlayStrong),
+                    .black.opacity(AppConstants.PlayerUI.Opacity.overlayLight),
+                    .clear
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: topShadowHeight)
+            Spacer()
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
     }
 
     /// 是否有弹窗/菜单展开
@@ -69,8 +144,11 @@ struct UnifiedPlayerControlOverlay: View {
 
     var body: some View {
         ZStack {
-            // 底部渐变背景（锁定时隐藏）
+            // 顶/底部渐变背景（锁定时隐藏）
             if !bridge.isLocked.wrappedValue {
+                topShadowGradient
+                    .opacity(isMaskVisible ? 1 : 0)
+
                 VStack {
                     Spacer()
                     LinearGradient(
@@ -82,7 +160,7 @@ struct UnifiedPlayerControlOverlay: View {
                         startPoint: .top,
                         endPoint: .bottom
                     )
-                    .frame(height: 120)
+                    .frame(height: 80)
                 }
                 .ignoresSafeArea()
                 .opacity(isMaskVisible ? 1 : 0)
@@ -96,10 +174,14 @@ struct UnifiedPlayerControlOverlay: View {
 
                 // 锁定时隐藏其余所有控制
                 if !bridge.isLocked.wrappedValue {
+                    if showsCenteredStatusBar {
+                        topCenteredStatusBarLayer
+                    }
+
                     // 左上角：返回按钮
                     backButtonLayer
 
-                    // 右上角：状态栏 + 功能按钮
+                    // 右上角：功能按钮
                     topRightLayer
 
                     // 中间：暂停大按钮
@@ -123,7 +205,9 @@ struct UnifiedPlayerControlOverlay: View {
                     bottomRightLayer
                 }
             }
-            .padding(controlPadding)
+            .padding(.leading, controlPadding)
+            .padding(.trailing, controlPadding)
+            .padding(.bottom, controlPadding)
             .opacity(isMaskVisible ? 1 : 0)
             .allowsHitTesting(isMaskVisible)
             .ignoresSafeArea(shouldIgnoreSafeArea ? .all : [])
@@ -198,7 +282,7 @@ struct UnifiedPlayerControlOverlay: View {
                         .background(.ultraThinMaterial, in: Circle())
                 }
                 .buttonStyle(.plain)
-                .padding(.leading, isLandscape ? 30 : 0)
+                .padding(.leading, iPhoneLandscapeLockInset)
                 Spacer()
             }
             Spacer()
@@ -223,66 +307,75 @@ struct UnifiedPlayerControlOverlay: View {
                 }
                 .padding(-10)
                 .buttonStyle(.plain)
+                .padding(.leading, windowControlsLeadingInset + iPhoneLandscapeCornerInset)
                 Spacer()
             }
             Spacer()
         }
+        .padding(.top, topControlPadding)
         .transition(.opacity)
     }
 
-    // MARK: - Top Right (Status Bar + PiP + Settings)
+    // MARK: - Top Center / Top Right
+
+    private var topCenteredStatusBarLayer: some View {
+        VStack {
+            statusBarContent
+                .frame(maxWidth: .infinity)
+                .padding(.top, centeredStatusBarTopPadding)
+            Spacer()
+        }
+        .ignoresSafeArea(edges: .top)
+        .allowsHitTesting(false)
+        .transition(.opacity)
+    }
 
     private var topRightLayer: some View {
         VStack(spacing: 0) {
             HStack {
                 Spacer()
-                VStack(alignment: .trailing, spacing: 2) {
-                    // 状态栏（仅横屏/全屏时显示）
+                HStack(spacing: 16) {
+                    if bridge.supportsPictureInPicture {
+                        Button {
+                            bridge.togglePictureInPicture()
+                        } label: {
+                            Image(systemName: "pip")
+                                .frame(width: 30, height: 30)
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundStyle(.white)
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    // 画面缩放（仅横屏/全屏时显示）
                     if isLandscape || isIPadFullscreen.wrappedValue {
-                        statusBarContent
-                            .padding(.trailing, statusBarTrailingInset)
+                        scaleModeMenu
                     }
-                    HStack(spacing: 16) {
-                        if bridge.supportsPictureInPicture {
-                            Button {
-                                bridge.togglePictureInPicture()
-                            } label: {
-                                Image(systemName: "pip")
-                                    .frame(width: 30, height: 30)
-                                    .font(.system(size: 18, weight: .semibold))
-                                    .foregroundStyle(.white)
-                            }
-                            .buttonStyle(.plain)
-                        }
 
-                        // 画面缩放（仅横屏/全屏时显示）
-                        if isLandscape || isIPadFullscreen.wrappedValue {
-                            scaleModeMenu
-                        }
-
-                        SettingsButton(
-                            showVideoSetting: $showVideoSetting,
-                            showDanmakuSettings: $showDanmakuSettings,
-                            onDismiss: { dismiss() },
-                            onPopupStateChanged: { isOpen in
-                                isSettingsPopupOpen = isOpen
-                                if isOpen {
-                                    cancelAutoHideTimer()
-                                } else if isMaskVisible {
-                                    startAutoHideTimer()
-                                }
+                    SettingsButton(
+                        showVideoSetting: $showVideoSetting,
+                        showDanmakuSettings: $showDanmakuSettings,
+                        onDismiss: { dismiss() },
+                        onPopupStateChanged: { isOpen in
+                            isSettingsPopupOpen = isOpen
+                            if isOpen {
+                                cancelAutoHideTimer()
+                            } else if isMaskVisible {
+                                startAutoHideTimer()
                             }
-                        )
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(.ultraThinMaterial, in: Capsule())
+                        }
+                    )
                 }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(.ultraThinMaterial, in: Capsule())
+                .frame(height: topControlRowHeight)
+                .padding(.trailing, iPhoneLandscapeCornerInset)
             }
-            .padding(.top, isLandscape ? -controlPadding : 0)
-            .padding(.trailing, isLandscape ? -controlPadding / 2 : 0)
             Spacer()
         }
+        .padding(.top, topControlPadding)
+        .transition(.opacity)
     }
 
     // MARK: - Bottom Left (Play/Pause + Refresh)
@@ -316,6 +409,7 @@ struct UnifiedPlayerControlOverlay: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .background(.ultraThinMaterial, in: Capsule())
+                .padding(.leading, iPhoneLandscapeCornerInset)
                 Spacer()
             }
         }
@@ -354,6 +448,7 @@ struct UnifiedPlayerControlOverlay: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .background(.ultraThinMaterial, in: Capsule())
+                .padding(.trailing, iPhoneLandscapeCornerInset)
             }
         }
     }

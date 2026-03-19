@@ -19,6 +19,7 @@ struct VerticalLiveControllerView: View {
     @Environment(RoomInfoViewModel.self) private var viewModel
     @Environment(AppFavoriteModel.self) private var favoriteModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.isIPadFullscreen) private var isIPadFullscreen: Binding<Bool>
     @Environment(\.safeAreaInsetsCustom) private var safeAreaInsets
     @Environment(\.scenePhase) private var scenePhase
     @State private var backTapped = false
@@ -39,11 +40,29 @@ struct VerticalLiveControllerView: View {
         self.model = model
     }
 
+    /// iPadOS 26 窗口控制按钮的参考几何：x=20, y=20, width=38, height=20。
+    private var windowControlsFrame: CGRect? {
+        guard AppConstants.Device.isIPad else { return nil }
+        guard #available(iOS 26.0, *) else { return nil }
+        return CGRect(x: 20, y: 20, width: 38, height: 20)
+    }
+
+    private var windowControlsLeadingInset: CGFloat {
+        guard let frame = windowControlsFrame else { return 0 }
+        return frame.maxX + 12
+    }
+
+    /// 返回按钮当前布局尺寸为 40pt，按红绿灯中心线反推顶部 padding，再整体上移 5pt。
+    private var topBarTopPadding: CGFloat {
+        guard let frame = windowControlsFrame else { return safeAreaInsets.top }
+        return frame.midY - 25
+    }
+
     var body: some View {
         ZStack {
             // 顶部信息栏
             topBar
-                .padding(.top, safeAreaInsets.top)
+                .padding(.top, topBarTopPadding)
 
             // 左下角：弹幕气泡
             bottomLeftArea
@@ -62,7 +81,6 @@ struct VerticalLiveControllerView: View {
     private var topBar: some View {
         VStack {
             HStack(spacing: 10) {
-                // 返回按钮 - iOS 26 Liquid Glass 风格
                 Button {
                     backTapped.toggle()
                     dismiss()
@@ -77,6 +95,7 @@ struct VerticalLiveControllerView: View {
                         .contentShape(Rectangle())
                 }
                 .padding(-5)
+                .padding(.leading, windowControlsLeadingInset)
 
                 // 主播信息
                 HStack(spacing: 10) {
