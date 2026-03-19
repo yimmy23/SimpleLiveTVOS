@@ -166,9 +166,7 @@ struct PlayerControlView: View {
 
                             // 刷新按钮
                             Button {
-                                Task {
-                                    await viewModel.refreshPlayback()
-                                }
+                                viewModel.refreshPlayback()
                             } label: {
                                 Image(systemName: "arrow.trianglehead.2.counterclockwise")
                                     .frame(width: 30, height: 30)

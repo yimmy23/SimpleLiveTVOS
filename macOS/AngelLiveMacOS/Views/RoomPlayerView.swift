@@ -186,9 +186,7 @@ private extension RoomPlayerView {
                 }
                 Button("重试") {
                     viewModel.displayState = .loading
-                    Task {
-                        await viewModel.refreshPlayback()
-                    }
+                    viewModel.refreshPlayback()
                 }
                 .buttonStyle(.borderedProminent)
             }

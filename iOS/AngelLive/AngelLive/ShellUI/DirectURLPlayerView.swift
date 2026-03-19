@@ -62,7 +62,7 @@ struct DirectURLPlayerView: View {
         let urlString = url.absoluteString.lowercased()
         if urlString.contains(".m3u8") || urlString.contains("m3u8") {
             KSOptions.firstPlayerType = KSAVPlayer.self
-            KSOptions.secondPlayerType = KSMEPlayer.self
+            KSOptions.secondPlayerType = nil
         }
 
         let coordinator = KSVideoPlayer.Coordinator()

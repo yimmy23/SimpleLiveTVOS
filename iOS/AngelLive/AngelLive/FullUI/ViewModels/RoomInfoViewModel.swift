@@ -259,7 +259,7 @@ final class RoomInfoViewModel {
         // B站/抖音：首次加载优先找 HLS
         if (platform == .bilibili || platform == .douyin) && cdnIndex == 0 && urlIndex == 0 {
             if let hlsQuality = findHLSQuality(), let url = URL(string: hlsQuality.url) {
-                return PlayerTypeResult(playerTypes: [KSAVPlayer.self, KSMEPlayer.self], isHLS: true, overrideURL: url, overrideTitle: hlsQuality.title)
+                return PlayerTypeResult(playerTypes: [KSAVPlayer.self], isHLS: true, overrideURL: url, overrideTitle: hlsQuality.title)
             }
             if platform == .douyin, let firstQuality = findFirstQuality(), let url = URL(string: firstQuality.url) {
                 return PlayerTypeResult(playerTypes: [KSMEPlayer.self], isHLS: false, overrideURL: url, overrideTitle: firstQuality.title)
@@ -279,7 +279,7 @@ final class RoomInfoViewModel {
 
         // 通用 HLS（非 YouTube）：用 AVPlayer
         if quality.liveCodeType == .hls && platform != .youtube {
-            return PlayerTypeResult(playerTypes: [KSAVPlayer.self, KSMEPlayer.self], isHLS: true)
+            return PlayerTypeResult(playerTypes: [KSAVPlayer.self], isHLS: true)
         }
 
         // 默认：MEPlayer

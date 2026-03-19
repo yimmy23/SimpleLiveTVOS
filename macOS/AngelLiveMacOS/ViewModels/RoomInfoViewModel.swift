@@ -34,6 +34,14 @@ enum PlayerDisplayState {
     case streamerOffline  // 主播已下播
 }
 
+// MARK: - 播放器常量配置
+private enum PlayerConstants {
+    /// 弹幕消息最大数量限制
+    static let maxDanmuMessageCount = 100
+    /// 默认 User-Agent
+    static let defaultUserAgent = "libmpv"
+}
+
 @Observable
 final class RoomInfoViewModel {
     var currentRoom: LiveModel
@@ -42,6 +50,10 @@ final class RoomInfoViewModel {
     var playError: Error?
     var playErrorMessage: String?
     var displayState: PlayerDisplayState = .loading  // 播放器显示状态
+    /// 防止并发/重复请求播放地址
+    private var isFetchingPlayURL = false
+    /// 是否已成功加载过当前房间的播放地址
+    private var hasLoadedPlayURL = false
 
     // 播放器相关属性
     var playerOption: PlayerOptions
@@ -51,8 +63,12 @@ final class RoomInfoViewModel {
     var currentCdnIndex = 0  // 当前选中的线路索引
     var currentQualityIndex = 0  // 当前选中的清晰度索引
     var isPlaying = false
+    var isHLSStream = false  // 当前是否为 HLS 流
     var douyuFirstLoad = true
     var yyFirstLoad = true
+
+    /// 斗鱼/YY 清晰度切换任务，用于取消之前的请求
+    private var qualitySwitchTask: Task<Void, Never>?
 
     // 弹幕相关属性
     var socketConnection: WebSocketConnection?
@@ -68,18 +84,27 @@ final class RoomInfoViewModel {
 
         // 初始化播放器选项
         KSOptions.isAutoPlay = true
-        KSOptions.isSecondOpen = true
-        KSOptions.firstPlayerType = KSMEPlayer.self
-        KSOptions.secondPlayerType = KSMEPlayer.self
+        // 关闭双路自动重开，避免在弱网/失败时频繁重连导致 stop 循环
+        KSOptions.isSecondOpen = false
         let option = PlayerOptions()
-        option.userAgent = "libmpv"
+        option.userAgent = PlayerConstants.defaultUserAgent
         self.playerOption = option
     }
 
     // 加载播放地址
     @MainActor
-    func loadPlayURL() async {
+    func loadPlayURL(force: Bool = false) async {
+        // 避免重复触发导致接口被频繁调用
+        guard !isFetchingPlayURL else { return }
+        // 已经加载过且不强制刷新时直接返回
+        guard force || !hasLoadedPlayURL else { return }
+
+        isFetchingPlayURL = true
+        defer { isFetchingPlayURL = false }
+
         isLoading = true
+        playError = nil
+        playErrorMessage = nil
         await getPlayArgs()
     }
 
@@ -95,6 +120,8 @@ final class RoomInfoViewModel {
         } catch {
             await MainActor.run {
                 self.isLoading = false
+                self.playError = error
+                self.playErrorMessage = "获取播放地址失败"
             }
         }
     }
@@ -104,14 +131,16 @@ final class RoomInfoViewModel {
         self.currentRoomPlayArgs = playArgs
         if playArgs.count == 0 {
             self.isLoading = false
+            self.playErrorMessage = "暂无可用的播放源"
             return
         }
         self.changePlayUrl(cdnIndex: 0, urlIndex: 0)
 
-        // 启动弹幕连接
-        if danmuSettings.showDanmu {
-            getDanmuInfo()
-        }
+        // 已成功获取到播放参数，标记已加载
+        hasLoadedPlayURL = true
+
+        // 始终启动弹幕连接（聊天区域需要），showDanmu 仅控制浮动弹幕显示
+        getDanmuInfo()
     }
 
     /// 手动应用当前弹幕设置到正在展示的弹幕层（避免等待下一轮消息）
@@ -153,7 +182,7 @@ final class RoomInfoViewModel {
 
     /// 按插件返回的播放配置应用 UA / Headers，保证三端行为一致
     private func applyPlaybackRequestOptions(for quality: LiveQualityDetail) {
-        let fallbackUA = "libmpv"
+        let fallbackUA = PlayerConstants.defaultUserAgent
         let customUA = quality.userAgent?.trimmingCharacters(in: .whitespacesAndNewlines)
         let userAgent = (customUA?.isEmpty == false) ? customUA! : fallbackUA
 
@@ -171,209 +200,172 @@ final class RoomInfoViewModel {
         }
     }
 
-    // 切换清晰度    的形成v吃吃吃v b
+    // MARK: - HLS 流查找辅助方法
+
+    /// 在播放参数中查找 HLS 流
+    /// - Returns: 找到的 HLS 清晰度详情，如果没有则返回 nil
+    private func findHLSQuality() -> LiveQualityDetail? {
+        guard let playArgs = currentRoomPlayArgs else { return nil }
+        for item in playArgs {
+            for quality in item.qualitys where quality.liveCodeType == .hls {
+                return quality
+            }
+        }
+        return nil
+    }
+
+    /// 在播放参数中查找第一个可用的清晰度
+    /// - Returns: 第一个可用的清晰度详情
+    private func findFirstQuality() -> LiveQualityDetail? {
+        currentRoomPlayArgs?.first?.qualitys.first
+    }
+
+    // 切换清晰度
     @MainActor
     func changePlayUrl(cdnIndex: Int, urlIndex: Int) {
-        guard currentRoomPlayArgs != nil else {
+        guard let playArgs = currentRoomPlayArgs, !playArgs.isEmpty,
+              cdnIndex < playArgs.count else {
             isLoading = false
             return
         }
 
-        if cdnIndex >= currentRoomPlayArgs?.count ?? 0 {
-            return
-        }
+        let currentCdn = playArgs[cdnIndex]
+        guard urlIndex < currentCdn.qualitys.count else { return }
 
-        guard let currentCdn = currentRoomPlayArgs?[cdnIndex] else {
-            return
-        }
-
-        if urlIndex >= currentCdn.qualitys.count {
-            return
-        }
-
-        isPlaying = false
         let currentQuality = currentCdn.qualitys[urlIndex]
         currentPlayQualityString = currentQuality.title
         currentPlayQualityQn = currentQuality.qn
-        currentCdnIndex = cdnIndex
-        currentQualityIndex = urlIndex
+        self.currentCdnIndex = cdnIndex
+        self.currentQualityIndex = urlIndex
 
         applyPlaybackRequestOptions(for: currentQuality)
 
-        // B站优先使用 HLS
-        if currentRoom.liveType == .bilibili && cdnIndex == 0 && urlIndex == 0 {
-            for item in currentRoomPlayArgs! {
-                for liveQuality in item.qualitys {
-                    if liveQuality.liveCodeType == .hls {
-                        KSOptions.firstPlayerType = KSAVPlayer.self
-                        KSOptions.secondPlayerType = KSMEPlayer.self
-                        DispatchQueue.main.async {
-                            self.currentPlayURL = URL(string: liveQuality.url)!
-                            self.currentPlayQualityString = liveQuality.title
-                            self.isLoading = false
-                        }
-                        return
-                    }
-                }
-            }
-            if self.currentPlayURL == nil {
-                KSOptions.firstPlayerType = KSMEPlayer.self
-                KSOptions.secondPlayerType = KSMEPlayer.self
-            }
-        }
-        // 抖音优先使用 HLS
-        else if currentRoom.liveType == .douyin {
-            KSOptions.firstPlayerType = KSMEPlayer.self
-            KSOptions.secondPlayerType = KSMEPlayer.self
-            if cdnIndex == 0 && urlIndex == 0 {
-                for item in currentRoomPlayArgs! {
-                    for liveQuality in item.qualitys {
-                        if liveQuality.liveCodeType == .hls {
-                            KSOptions.firstPlayerType = KSAVPlayer.self
-                            KSOptions.secondPlayerType = KSMEPlayer.self
-                            DispatchQueue.main.async {
-                                self.currentPlayURL = URL(string: liveQuality.url)!
-                                self.currentPlayQualityString = liveQuality.title
-                                self.isLoading = false
-                            }
-                            return
-                        } else {
-                            KSOptions.firstPlayerType = KSMEPlayer.self
-                            KSOptions.secondPlayerType = KSMEPlayer.self
-                            DispatchQueue.main.async {
-                                self.currentPlayURL = URL(string: liveQuality.url)!
-                                self.currentPlayQualityString = liveQuality.title
-                                self.isLoading = false
-                            }
-                            return
-                        }
-                    }
-                }
-            }
-        }
-        // 其他平台
-        else {
-            if currentQuality.liveCodeType == .hls && currentRoom.liveType == .huya && LiveState(rawValue: currentRoom.liveState ?? "unknow") == .video {
-                KSOptions.firstPlayerType = KSMEPlayer.self
-                KSOptions.secondPlayerType = KSMEPlayer.self
-            } else if currentQuality.liveCodeType == .hls {
-                KSOptions.firstPlayerType = KSAVPlayer.self
-                KSOptions.secondPlayerType = KSMEPlayer.self
-            } else {
-                KSOptions.firstPlayerType = KSMEPlayer.self
-                KSOptions.secondPlayerType = KSMEPlayer.self
-            }
+        // 1. 决定播放器类型
+        let resolved = resolvePlayerTypes(quality: currentQuality, cdnIndex: cdnIndex, urlIndex: urlIndex)
+        playerOption.playerTypes = resolved.playerTypes
+        isHLSStream = resolved.isHLS
+
+        // 如果已经通过 HLS 查找确定了播放地址，直接返回
+        if let resolvedURL = resolved.overrideURL {
+            currentPlayURL = resolvedURL
+            currentPlayQualityString = resolved.overrideTitle ?? currentPlayQualityString
+            isLoading = false
+            return
         }
 
-        // 快手特殊处理
-        if currentRoom.liveType == .ks {
-            KSOptions.firstPlayerType = KSMEPlayer.self
-            KSOptions.secondPlayerType = KSMEPlayer.self
+        // 2. 设置播放地址（部分平台需要异步重新请求）
+        applyPlayURL(quality: currentQuality, cdn: currentCdn, cdnIndex: cdnIndex, urlIndex: urlIndex)
+    }
+
+    // MARK: - 播放器类型决策
+
+    private struct PlayerTypeResult {
+        let playerTypes: [MediaPlayerProtocol.Type]
+        let isHLS: Bool
+        /// 某些分支会直接确定播放地址（如 B站/抖音 HLS 查找）
+        var overrideURL: URL?
+        var overrideTitle: String?
+    }
+
+    private func resolvePlayerTypes(quality: LiveQualityDetail, cdnIndex: Int, urlIndex: Int) -> PlayerTypeResult {
+        let platform = currentRoom.liveType
+
+        // B站/抖音：首次加载优先找 HLS
+        if (platform == .bilibili || platform == .douyin) && cdnIndex == 0 && urlIndex == 0 {
+            if let hlsQuality = findHLSQuality(), let url = URL(string: hlsQuality.url) {
+                return PlayerTypeResult(playerTypes: [KSAVPlayer.self], isHLS: true, overrideURL: url, overrideTitle: hlsQuality.title)
+            }
+            if platform == .douyin, let firstQuality = findFirstQuality(), let url = URL(string: firstQuality.url) {
+                return PlayerTypeResult(playerTypes: [KSMEPlayer.self], isHLS: false, overrideURL: url, overrideTitle: firstQuality.title)
+            }
+            return PlayerTypeResult(playerTypes: [KSMEPlayer.self], isHLS: false)
         }
 
-        // 斗鱼特殊处理
-        if currentRoom.liveType == .douyu && douyuFirstLoad == false {
-            guard let douyuPlatform = SandboxPluginCatalog.platform(for: .douyu) else {
-                isLoading = false
-                return
+        // 快手：强制 MEPlayer
+        if platform == .ks {
+            return PlayerTypeResult(playerTypes: [KSMEPlayer.self], isHLS: false)
+        }
+
+        // 虎牙录像 HLS：用 MEPlayer
+        if quality.liveCodeType == .hls && platform == .huya && LiveState(rawValue: currentRoom.liveState ?? "unknow") == .video {
+            return PlayerTypeResult(playerTypes: [KSMEPlayer.self], isHLS: false)
+        }
+
+        // 通用 HLS（非 YouTube）：用 AVPlayer
+        if quality.liveCodeType == .hls && platform != .youtube {
+            return PlayerTypeResult(playerTypes: [KSAVPlayer.self], isHLS: true)
+        }
+
+        // 默认：MEPlayer
+        return PlayerTypeResult(playerTypes: [KSMEPlayer.self], isHLS: false)
+    }
+
+    // MARK: - 播放地址设置
+
+    private func applyPlayURL(quality: LiveQualityDetail, cdn: LiveQualityModel, cdnIndex: Int, urlIndex: Int) {
+        let platform = currentRoom.liveType
+
+        // 斗鱼/YY 切换清晰度时需要重新请求播放地址
+        if platform == .douyu && !douyuFirstLoad {
+            let context: [String: Any] = ["rate": quality.qn, "cdn": cdn.douyuCdnName ?? ""]
+            fetchPlayURL(platform: .douyu, context: context) { newPlayArgs in
+                newPlayArgs.first?.qualitys.first.flatMap { URL(string: $0.url) }
             }
-            // 斗鱼平台每次切换清晰度都需要重新请求流地址
-            isLoading = true
-            Task {
-                do {
-                    let currentCdn = currentRoomPlayArgs![cdnIndex]
-                    let currentQuality = currentCdn.qualitys[urlIndex]
-                    let playArgs = try await LiveParseJSPlatformManager.getPlayArgs(platform: douyuPlatform, roomId: currentRoom.roomId, userId: nil, context: ["rate": currentQuality.qn, "cdn": currentCdn.douyuCdnName ?? ""])
-                    await MainActor.run {
-                        if let newQuality = playArgs.first?.qualitys.first,
-                           let url = URL(string: newQuality.url) {
-                            self.currentPlayURL = url
-                            self.isLoading = false
-                        } else {
-                            // 如果获取失败，保持当前播放地址
-                            print("⚠️ 斗鱼切换清晰度失败：无法获取新的播放地址")
-                            self.isLoading = false
-                        }
-                    }
-                } catch {
-                    await MainActor.run {
-                        print("❌ 斗鱼切换清晰度失败: \(error.localizedDescription)")
-                        self.isLoading = false
-                        // 保持当前播放地址，不中断播放
-                    }
-                }
-            }
-        } else {
+            return
+        } else if platform == .douyu {
             douyuFirstLoad = false
-            if let url = URL(string: currentQuality.url) {
-                DispatchQueue.main.async {
-                    self.currentPlayURL = url
-                }
-            }
         }
 
-        // YY 特殊处理
-        if currentRoom.liveType == .yy && yyFirstLoad == false {
-            guard let yyPlatform = SandboxPluginCatalog.platform(for: .yy) else {
-                isLoading = false
-                return
+        if platform == .yy && !yyFirstLoad {
+            let context = yyPlaybackContext(cdn: cdn, quality: quality)
+            fetchPlayURL(platform: .yy, context: context) { [weak self] newPlayArgs in
+                guard let self else { return nil }
+                return firstPlayableURL(from: newPlayArgs)
             }
-            // YY 平台每次切换清晰度都需要重新请求流地址
-            isLoading = true
-            Task {
-                do {
-                    guard var playArgs = currentRoomPlayArgs,
-                          cdnIndex < playArgs.count else {
-                        await MainActor.run {
-                            self.isLoading = false
-                        }
-                        return
-                    }
-                    let currentCdn = playArgs[cdnIndex]
-                    let currentQuality = currentCdn.qualitys[urlIndex]
-                    playArgs = try await LiveParseJSPlatformManager.getPlayArgs(
-                        platform: yyPlatform,
-                        roomId: currentRoom.roomId,
-                        userId: nil,
-                        context: yyPlaybackContext(cdn: currentCdn, quality: currentQuality)
-                    )
-                    await MainActor.run {
-                        if let url = self.firstPlayableURL(from: playArgs) {
-                            self.currentPlayURL = url
-                        }
-                        self.isLoading = false
-                    }
-                } catch {
-                    await MainActor.run {
-                        print("❌ YY 切换清晰度失败: \(error.localizedDescription)")
-                        self.isLoading = false
-                    }
-                }
-            }
-        } else {
+            return
+        } else if platform == .yy {
             yyFirstLoad = false
-            if let url = URL(string: currentQuality.url) {
-                DispatchQueue.main.async {
-                    self.currentPlayURL = url
-                }
-            }
         }
 
-        // 只有非异步请求的平台才在这里设置 isLoading = false
-        // 斗鱼和YY平台会在各自的异步任务中管理 isLoading
-        if currentRoom.liveType != .douyu && currentRoom.liveType != .yy {
-            DispatchQueue.main.async {
-                self.isLoading = false
-            }
-        } else if currentRoom.liveType == .douyu && douyuFirstLoad {
-            // 斗鱼首次加载时也需要设置
-            DispatchQueue.main.async {
-                self.isLoading = false
-            }
-        } else if currentRoom.liveType == .yy && yyFirstLoad {
-            // YY 首次加载时也需要设置
-            DispatchQueue.main.async {
-                self.isLoading = false
+        // 通用：直接使用 URL
+        if let url = URL(string: quality.url) {
+            currentPlayURL = url
+        }
+        isLoading = false
+    }
+
+    /// 异步请求新的播放地址（斗鱼/YY 切换清晰度时使用）
+    private func fetchPlayURL(
+        platform: LiveType,
+        context: [String: Any],
+        extractURL: @escaping @Sendable ([LiveQualityModel]) -> URL?
+    ) {
+        guard let parsePlatform = SandboxPluginCatalog.platform(for: platform) else {
+            isLoading = false
+            return
+        }
+        qualitySwitchTask?.cancel()
+        isLoading = true
+
+        let roomId = currentRoom.roomId
+        qualitySwitchTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                try Task.checkCancellation()
+                let newPlayArgs = try await LiveParseJSPlatformManager.getPlayArgs(
+                    platform: parsePlatform, roomId: roomId, userId: nil, context: context
+                )
+                try Task.checkCancellation()
+                await MainActor.run {
+                    if let url = extractURL(newPlayArgs) {
+                        self.currentPlayURL = url
+                    }
+                    self.isLoading = false
+                }
+            } catch is CancellationError {
+                // 任务被取消，不做处理
+            } catch {
+                await MainActor.run { self.isLoading = false }
             }
         }
     }
@@ -399,12 +391,7 @@ final class RoomInfoViewModel {
             message: message,
             isSystemMessage: true
         )
-        danmuMessages.append(systemMsg)
-
-        // 限制消息数量
-        if danmuMessages.count > 100 {
-            danmuMessages.removeFirst(danmuMessages.count - 100)
-        }
+        appendDanmuMessage(systemMsg)
     }
 
     /// 获取弹幕连接信息并连接
@@ -469,7 +456,7 @@ final class RoomInfoViewModel {
                     }
                 }
             } catch {
-                print("获取弹幕连接失败: \(error)")
+                Logger.error(error, message: "获取弹幕连接失败", category: .danmu)
                 await MainActor.run {
                     danmuServerIsLoading = false
                     addSystemMessage("连接弹幕服务器失败：\(error.localizedDescription)")
@@ -479,10 +466,11 @@ final class RoomInfoViewModel {
     }
 
     /// 断开弹幕连接
+    @MainActor
     func disconnectSocket() {
         // 断开 WebSocket
-        socketConnection?.disconnect()
         socketConnection?.delegate = nil
+        socketConnection?.disconnect()
         socketConnection = nil
 
         // 断开 HTTP 轮询
@@ -496,13 +484,10 @@ final class RoomInfoViewModel {
 
     /// 刷新当前播放流
     @MainActor
-    func refreshPlayback() async {
-        isLoading = true
-        isPlaying = false
-        if danmuSettings.showDanmu {
-            disconnectSocket()
+    func refreshPlayback() {
+        Task {
+            await loadPlayURL(force: true)
         }
-        await getPlayArgs()
     }
 
     /// 切换弹幕显示状态
@@ -511,18 +496,17 @@ final class RoomInfoViewModel {
         setDanmuDisplay(!danmuSettings.showDanmu)
     }
 
-    /// 设置弹幕显示状态
+    /// 设置弹幕显示状态（仅控制浮动弹幕，不影响聊天区域）
     @MainActor
     func setDanmuDisplay(_ enabled: Bool) {
         guard enabled != danmuSettings.showDanmu else { return }
         danmuSettings.showDanmu = enabled
         if enabled {
             danmuCoordinator.play()
-            getDanmuInfo()
         } else {
             danmuCoordinator.clear()
-            disconnectSocket()
         }
+        // 注意：不断开 WebSocket，让底部聊天区域继续接收消息
     }
 
     /// 添加弹幕消息到聊天列表
@@ -532,12 +516,18 @@ final class RoomInfoViewModel {
             userName: userName,
             message: text
         )
-        danmuMessages.append(message)
+        appendDanmuMessage(message)
+    }
 
-        // 限制消息数量，避免内存占用过大
-        if danmuMessages.count > 100 {
-            danmuMessages.removeFirst(danmuMessages.count - 100)
+    /// 统一的消息追加方法，自动管理消息数量
+    /// 优化：在追加前检查容量，避免数组频繁扩容和移除操作
+    @MainActor
+    private func appendDanmuMessage(_ message: ChatMessage) {
+        // 如果已满，先移除最旧的消息
+        if danmuMessages.count >= PlayerConstants.maxDanmuMessageCount {
+            danmuMessages.removeFirst()
         }
+        danmuMessages.append(message)
     }
 }
 
@@ -566,7 +556,7 @@ extension RoomInfoViewModel: WebSocketConnectionDelegate {
             danmuServerIsConnected = true
             danmuServerIsLoading = false
             addSystemMessage("弹幕服务器连接成功")
-            print("✅ 弹幕服务已连接")
+            Logger.info("弹幕服务已连接", category: .danmu)
         }
     }
 
@@ -576,7 +566,7 @@ extension RoomInfoViewModel: WebSocketConnectionDelegate {
             danmuServerIsLoading = false
             if let error = error {
                 addSystemMessage("弹幕服务器已断开：\(error.localizedDescription)")
-                print("❌ 弹幕服务断开: \(error.localizedDescription)")
+                Logger.error(error, message: "弹幕服务断开", category: .danmu)
             }
         }
     }
