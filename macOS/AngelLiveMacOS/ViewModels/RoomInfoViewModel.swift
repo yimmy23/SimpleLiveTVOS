@@ -9,22 +9,8 @@
 import Foundation
 import SwiftUI
 import Observation
-import CoreMedia
 import AngelLiveCore
 import AngelLiveDependencies
-
-public class PlayerOptions: KSOptions, @unchecked Sendable {
-    public var syncSystemRate: Bool = false
-
-    nonisolated required public init() {
-        super.init()
-    }
-
-    override public func updateVideo(refreshRate: Float, isDovi: Bool, formatDescription: CMFormatDescription) {
-        guard syncSystemRate else { return }
-        super.updateVideo(refreshRate: refreshRate, isDovi: isDovi, formatDescription: formatDescription)
-    }
-}
 
 /// 播放器显示状态
 enum PlayerDisplayState {
@@ -158,45 +144,28 @@ final class RoomInfoViewModel {
 
     /// 构建 YY 请求上下文，兼容新版 WebSocket 拉流（qn）和旧版参数（gear/lineSeq）
     private func yyPlaybackContext(cdn: LiveQualityModel, quality: LiveQualityDetail) -> [String: Any] {
-        let rawLineSeq = (cdn.yyLineSeq ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        let lineSeq: Any = Int(rawLineSeq) ?? (rawLineSeq.isEmpty ? -1 : rawLineSeq)
-
-        return [
-            "lineSeq": lineSeq,
-            "gear": quality.qn,
-            "qn": quality.qn
-        ]
+        RoomPlaybackResolver.yyPlaybackContext(cdn: cdn, quality: quality)
     }
 
     /// 从播放参数中提取首个可用 URL（YY WebSocket 返回通常只有一个清晰度）
     private func firstPlayableURL(from playArgs: [LiveQualityModel]) -> URL? {
-        for cdn in playArgs {
-            for quality in cdn.qualitys {
-                if let url = URL(string: quality.url) {
-                    return url
-                }
-            }
-        }
-        return nil
+        RoomPlaybackResolver.firstPlayableURL(from: playArgs)
     }
 
     /// 按插件返回的播放配置应用 UA / Headers，保证三端行为一致
     private func applyPlaybackRequestOptions(for quality: LiveQualityDetail) {
-        let fallbackUA = PlayerConstants.defaultUserAgent
-        let customUA = quality.userAgent?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let userAgent = (customUA?.isEmpty == false) ? customUA! : fallbackUA
+        let requestOptions = RoomPlaybackResolver.requestOptions(
+            for: quality,
+            fallbackUserAgent: PlayerConstants.defaultUserAgent
+        )
 
-        playerOption.userAgent = userAgent
+        playerOption.userAgent = requestOptions.userAgent
         // 先清理上一次流的头，避免跨平台/跨线路残留
         playerOption.avOptions["AVURLAssetHTTPHeaderFieldsKey"] = nil
         playerOption.formatContextOptions["headers"] = nil
 
-        var headers = quality.headers ?? [:]
-        if headers["User-Agent"] == nil && headers["user-agent"] == nil {
-            headers["user-agent"] = userAgent
-        }
-        if !headers.isEmpty {
-            playerOption.appendHeader(headers)
+        if !requestOptions.headers.isEmpty {
+            playerOption.appendHeader(requestOptions.headers)
         }
     }
 
@@ -205,19 +174,13 @@ final class RoomInfoViewModel {
     /// 在播放参数中查找 HLS 流
     /// - Returns: 找到的 HLS 清晰度详情，如果没有则返回 nil
     private func findHLSQuality() -> LiveQualityDetail? {
-        guard let playArgs = currentRoomPlayArgs else { return nil }
-        for item in playArgs {
-            for quality in item.qualitys where quality.liveCodeType == .hls {
-                return quality
-            }
-        }
-        return nil
+        RoomPlaybackResolver.findHLSQuality(in: currentRoomPlayArgs)
     }
 
     /// 在播放参数中查找第一个可用的清晰度
     /// - Returns: 第一个可用的清晰度详情
     private func findFirstQuality() -> LiveQualityDetail? {
-        currentRoomPlayArgs?.first?.qualitys.first
+        RoomPlaybackResolver.findFirstQuality(in: currentRoomPlayArgs)
     }
 
     // 切换清晰度
@@ -232,29 +195,48 @@ final class RoomInfoViewModel {
         let currentCdn = playArgs[cdnIndex]
         guard urlIndex < currentCdn.qualitys.count else { return }
 
+        let tappedSelection = RoomPlaybackResolver.selection(
+            in: playArgs,
+            cdnIndex: cdnIndex,
+            qualityIndex: urlIndex
+        )
         let currentQuality = currentCdn.qualitys[urlIndex]
-        currentPlayQualityString = currentQuality.title
-        currentPlayQualityQn = currentQuality.qn
-        self.currentCdnIndex = cdnIndex
-        self.currentQualityIndex = urlIndex
+        let resolved = resolvePlayerTypes(quality: currentQuality, cdnIndex: cdnIndex, urlIndex: urlIndex)
+        let effectiveSelection = resolved.resolvedSelection ?? tappedSelection
+        let effectiveQuality = effectiveSelection?.quality ?? currentQuality
+        let debugContext = RoomPlaybackDebugContext(
+            tappedSelection: tappedSelection,
+            effectiveSelection: effectiveSelection
+        )
 
-        applyPlaybackRequestOptions(for: currentQuality)
+        currentPlayQualityString = effectiveQuality.title
+        currentPlayQualityQn = effectiveQuality.qn
+        self.currentCdnIndex = effectiveSelection?.cdnIndex ?? cdnIndex
+        self.currentQualityIndex = effectiveSelection?.qualityIndex ?? urlIndex
+
+        applyPlaybackRequestOptions(for: effectiveQuality)
 
         // 1. 决定播放器类型
-        let resolved = resolvePlayerTypes(quality: currentQuality, cdnIndex: cdnIndex, urlIndex: urlIndex)
         playerOption.playerTypes = resolved.playerTypes
         isHLSStream = resolved.isHLS
 
         // 如果已经通过 HLS 查找确定了播放地址，直接返回
         if let resolvedURL = resolved.overrideURL {
-            currentPlayURL = resolvedURL
-            currentPlayQualityString = resolved.overrideTitle ?? currentPlayQualityString
+            setPlayURL(resolvedURL, source: "resolved", debugContext: debugContext)
+            currentPlayQualityString = resolved.overrideTitle ?? effectiveQuality.title
             isLoading = false
             return
         }
 
         // 2. 设置播放地址（部分平台需要异步重新请求）
-        applyPlayURL(quality: currentQuality, cdn: currentCdn, cdnIndex: cdnIndex, urlIndex: urlIndex)
+        let effectiveCdn = effectiveSelection.map { playArgs[$0.cdnIndex] } ?? currentCdn
+        applyPlayURL(
+            quality: effectiveQuality,
+            cdn: effectiveCdn,
+            cdnIndex: self.currentCdnIndex,
+            urlIndex: self.currentQualityIndex,
+            debugContext: debugContext
+        )
     }
 
     // MARK: - 播放器类型决策
@@ -265,50 +247,104 @@ final class RoomInfoViewModel {
         /// 某些分支会直接确定播放地址（如 B站/抖音 HLS 查找）
         var overrideURL: URL?
         var overrideTitle: String?
+        var resolvedSelection: RoomPlaybackSelection?
     }
 
     private func resolvePlayerTypes(quality: LiveQualityDetail, cdnIndex: Int, urlIndex: Int) -> PlayerTypeResult {
-        let platform = currentRoom.liveType
+        let plan = RoomPlaybackResolver.resolvePlan(
+            liveType: currentRoom.liveType,
+            liveState: currentRoom.liveState,
+            selectedQuality: quality,
+            playArgs: currentRoomPlayArgs,
+            cdnIndex: cdnIndex,
+            urlIndex: urlIndex
+        )
 
-        // B站/抖音：首次加载优先找 HLS
-        if (platform == .bilibili || platform == .douyin) && cdnIndex == 0 && urlIndex == 0 {
-            if let hlsQuality = findHLSQuality(), let url = URL(string: hlsQuality.url) {
-                return PlayerTypeResult(playerTypes: [KSAVPlayer.self], isHLS: true, overrideURL: url, overrideTitle: hlsQuality.title)
+        return PlayerTypeResult(
+            playerTypes: plan.playerKinds.map(playerType(for:)),
+            isHLS: plan.isHLS,
+            overrideURL: plan.overrideURL,
+            overrideTitle: plan.overrideTitle,
+            resolvedSelection: plan.resolvedSelection
+        )
+    }
+
+    private func playerType(for kind: RoomPlaybackPlayerKind) -> MediaPlayerProtocol.Type {
+        switch kind {
+        case .avPlayer:
+            KSAVPlayer.self
+        case .mePlayer:
+            KSMEPlayer.self
+        }
+    }
+
+    @MainActor
+    private func setPlayURL(
+        _ url: URL,
+        source: String,
+        debugContext: RoomPlaybackDebugContext? = nil
+    ) {
+        logSelectedStreamBeforePlayback(url, source: source, debugContext: debugContext)
+        if currentPlayURL == url {
+            currentPlayURL = nil
+            Task { @MainActor [weak self] in
+                await Task.yield()
+                guard let self, self.currentPlayURL == nil else { return }
+                self.currentPlayURL = url
             }
-            if platform == .douyin, let firstQuality = findFirstQuality(), let url = URL(string: firstQuality.url) {
-                return PlayerTypeResult(playerTypes: [KSMEPlayer.self], isHLS: false, overrideURL: url, overrideTitle: firstQuality.title)
-            }
-            return PlayerTypeResult(playerTypes: [KSMEPlayer.self], isHLS: false)
+            return
         }
 
-        // 快手：强制 MEPlayer
-        if platform == .ks {
-            return PlayerTypeResult(playerTypes: [KSMEPlayer.self], isHLS: false)
-        }
+        currentPlayURL = url
+    }
 
-        // 虎牙录像 HLS：用 MEPlayer
-        if quality.liveCodeType == .hls && platform == .huya && LiveState(rawValue: currentRoom.liveState ?? "unknow") == .video {
-            return PlayerTypeResult(playerTypes: [KSMEPlayer.self], isHLS: false)
-        }
+    @MainActor
+    private func logSelectedStreamBeforePlayback(
+        _ url: URL,
+        source: String,
+        debugContext: RoomPlaybackDebugContext?
+    ) {
+        let playerNames = playerOption.playerTypes.map { playerTypeName(for: $0) }
+        let selectedPlayers = playerNames.isEmpty ? "未设置" : playerNames.joined(separator: ",")
+        let fallbackSelection = RoomPlaybackResolver.selection(
+            in: currentRoomPlayArgs,
+            cdnIndex: currentCdnIndex,
+            qualityIndex: currentQualityIndex
+        )
+        let tappedSummary = RoomPlaybackResolver.debugSelectionSummary(
+            in: currentRoomPlayArgs,
+            selection: debugContext?.tappedSelection
+        )
+        let effectiveSummary = RoomPlaybackResolver.debugSelectionSummary(
+            in: currentRoomPlayArgs,
+            selection: debugContext?.effectiveSelection ?? fallbackSelection
+        )
+        let message = "[PlayerDebug][macOS][WillPlay] source=\(source), platform=\(currentRoom.liveType.rawValue), roomId=\(currentRoom.roomId), tapped=\(tappedSummary), effective=\(effectiveSummary), finalQuality=\(currentPlayQualityString)(qn=\(currentPlayQualityQn)), players=\(selectedPlayers), url=\(url.absoluteString)"
+        Logger.debug(message, category: .player)
+    }
 
-        // 通用 HLS（非 YouTube）：用 AVPlayer
-        if quality.liveCodeType == .hls && platform != .youtube {
-            return PlayerTypeResult(playerTypes: [KSAVPlayer.self], isHLS: true)
-        }
-
-        // 默认：MEPlayer
-        return PlayerTypeResult(playerTypes: [KSMEPlayer.self], isHLS: false)
+    private func playerTypeName(for playerType: MediaPlayerProtocol.Type) -> String {
+        let name = String(describing: playerType)
+        return name
+            .replacingOccurrences(of: "AngelLiveDependencies.", with: "")
+            .replacingOccurrences(of: "KSPlayer.", with: "")
     }
 
     // MARK: - 播放地址设置
 
-    private func applyPlayURL(quality: LiveQualityDetail, cdn: LiveQualityModel, cdnIndex: Int, urlIndex: Int) {
+    private func applyPlayURL(
+        quality: LiveQualityDetail,
+        cdn: LiveQualityModel,
+        cdnIndex: Int,
+        urlIndex: Int,
+        debugContext: RoomPlaybackDebugContext
+    ) {
         let platform = currentRoom.liveType
 
         // 斗鱼/YY 切换清晰度时需要重新请求播放地址
         if platform == .douyu && !douyuFirstLoad {
             let context: [String: Any] = ["rate": quality.qn, "cdn": cdn.douyuCdnName ?? ""]
-            fetchPlayURL(platform: .douyu, context: context) { newPlayArgs in
+            fetchPlayURL(platform: .douyu, context: context, debugContext: debugContext) { newPlayArgs in
                 newPlayArgs.first?.qualitys.first.flatMap { URL(string: $0.url) }
             }
             return
@@ -316,9 +352,20 @@ final class RoomInfoViewModel {
             douyuFirstLoad = false
         }
 
+        if platform == .douyin && currentPlayURL != nil {
+            let context = RoomPlaybackResolver.douyinPlaybackContext(cdn: cdn, quality: quality)
+            fetchPlayURL(platform: .douyin, context: context, debugContext: debugContext) { newPlayArgs in
+                if let selection = RoomPlaybackResolver.matchingSelection(in: newPlayArgs, preferredQuality: quality) {
+                    return URL(string: selection.quality.url)
+                }
+                return RoomPlaybackResolver.firstPlayableURL(from: newPlayArgs)
+            }
+            return
+        }
+
         if platform == .yy && !yyFirstLoad {
             let context = yyPlaybackContext(cdn: cdn, quality: quality)
-            fetchPlayURL(platform: .yy, context: context) { [weak self] newPlayArgs in
+            fetchPlayURL(platform: .yy, context: context, debugContext: debugContext) { [weak self] newPlayArgs in
                 guard let self else { return nil }
                 return firstPlayableURL(from: newPlayArgs)
             }
@@ -329,7 +376,7 @@ final class RoomInfoViewModel {
 
         // 通用：直接使用 URL
         if let url = URL(string: quality.url) {
-            currentPlayURL = url
+            setPlayURL(url, source: "direct", debugContext: debugContext)
         }
         isLoading = false
     }
@@ -338,6 +385,7 @@ final class RoomInfoViewModel {
     private func fetchPlayURL(
         platform: LiveType,
         context: [String: Any],
+        debugContext: RoomPlaybackDebugContext,
         extractURL: @escaping @Sendable ([LiveQualityModel]) -> URL?
     ) {
         guard let parsePlatform = SandboxPluginCatalog.platform(for: platform) else {
@@ -358,7 +406,7 @@ final class RoomInfoViewModel {
                 try Task.checkCancellation()
                 await MainActor.run {
                     if let url = extractURL(newPlayArgs) {
-                        self.currentPlayURL = url
+                        self.setPlayURL(url, source: "refetch", debugContext: debugContext)
                     }
                     self.isLoading = false
                 }
@@ -611,9 +659,7 @@ extension RoomInfoViewModel: KSPlayerLayerDelegate {
             if errorMsg.contains("avformat can't open input") || errorMsg.contains("timed out") || errorMsg.contains("Operation timed out") {
                 checkLiveStatusOnError(error: error)
             } else {
-                playError = error
-                playErrorMessage = errorMsg
-                displayState = .error
+                print("[KSPlayer] suppress finish error UI on macOS: \(errorMsg)")
             }
         }
     }

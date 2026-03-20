@@ -472,14 +472,16 @@ struct UnifiedPlayerControlOverlay: View {
     private var qualityMenu: some View {
         Menu {
             if let playArgs = viewModel.currentRoomPlayArgs {
-                ForEach(Array(playArgs.enumerated()), id: \.offset) { cdnIndex, cdn in
+                ForEach(displayedCDNIndices(from: playArgs), id: \.self) { cdnIndex in
+                    let cdn = playArgs[cdnIndex]
                     Menu {
-                        ForEach(Array(cdn.qualitys.enumerated()), id: \.offset) { urlIndex, quality in
+                        ForEach(displayedQualityIndices(from: cdn), id: \.self) { urlIndex in
+                            let quality = cdn.qualitys[urlIndex]
                             Button {
                                 viewModel.changePlayUrl(cdnIndex: cdnIndex, urlIndex: urlIndex)
                             } label: {
                                 HStack {
-                                    Text(quality.title)
+                                    Text(RoomPlaybackResolver.qualityDisplayTitle(quality, in: playArgs))
                                     if viewModel.currentCdnIndex == cdnIndex && viewModel.currentQualityIndex == urlIndex {
                                         Image(systemName: "checkmark")
                                     }
@@ -498,6 +500,16 @@ struct UnifiedPlayerControlOverlay: View {
         .menuIndicator(.hidden)
         .menuStyle(.borderlessButton)
         .tint(.primary)
+    }
+
+    private func displayedCDNIndices(from playArgs: [LiveQualityModel]) -> [Int] {
+        let indices = Array(playArgs.indices)
+        return isFullscreen ? Array(indices.reversed()) : indices
+    }
+
+    private func displayedQualityIndices(from cdn: LiveQualityModel) -> [Int] {
+        let indices = Array(cdn.qualitys.indices)
+        return isFullscreen ? Array(indices.reversed()) : indices
     }
 
     // MARK: - Scale Mode Menu

@@ -7,22 +7,9 @@
 
 import Foundation
 import Observation
-import CoreMedia
 import SwiftUI
 import AngelLiveCore
 import AngelLiveDependencies
-
-public class PlayerOptions: KSOptions, @unchecked Sendable {
-  public var syncSystemRate: Bool = false
-
-//  override public func sei(string: String) {
-//      
-//  }
-    override public func updateVideo(refreshRate: Float, isDovi: Bool, formatDescription: CMFormatDescription) {
-    guard syncSystemRate else { return }
-      super.updateVideo(refreshRate: refreshRate, isDovi: isDovi, formatDescription: formatDescription)
-  }
-}
 
 /// 播放器显示状态
 enum PlayerDisplayState {
@@ -30,6 +17,19 @@ enum PlayerDisplayState {
     case playing
     case error
     case streamerOffline  // 主播已下播
+}
+
+private final class LiveFlagTimerHandle: @unchecked Sendable {
+    private weak var timer: Timer?
+
+    init(timer: Timer) {
+        self.timer = timer
+    }
+
+    @MainActor
+    func invalidate() {
+        timer?.invalidate()
+    }
 }
 
 @Observable
@@ -54,6 +54,7 @@ final class RoomInfoViewModel {
     weak var playerCoordinator: KSVideoPlayer.Coordinator?
     var douyuFirstLoad = true
     var yyFirstLoad = true
+    private var qualitySwitchTask: Task<Void, Never>?
 
     var isLoading = false
     var rotationAngle = 0.0
@@ -137,146 +138,219 @@ final class RoomInfoViewModel {
     */
     @MainActor
     func changePlayUrl(cdnIndex: Int, urlIndex: Int) {
-        guard currentRoomPlayArgs != nil else {
+        guard let playArgs = currentRoomPlayArgs, !playArgs.isEmpty,
+              cdnIndex < playArgs.count else {
             isLoading = false
             return
         }
-        
-        if cdnIndex >= currentRoomPlayArgs?.count ?? 0 {
+
+        let currentCdn = playArgs[cdnIndex]
+        guard urlIndex < currentCdn.qualitys.count else { return }
+
+        let tappedSelection = RoomPlaybackResolver.selection(
+            in: playArgs,
+            cdnIndex: cdnIndex,
+            qualityIndex: urlIndex
+        )
+        let currentQuality = currentCdn.qualitys[urlIndex]
+        let resolved = resolvePlayerTypes(quality: currentQuality, cdnIndex: cdnIndex, urlIndex: urlIndex)
+        let effectiveSelection = resolved.resolvedSelection ?? tappedSelection
+        let effectiveQuality = effectiveSelection?.quality ?? currentQuality
+        let debugContext = RoomPlaybackDebugContext(
+            tappedSelection: tappedSelection,
+            effectiveSelection: effectiveSelection
+        )
+
+        currentPlayQualityString = effectiveQuality.title
+        currentPlayQualityQn = effectiveQuality.qn
+
+        applyPlaybackRequestOptions(for: effectiveQuality)
+
+        applyResolvedPlayerTypes(resolved.playerTypes)
+
+        if let resolvedURL = resolved.overrideURL {
+            setPlayURL(resolvedURL, source: "resolved", debugContext: debugContext)
+            currentPlayQualityString = resolved.overrideTitle ?? effectiveQuality.title
+            isLoading = false
             return
         }
 
-        guard let currentCdn = currentRoomPlayArgs?[cdnIndex] else {
+        let effectiveCdn = effectiveSelection.map { playArgs[$0.cdnIndex] } ?? currentCdn
+        applyPlayURL(quality: effectiveQuality, cdn: effectiveCdn, debugContext: debugContext)
+    }
+
+    private struct PlayerTypeResult {
+        let playerTypes: [MediaPlayerProtocol.Type]
+        let overrideURL: URL?
+        let overrideTitle: String?
+        let resolvedSelection: RoomPlaybackSelection?
+    }
+
+    private func resolvePlayerTypes(quality: LiveQualityDetail, cdnIndex: Int, urlIndex: Int) -> PlayerTypeResult {
+        let plan = RoomPlaybackResolver.resolvePlan(
+            liveType: currentRoom.liveType,
+            liveState: currentRoom.liveState,
+            selectedQuality: quality,
+            playArgs: currentRoomPlayArgs,
+            cdnIndex: cdnIndex,
+            urlIndex: urlIndex
+        )
+
+        return PlayerTypeResult(
+            playerTypes: plan.playerKinds.map(playerType(for:)),
+            overrideURL: plan.overrideURL,
+            overrideTitle: plan.overrideTitle,
+            resolvedSelection: plan.resolvedSelection
+        )
+    }
+
+    private func playerType(for kind: RoomPlaybackPlayerKind) -> MediaPlayerProtocol.Type {
+        switch kind {
+        case .avPlayer:
+            KSAVPlayer.self
+        case .mePlayer:
+            KSMEPlayer.self
+        }
+    }
+
+    @MainActor
+    private func applyResolvedPlayerTypes(_ playerTypes: [MediaPlayerProtocol.Type]) {
+        guard let first = playerTypes.first else { return }
+        let second = playerTypes.dropFirst().first
+        applyPlayerTypes(first: first, second: second)
+    }
+
+    @MainActor
+    private func setPlayURL(
+        _ url: URL,
+        source: String,
+        debugContext: RoomPlaybackDebugContext? = nil
+    ) {
+        logSelectedStreamBeforePlayback(url, source: source, debugContext: debugContext)
+        if currentPlayURL == url {
+            currentPlayURL = nil
+            Task { @MainActor [weak self] in
+                await Task.yield()
+                guard let self, self.currentPlayURL == nil else { return }
+                self.currentPlayURL = url
+            }
             return
         }
-        
-        if urlIndex >= currentCdn.qualitys.count {
+
+        currentPlayURL = url
+    }
+
+    @MainActor
+    private func logSelectedStreamBeforePlayback(
+        _ url: URL,
+        source: String,
+        debugContext: RoomPlaybackDebugContext?
+    ) {
+        let playerNames = playerOption.playerTypes.map { playerTypeName(for: $0) }
+        let selectedPlayers = playerNames.isEmpty ? "未设置" : playerNames.joined(separator: ",")
+        let tappedSummary = RoomPlaybackResolver.debugSelectionSummary(
+            in: currentRoomPlayArgs,
+            selection: debugContext?.tappedSelection
+        )
+        let effectiveSummary = RoomPlaybackResolver.debugSelectionSummary(
+            in: currentRoomPlayArgs,
+            selection: debugContext?.effectiveSelection
+        )
+        let message = "[PlayerDebug][tvOS][WillPlay] source=\(source), platform=\(currentRoom.liveType.rawValue), roomId=\(currentRoom.roomId), tapped=\(tappedSummary), effective=\(effectiveSummary), finalQuality=\(currentPlayQualityString)(qn=\(currentPlayQualityQn)), players=\(selectedPlayers), url=\(url.absoluteString)"
+        Logger.debug(message, category: .player)
+    }
+
+    private func playerTypeName(for playerType: MediaPlayerProtocol.Type) -> String {
+        let name = String(describing: playerType)
+        return name
+            .replacingOccurrences(of: "AngelLiveDependencies.", with: "")
+            .replacingOccurrences(of: "KSPlayer.", with: "")
+    }
+
+    @MainActor
+    private func applyPlayURL(
+        quality: LiveQualityDetail,
+        cdn: LiveQualityModel,
+        debugContext: RoomPlaybackDebugContext
+    ) {
+        let platform = currentRoom.liveType
+
+        if platform == .douyu && !douyuFirstLoad {
+            let context: [String: Any] = ["rate": quality.qn, "cdn": cdn.douyuCdnName ?? ""]
+            fetchPlayURL(platform: .douyu, context: context, debugContext: debugContext) { newPlayArgs in
+                newPlayArgs.first?.qualitys.first.flatMap { URL(string: $0.url) }
+            }
             return
-        }
-        
-        let currentQuality = currentCdn.qualitys[urlIndex]
-        currentPlayQualityString = currentQuality.title
-        currentPlayQualityQn = currentQuality.qn
-        
-        applyPlaybackRequestOptions(for: currentQuality)
-        
-        
-        if currentRoom.liveType == .bilibili && cdnIndex == 0 && urlIndex == 0 { // bilibili 优先 HLS 播放
-            for item in currentRoomPlayArgs! {
-                for liveQuality in item.qualitys {
-                    let urlString = liveQuality.url.lowercased()
-                    let isHls = liveQuality.liveCodeType == .hls || urlString.contains(".m3u8")
-                    if isHls {
-                        applyPlayerTypes(first: KSAVPlayer.self, second: nil)
-                        if let url = URL(string: liveQuality.url) {
-                            setPlayURL(url)
-                        }
-                        currentPlayQualityString = liveQuality.title
-                        return
-                    }
-                }
-            } 
-            if self.currentPlayURL == nil {
-                applyPlayerTypes(first: KSMEPlayer.self, second: nil)
-            }
-        }else if (currentRoom.liveType == .douyin) { //douyin 优先HLS播放
-            applyPlayerTypes(first: KSMEPlayer.self, second: nil)
-            if cdnIndex == 0 && urlIndex == 0 {
-                for item in currentRoomPlayArgs! {
-                    for liveQuality in item.qualitys {
-                        let urlString = liveQuality.url.lowercased()
-                        let isHls = liveQuality.liveCodeType == .hls || urlString.contains(".m3u8")
-                        if isHls {
-                            applyPlayerTypes(first: KSAVPlayer.self, second: nil)
-                            if let url = URL(string: liveQuality.url) {
-                                setPlayURL(url)
-                            }
-                            currentPlayQualityString = liveQuality.title
-                            return
-                        }else {
-                            applyPlayerTypes(first: KSMEPlayer.self, second: nil)
-                            if let url = URL(string: liveQuality.url) {
-                                setPlayURL(url)
-                            }
-                            currentPlayQualityString = liveQuality.title
-                            return
-                        }
-                    }
-                }
-            }
-        } else {
-            let urlString = currentQuality.url.lowercased()
-            let isHls = currentQuality.liveCodeType == .hls || urlString.contains(".m3u8")
-            if isHls && currentRoom.liveType == .huya && LiveState(rawValue: currentRoom.liveState ?? "unknow") == .video {
-                applyPlayerTypes(first: KSMEPlayer.self, second: nil)
-            }else if isHls {
-                applyPlayerTypes(first: KSAVPlayer.self, second: nil)
-            }else {
-                applyPlayerTypes(first: KSMEPlayer.self, second: nil)
-            }
-        }
-        
-        if currentRoom.liveType == .ks {
-            applyPlayerTypes(first: KSMEPlayer.self, second: nil)
-        }
-        
-        if currentRoom.liveType == .douyu && douyuFirstLoad == false {
-            guard let douyuPlatform = SandboxPluginCatalog.platform(for: .douyu) else {
-                return
-            }
-            Task {
-                let currentCdn = currentRoomPlayArgs![cdnIndex]
-                let currentQuality = currentCdn.qualitys[urlIndex]
-                let playArgs = try await LiveParseJSPlatformManager.getPlayArgsWithQuality(platform: douyuPlatform, roomId: currentRoom.roomId, userId: nil, quality: ["rate": currentQuality.qn, "cdn": currentCdn.douyuCdnName ?? ""])
-                DispatchQueue.main.async {
-                    let currentQuality = playArgs.first?.qualitys[urlIndex]
-                    let lastCurrentPlayURL = self.currentPlayURL
-                    if let urlString = currentQuality?.url ?? lastCurrentPlayURL?.absoluteString,
-                       let url = URL(string: urlString) {
-                        self.setPlayURL(url)
-                    }
-                }
-            }
-        }else {
+        } else if platform == .douyu {
             douyuFirstLoad = false
-            if let url = URL(string: currentQuality.url) {
-                setPlayURL(url)
-            }            
         }
-        
-        if currentRoom.liveType == .yy && yyFirstLoad == false {
-            guard let yyPlatform = SandboxPluginCatalog.platform(for: .yy) else {
-                return
+
+        if platform == .douyin && currentPlayURL != nil {
+            let context = RoomPlaybackResolver.douyinPlaybackContext(cdn: cdn, quality: quality)
+            fetchPlayURL(platform: .douyin, context: context, debugContext: debugContext) { newPlayArgs in
+                if let selection = RoomPlaybackResolver.matchingSelection(in: newPlayArgs, preferredQuality: quality) {
+                    return URL(string: selection.quality.url)
+                }
+                return RoomPlaybackResolver.firstPlayableURL(from: newPlayArgs)
             }
-            Task {
-                guard var playArgs = currentRoomPlayArgs,
-                      cdnIndex < playArgs.count else { return }
-                let currentCdn = playArgs[cdnIndex]
-                let currentQuality = currentCdn.qualitys[urlIndex]
-                playArgs = try await LiveParseJSPlatformManager.getPlayArgsWithQuality(
-                    platform: yyPlatform,
-                    roomId: currentRoom.roomId,
+            return
+        }
+
+        if platform == .yy && !yyFirstLoad {
+            let context = yyPlaybackContext(cdn: cdn, quality: quality)
+            fetchPlayURL(platform: .yy, context: context, debugContext: debugContext) { newPlayArgs in
+                RoomPlaybackResolver.firstPlayableURL(from: newPlayArgs)
+            }
+            return
+        } else if platform == .yy {
+            yyFirstLoad = false
+        }
+
+        if let url = URL(string: quality.url) {
+            setPlayURL(url, source: "direct", debugContext: debugContext)
+        }
+        isLoading = false
+    }
+
+    private func fetchPlayURL(
+        platform: LiveType,
+        context: [String: Any],
+        debugContext: RoomPlaybackDebugContext,
+        extractURL: @escaping @Sendable ([LiveQualityModel]) -> URL?
+    ) {
+        guard let parsePlatform = SandboxPluginCatalog.platform(for: platform) else {
+            isLoading = false
+            return
+        }
+        qualitySwitchTask?.cancel()
+        isLoading = true
+
+        let roomId = currentRoom.roomId
+        qualitySwitchTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                try Task.checkCancellation()
+                let newPlayArgs = try await LiveParseJSPlatformManager.getPlayArgs(
+                    platform: parsePlatform,
+                    roomId: roomId,
                     userId: nil,
-                    quality: yyPlaybackContext(cdn: currentCdn, quality: currentQuality)
+                    context: context
                 )
-                DispatchQueue.main.async {
-                    let lastCurrentPlayURL = self.currentPlayURL
-                    if let urlString = self.firstPlayableURL(from: playArgs)?.absoluteString ?? lastCurrentPlayURL?.absoluteString,
-                       let url = URL(string: urlString) {
-                        self.setPlayURL(url)
+                try Task.checkCancellation()
+                await MainActor.run {
+                    if let url = extractURL(newPlayArgs) {
+                        self.setPlayURL(url, source: "refetch", debugContext: debugContext)
                     }
+                    self.isLoading = false
+                }
+            } catch is CancellationError {
+                // 忽略取消的切换任务
+            } catch {
+                await MainActor.run {
+                    self.isLoading = false
                 }
             }
-        }else {
-            yyFirstLoad = false
-            if let url = URL(string: currentQuality.url) {
-                setPlayURL(url)
-            }
         }
-        
-       
-        
-        isLoading = false
     }
     
     /**
@@ -318,15 +392,15 @@ final class RoomInfoViewModel {
                 let roomId = currentRoom.roomId
                 let userId = currentRoom.userId
                 let liveType = currentRoom.liveType
-                liveFlagTimer = Timer.scheduledTimer(withTimeInterval: TimeInterval(appViewModel.playerSettingsViewModel.openExitPlayerViewWhenLiveEndSecond), repeats: true) { [weak self] _ in
-                    Task { @MainActor [weak self] in
-                        guard let self = self else { return }
+                liveFlagTimer = Timer.scheduledTimer(withTimeInterval: TimeInterval(appViewModel.playerSettingsViewModel.openExitPlayerViewWhenLiveEndSecond), repeats: true) { timer in
+                    let timerHandle = LiveFlagTimerHandle(timer: timer)
+                    Task {
                         let state = try await ApiManager.getCurrentRoomLiveState(roomId: roomId, userId: userId, liveType: liveType)
-                        if state == .close || state == .unknow {
+                        guard state == .close || state == .unknow else { return }
+                        await MainActor.run {
                             NotificationCenter.default.post(name: SimpleLiveNotificationNames.playerEndPlay, object: nil, userInfo: nil)
-                            self.liveFlagTimer?.invalidate()
-                            self.liveFlagTimer = nil
                         }
+                        await timerHandle.invalidate()
                     }
                 }
             }
@@ -366,46 +440,29 @@ final class RoomInfoViewModel {
 
     /// 按插件返回的播放配置应用 UA / Headers，保证三端行为一致
     private func applyPlaybackRequestOptions(for quality: LiveQualityDetail) {
-        let fallbackUA = "libmpv"
-        let customUA = quality.userAgent?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let userAgent = (customUA?.isEmpty == false) ? customUA! : fallbackUA
+        let requestOptions = RoomPlaybackResolver.requestOptions(
+            for: quality,
+            fallbackUserAgent: "libmpv"
+        )
 
-        playerOption.userAgent = userAgent
+        playerOption.userAgent = requestOptions.userAgent
         // 先清理上一次流的头，避免跨平台/跨线路残留
         playerOption.avOptions["AVURLAssetHTTPHeaderFieldsKey"] = nil
         playerOption.formatContextOptions["headers"] = nil
 
-        var headers = quality.headers ?? [:]
-        if headers["User-Agent"] == nil && headers["user-agent"] == nil {
-            headers["user-agent"] = userAgent
-        }
-        if !headers.isEmpty {
-            playerOption.appendHeader(headers)
+        if !requestOptions.headers.isEmpty {
+            playerOption.appendHeader(requestOptions.headers)
         }
     }
 
     /// 构建 YY 请求上下文，兼容新版 WebSocket 拉流（qn）和旧版参数（gear/lineSeq）
     private func yyPlaybackContext(cdn: LiveQualityModel, quality: LiveQualityDetail) -> [String: Any] {
-        let rawLineSeq = (cdn.yyLineSeq ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        let lineSeq: Any = Int(rawLineSeq) ?? (rawLineSeq.isEmpty ? -1 : rawLineSeq)
-
-        return [
-            "lineSeq": lineSeq,
-            "gear": quality.qn,
-            "qn": quality.qn
-        ]
+        RoomPlaybackResolver.yyPlaybackContext(cdn: cdn, quality: quality)
     }
 
     /// 从播放参数中提取首个可用 URL（YY WebSocket 返回通常只有一个清晰度）
     private func firstPlayableURL(from playArgs: [LiveQualityModel]) -> URL? {
-        for cdn in playArgs {
-            for quality in cdn.qualitys {
-                if let url = URL(string: quality.url) {
-                    return url
-                }
-            }
-        }
-        return nil
+        RoomPlaybackResolver.firstPlayableURL(from: playArgs)
     }
     
     func getDanmuInfo() {
@@ -484,20 +541,6 @@ final class RoomInfoViewModel {
             disConnectSocket()
         }
         getPlayArgs()
-    }
-
-    @MainActor
-    private func setPlayURL(_ url: URL) {
-        if currentPlayURL == url {
-            // 强制刷新同一 URL，避免播放器忽略相同地址的更新
-            currentPlayURL = nil
-            Task { @MainActor in
-                await Task.yield()
-                self.currentPlayURL = url
-            }
-        } else {
-            currentPlayURL = url
-        }
     }
 
     func stopTimer() {
@@ -579,10 +622,7 @@ extension RoomInfoViewModel: KSPlayerLayerDelegate {
             if errorMsg.contains("avformat can't open input") || errorMsg.contains("timed out") || errorMsg.contains("Operation timed out") {
                 checkLiveStatusOnError(error: error)
             } else {
-                hasError = true
-                currentError = error
-                errorMessage = errorMsg
-                displayState = .error
+                print("[KSPlayer] suppress finish error UI on tvOS: \(errorMsg)")
             }
         }
     }

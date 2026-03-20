@@ -28,6 +28,9 @@ struct PlayerControlView: View {
     @State private var showVolumeSlider = false
     @State private var isCursorHidden = false
     @State private var cursorHideTask: Task<Void, Never>?
+    @State private var mouseActivityMonitor: Any?
+    @State private var previousAcceptsMouseMovedEvents: Bool?
+    @State private var mouseTrackingWindow: NSWindow?
     @Binding var volume: Float  // 独立音量控制
     @Binding var isMuted: Bool      // 独立静音状态
     @Environment(\.dismiss) private var dismiss
@@ -346,8 +349,13 @@ struct PlayerControlView: View {
             if showSettings {
                 HStack {
                     Spacer()
-                    VideoSettingsPanel(coordinator: coordinator, isShowing: $showSettings)
-                        .frame(width: 320)
+                    VideoSettingsPanel(
+                        coordinator: coordinator,
+                        qualityTitle: viewModel.currentPlayQualityString,
+                        streamURL: viewModel.currentPlayURL,
+                        isShowing: $showSettings
+                    )
+                        .frame(width: 380)
                         .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
                 .animation(.easeInOut(duration: 0.3), value: showSettings)
@@ -358,12 +366,16 @@ struct PlayerControlView: View {
         }
         .onAppear {
             syncPinnedState()
+            enableMouseMovedEventsIfNeeded()
+            installMouseActivityMonitor()
         }
         .onDisappear {
             // 恢复鼠标指针
             showCursor()
             cursorHideTask?.cancel()
             hideTask?.cancel()
+            removeMouseActivityMonitor()
+            restoreMouseMovedEventsIfNeeded()
         }
     }
 
@@ -463,6 +475,65 @@ struct PlayerControlView: View {
         }
     }
 
+    @MainActor
+    private func enableMouseMovedEventsIfNeeded() {
+        guard let window = NSApplication.shared.keyWindow ?? NSApplication.shared.mainWindow else { return }
+        if previousAcceptsMouseMovedEvents == nil {
+            previousAcceptsMouseMovedEvents = window.acceptsMouseMovedEvents
+            mouseTrackingWindow = window
+        }
+        window.acceptsMouseMovedEvents = true
+    }
+
+    @MainActor
+    private func restoreMouseMovedEventsIfNeeded() {
+        guard let previousAcceptsMouseMovedEvents,
+              let window = mouseTrackingWindow else {
+            self.previousAcceptsMouseMovedEvents = nil
+            self.mouseTrackingWindow = nil
+            return
+        }
+        window.acceptsMouseMovedEvents = previousAcceptsMouseMovedEvents
+        self.previousAcceptsMouseMovedEvents = nil
+        self.mouseTrackingWindow = nil
+    }
+
+    @MainActor
+    private func installMouseActivityMonitor() {
+        guard mouseActivityMonitor == nil else { return }
+        mouseActivityMonitor = NSEvent.addLocalMonitorForEvents(
+            matching: [.mouseMoved, .leftMouseDragged, .rightMouseDragged, .otherMouseDragged, .scrollWheel]
+        ) { event in
+            Task { @MainActor in
+                handleMouseActivity(event)
+            }
+            return event
+        }
+    }
+
+    @MainActor
+    private func removeMouseActivityMonitor() {
+        guard let mouseActivityMonitor else { return }
+        NSEvent.removeMonitor(mouseActivityMonitor)
+        self.mouseActivityMonitor = nil
+    }
+
+    @MainActor
+    private func handleMouseActivity(_ event: NSEvent) {
+        guard NSApplication.shared.isActive else { return }
+        guard let window = event.window ?? NSApplication.shared.keyWindow, window.isKeyWindow else { return }
+        guard window.styleMask.contains(.fullScreen) else {
+            if isCursorHidden {
+                showCursor()
+            }
+            return
+        }
+
+        isHovering = true
+        showCursor()
+        resetHideTimer()
+    }
+
     private func showCursor() {
         cursorHideTask?.cancel()
         if isCursorHidden {
@@ -527,51 +598,50 @@ struct PlayerControlView: View {
 // 设置面板
 struct VideoSettingsPanel: View {
     @ObservedObject var coordinator: KSVideoPlayer.Coordinator
+    let qualityTitle: String?
+    let streamURL: URL?
     @Binding var isShowing: Bool
     @State private var resolvedPlayerLayer: KSPlayerLayer?
     @State private var resolveTask: Task<Void, Never>?
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // 标题栏
-            HStack {
-                Text("视频信息统计")
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                Spacer()
-                Button {
-                    isShowing = false
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.title3)
-                        .foregroundStyle(.white.opacity(0.8))
-                }
-                .buttonStyle(.plain)
-            }
-            .padding()
-            .background(Color.black.opacity(0.8))
+    private var normalizedQualityTitle: String? {
+        guard let qualityTitle else { return nil }
+        let trimmed = qualityTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed != "清晰度" else { return nil }
+        return trimmed
+    }
 
-            // 内容区域
+    var body: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            header
+
             TimelineView(.periodic(from: .now, by: 1.0)) { _ in
-                ScrollView {
+                ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 20) {
+                        streamInfoSection
+
                         if let playerLayer = resolvedPlayerLayer ?? coordinator.playerLayer {
                             videoInfoSection(playerLayer: playerLayer)
                             performanceInfoSection(playerLayer: playerLayer)
                         } else {
-                            Text("加载中...")
-                                .foregroundStyle(.white.opacity(0.7))
+                            loadingState
                         }
                     }
-                    .padding()
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .background(Color.black.opacity(0.7))
             }
+
+            Spacer(minLength: 0)
         }
+        .padding(24)
         .frame(maxHeight: .infinity, alignment: .top)
-        .background(Color.black.opacity(0.5))
+        .adaptiveGlassEffectRoundedRect(cornerRadius: 24)
+        .overlay {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(.white.opacity(0.12), lineWidth: 1)
+        }
+        .shadow(color: .black.opacity(0.22), radius: 22, y: 12)
         .task(id: isShowing) {
-            // 打开面板时尝试获取 playerLayer，避免因未发布的属性导致一直“加载中”
             resolveTask?.cancel()
             guard isShowing else { return }
             resolveTask = Task {
@@ -582,7 +652,7 @@ struct VideoSettingsPanel: View {
                         }
                         break
                     }
-                    try? await Task.sleep(nanoseconds: 200_000_000) // 0.2s
+                    try? await Task.sleep(nanoseconds: 200_000_000)
                 }
             }
         }
@@ -591,27 +661,78 @@ struct VideoSettingsPanel: View {
         }
     }
 
+    private var header: some View {
+        HStack(alignment: .top, spacing: 16) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("视频信息统计")
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundStyle(.white)
+
+                Text("实时查看当前流、解码方式和播放性能。")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.72))
+            }
+
+            Spacer(minLength: 12)
+
+            Button {
+                isShowing = false
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 36, height: 36)
+            }
+            .buttonStyle(.plain)
+            .adaptiveGlassEffect(in: .circle)
+        }
+    }
+
+    private var streamInfoSection: some View {
+        sectionCard(title: "当前流", systemImage: "dot.radiowaves.left.and.right") {
+            InfoRow(title: "播放方案", value: Self.playerDisplayName(for: KSOptions.firstPlayerType))
+
+            if let normalizedQualityTitle {
+                InfoRow(title: "当前清晰度", value: normalizedQualityTitle)
+            }
+
+            if let streamURL {
+                InfoRow(title: "流协议", value: Self.streamProtocol(for: streamURL))
+                InfoRow(title: "流地址", value: Self.formatStreamURL(streamURL))
+            }
+        }
+    }
+
+    private var loadingState: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ProgressView()
+                .tint(.white)
+            Text("正在读取播放器统计信息...")
+                .foregroundStyle(.white.opacity(0.72))
+                .font(.system(size: 15, weight: .medium))
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .adaptiveGlassEffectRoundedRect(cornerRadius: 20)
+    }
+
     @ViewBuilder
     private func videoInfoSection(playerLayer: KSPlayerLayer) -> some View {
         let videoTrack = playerLayer.player.tracks(mediaType: .video).first { $0.isEnabled }
         let videoType = (videoTrack?.dynamicRange ?? .sdr).description
         let decodeType = playerLayer.options.decodeType.rawValue
+        let naturalSize = playerLayer.player.naturalSize
+        let sizeText: String? = naturalSize.width > 0 && naturalSize.height > 0
+            ? "\(Int(naturalSize.width)) x \(Int(naturalSize.height))"
+            : nil
 
-        GroupBox {
-            VStack(alignment: .leading, spacing: 8) {
-                InfoRow(title: "视频类型", value: videoType)
-                InfoRow(title: "解码方式", value: decodeType)
-                let naturalSize = playerLayer.player.naturalSize
-                if naturalSize.width > 0 && naturalSize.height > 0 {
-                    let sizeText = "\(Int(naturalSize.width)) x \(Int(naturalSize.height))"
-                    InfoRow(title: "视频尺寸", value: sizeText)
-                }
+        sectionCard(title: "视频信息", systemImage: "film") {
+            InfoRow(title: "视频类型", value: videoType)
+            InfoRow(title: "解码方式", value: decodeType)
+            if let sizeText {
+                InfoRow(title: "视频尺寸", value: sizeText)
             }
-        } label: {
-            Label("视频信息", systemImage: "film")
-                .foregroundStyle(.white)
         }
-        .backgroundStyle(Color.black.opacity(0.3))
     }
 
     @ViewBuilder
@@ -620,27 +741,78 @@ struct VideoSettingsPanel: View {
         let fpsText = String(format: "%.1f fps", dynamicInfo.displayFPS)
         let droppedFrames = dynamicInfo.droppedVideoFrameCount + dynamicInfo.droppedVideoPacketCount
         let syncText = String(format: "%.3f s", dynamicInfo.audioVideoSyncDiff)
-        let networkSpeed = formatBytes(Int64(dynamicInfo.networkSpeed)) + "/s"
-        let videoBitrate = formatBytes(Int64(dynamicInfo.videoBitrate)) + "ps"
-        let audioBitrate = formatBytes(Int64(dynamicInfo.audioBitrate)) + "ps"
+        let networkSpeed = Self.formatBytes(Int64(dynamicInfo.networkSpeed)) + "/s"
+        let videoBitrate = Self.formatBytes(Int64(dynamicInfo.videoBitrate)) + "ps"
+        let audioBitrate = Self.formatBytes(Int64(dynamicInfo.audioBitrate)) + "ps"
 
-        GroupBox {
-            VStack(alignment: .leading, spacing: 8) {
-                InfoRow(title: "显示帧率", value: fpsText)
-                InfoRow(title: "丢帧数", value: "\(droppedFrames)")
-                InfoRow(title: "音视频同步", value: syncText)
-                InfoRow(title: "网络速度", value: networkSpeed)
-                InfoRow(title: "视频码率", value: videoBitrate)
-                InfoRow(title: "音频码率", value: audioBitrate)
-            }
-        } label: {
-            Label("性能信息", systemImage: "speedometer")
-                .foregroundStyle(.white)
+        sectionCard(title: "性能信息", systemImage: "speedometer") {
+            InfoRow(title: "显示帧率", value: fpsText)
+            InfoRow(title: "丢帧数", value: "\(droppedFrames)")
+            InfoRow(title: "音视频同步", value: syncText)
+            InfoRow(title: "网络速度", value: networkSpeed)
+            InfoRow(title: "视频码率", value: videoBitrate)
+            InfoRow(title: "音频码率", value: audioBitrate)
         }
-        .backgroundStyle(Color.black.opacity(0.3))
     }
 
-    private func formatBytes(_ bytes: Int64) -> String {
+    private func sectionCard<Content: View>(
+        title: String,
+        systemImage: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Label(title, systemImage: systemImage)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(.white)
+
+            VStack(alignment: .leading, spacing: 12) {
+                content()
+            }
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .adaptiveGlassEffectRoundedRect(cornerRadius: 20)
+    }
+
+    private static func playerDisplayName(for playerType: MediaPlayerProtocol.Type) -> String {
+        let name = String(describing: playerType)
+        if name.contains("KSAVPlayer") {
+            return "AVPlayer"
+        }
+        if name.contains("KSMEPlayer") {
+            return "MEPlayer"
+        }
+        return name
+            .replacingOccurrences(of: "AngelLiveDependencies.", with: "")
+            .replacingOccurrences(of: "KSPlayer.", with: "")
+    }
+
+    private static func streamProtocol(for url: URL) -> String {
+        let lowercasedPath = url.path.lowercased()
+        if lowercasedPath.contains(".m3u8") {
+            return "HLS"
+        }
+        if lowercasedPath.contains(".flv") {
+            return "FLV"
+        }
+        return url.scheme?.uppercased() ?? "未知"
+    }
+
+    private static func formatStreamURL(_ url: URL) -> String {
+        let host = url.host() ?? url.host ?? url.absoluteString
+        let lastPathComponent = url.lastPathComponent
+        guard !lastPathComponent.isEmpty else { return host }
+
+        if lastPathComponent.count <= 36 {
+            return "\(host)/\(lastPathComponent)"
+        }
+
+        let prefix = lastPathComponent.prefix(16)
+        let suffix = lastPathComponent.suffix(12)
+        return "\(host)/\(prefix)...\(suffix)"
+    }
+
+    private static func formatBytes(_ bytes: Int64) -> String {
         let kb = Double(bytes) / 1024.0
         if kb < 1024 {
             return String(format: "%.1fK", kb)
@@ -654,20 +826,21 @@ struct VideoSettingsPanel: View {
     }
 }
 
-// 信息行
 struct InfoRow: View {
     let title: String
     let value: String
 
     var body: some View {
-        HStack {
+        HStack(spacing: 16) {
             Text(title)
-                .foregroundStyle(.white.opacity(0.7))
-                .font(.caption)
+                .foregroundStyle(.white.opacity(0.72))
+                .font(.system(size: 13, weight: .medium))
             Spacer()
             Text(value)
                 .foregroundStyle(.white)
-                .font(.caption.monospacedDigit())
+                .font(.system(size: 14, weight: .semibold, design: .rounded).monospacedDigit())
+                .lineLimit(1)
+                .truncationMode(.middle)
         }
     }
 }
@@ -699,6 +872,15 @@ private extension View {
             case .circle:
                 self.background(.ultraThinMaterial, in: Circle())
             }
+        }
+    }
+
+    @ViewBuilder
+    func adaptiveGlassEffectRoundedRect(cornerRadius: CGFloat) -> some View {
+        if #available(macOS 26.0, *) {
+            self.glassEffect(.regular.interactive().tint(.black.opacity(0.6)), in: .rect(cornerRadius: cornerRadius))
+        } else {
+            self.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
         }
     }
 }

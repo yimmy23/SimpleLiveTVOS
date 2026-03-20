@@ -45,7 +45,7 @@ struct TVDirectURLPlayerView: View {
                 GeometryReader { geometry in
                     HStack {
                         Spacer()
-                        TVPlayerStatisticsPanel(playerCoordinator: playerCoordinator) {
+                        TVPlayerStatisticsPanel(playerCoordinator: playerCoordinator, streamURL: url) {
                             hideStatisticsPanel()
                         }
                         .frame(width: min(geometry.size.width * 0.4, 640), height: geometry.size.height - 80)

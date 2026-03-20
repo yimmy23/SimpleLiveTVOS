@@ -75,10 +75,10 @@
     {
       "identity" : "ffmpegkit",
       "kind" : "remoteSourceControl",
-      "location" : "git@github.com:TracyPlayer/FFmpegKit.git",
+      "location" : "https://github.com/TracyPlayer/FFmpegKit",
       "state" : {
-        "revision" : "96874d4ffd5064122d25878e1f8611edffe445c5",
-        "version" : "8.0.2"
+        "branch" : "lgpl",
+        "revision" : "9f802e9f3e00e867e1ca2a21fd5519a8e2cf4863"
       }
     },
     {

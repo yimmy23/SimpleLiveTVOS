@@ -529,74 +529,133 @@ struct VideoSettingHUDView: View {
     @ObservedObject
     var model: KSVideoPlayerModel
     @Binding var isShowing: Bool
+    @Environment(RoomInfoViewModel.self) private var viewModel
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    private var panelWidth: CGFloat {
+        if AppConstants.Device.isIPad {
+            return 420
+        }
+        return horizontalSizeClass == .compact ? 320 : 360
+    }
+
+    private var normalizedQualityTitle: String? {
+        let trimmed = viewModel.currentPlayQualityString.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed != "清晰度" else { return nil }
+        return trimmed
+    }
+
+    private var currentStreamURL: URL? {
+        viewModel.currentPlayURL ?? model.url
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // 标题栏
-            HStack {
-                Text("视频信息统计")
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                Spacer()
-                Button {
-                    isShowing = false
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.title3)
-                        .foregroundStyle(.white.opacity(0.8))
-                }
-                .buttonStyle(.plain)
-            }
-            .padding()
-            .background(Color.black.opacity(AppConstants.PlayerUI.Opacity.overlayHeavy))
+        VStack(alignment: .leading, spacing: 24) {
+            header
 
-            // 内容区域 - 使用 TimelineView 实现定期刷新
-            TimelineView(.periodic(from: .now, by: 1.0)) { context in
-                ScrollView {
+            TimelineView(.periodic(from: .now, by: 1.0)) { _ in
+                ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 20) {
+                        streamInfoSection
+
                         if let playerLayer = model.config.playerLayer {
                             videoInfoSection(playerLayer: playerLayer)
                             performanceInfoSection(playerLayer: playerLayer)
                         } else {
-                            Text("加载中...")
-                                .foregroundStyle(.white.opacity(0.7))
+                            loadingState
                         }
                     }
-                    .padding()
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .background(Color.black.opacity(AppConstants.PlayerUI.Opacity.overlayStrong))
             }
+
+            Spacer(minLength: 0)
         }
-        .frame(width: 320)
+        .padding(24)
+        .frame(width: panelWidth)
         .frame(maxHeight: .infinity, alignment: .top)
-        .background(Color.black.opacity(AppConstants.PlayerUI.Opacity.overlayMedium))
+        .adaptiveRoundedRectGlassEffect(cornerRadius: 26)
+        .overlay {
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .stroke(.white.opacity(0.12), lineWidth: 1)
+        }
+        .shadow(color: .black.opacity(0.2), radius: 20, y: 10)
     }
 
-    // 视频信息分组
+    private var header: some View {
+        HStack(alignment: .top, spacing: 16) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("视频信息统计")
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundStyle(.white)
+
+                Text("实时查看当前流、解码方式和播放性能。")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.72))
+            }
+
+            Spacer(minLength: 12)
+
+            Button {
+                isShowing = false
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 40, height: 40)
+            }
+            .buttonStyle(.plain)
+            .adaptiveCircleGlassEffect()
+        }
+    }
+
+    private var streamInfoSection: some View {
+        sectionCard(title: "当前流", systemImage: "dot.radiowaves.left.and.right") {
+            InfoRow(title: "播放方案", value: Self.playerDisplayName(for: KSOptions.firstPlayerType))
+
+            if let normalizedQualityTitle {
+                InfoRow(title: "当前清晰度", value: normalizedQualityTitle)
+            }
+
+            if let currentStreamURL {
+                InfoRow(title: "流协议", value: Self.streamProtocol(for: currentStreamURL))
+                InfoRow(title: "流地址", value: Self.formatStreamURL(currentStreamURL))
+            }
+        }
+    }
+
+    private var loadingState: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ProgressView()
+                .tint(.white)
+            Text("正在读取播放器统计信息...")
+                .foregroundStyle(.white.opacity(0.72))
+                .font(.system(size: 15, weight: .medium))
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .adaptiveRoundedRectGlassEffect(cornerRadius: 22)
+    }
+
     @ViewBuilder
     private func videoInfoSection(playerLayer: KSPlayerLayer) -> some View {
         let videoTrack = playerLayer.player.tracks(mediaType: .video).first { $0.isEnabled }
         let videoType = (videoTrack?.dynamicRange ?? .sdr).description
         let decodeType = playerLayer.options.decodeType.rawValue
+        let naturalSize = playerLayer.player.naturalSize
+        let sizeText: String? = naturalSize.width > 0 && naturalSize.height > 0
+            ? "\(Int(naturalSize.width)) x \(Int(naturalSize.height))"
+            : nil
 
-        GroupBox {
-            VStack(alignment: .leading, spacing: 8) {
-                InfoRow(title: "视频类型", value: videoType)
-                InfoRow(title: "解码方式", value: decodeType)
-                let naturalSize = playerLayer.player.naturalSize
-                if naturalSize.width > 0 && naturalSize.height > 0 {
-                    let sizeText = "\(Int(naturalSize.width)) x \(Int(naturalSize.height))"
-                    InfoRow(title: "视频尺寸", value: sizeText)
-                }
+        sectionCard(title: "视频信息", systemImage: "film") {
+            InfoRow(title: "视频类型", value: videoType)
+            InfoRow(title: "解码方式", value: decodeType)
+            if let sizeText {
+                InfoRow(title: "视频尺寸", value: sizeText)
             }
-        } label: {
-            Label("视频信息", systemImage: "film")
-                .foregroundStyle(.white)
         }
-        .backgroundStyle(Color.black.opacity(AppConstants.PlayerUI.Opacity.overlayLight))
     }
 
-    // 性能信息分组
     @ViewBuilder
     private func performanceInfoSection(playerLayer: KSPlayerLayer) -> some View {
         let dynamicInfo = playerLayer.player.dynamicInfo
@@ -607,23 +666,73 @@ struct VideoSettingHUDView: View {
         let videoBitrate = Self.formatBytes(Int64(dynamicInfo.videoBitrate)) + "ps"
         let audioBitrate = Self.formatBytes(Int64(dynamicInfo.audioBitrate)) + "ps"
 
-        GroupBox {
-            VStack(alignment: .leading, spacing: 8) {
-                InfoRow(title: "显示帧率", value: fpsText)
-                InfoRow(title: "丢帧数", value: "\(droppedFrames)")
-                InfoRow(title: "音视频同步", value: syncText)
-                InfoRow(title: "网络速度", value: networkSpeed)
-                InfoRow(title: "视频码率", value: videoBitrate)
-                InfoRow(title: "音频码率", value: audioBitrate)
-            }
-        } label: {
-            Label("性能信息", systemImage: "speedometer")
-                .foregroundStyle(.white)
+        sectionCard(title: "性能信息", systemImage: "speedometer") {
+            InfoRow(title: "显示帧率", value: fpsText)
+            InfoRow(title: "丢帧数", value: "\(droppedFrames)")
+            InfoRow(title: "音视频同步", value: syncText)
+            InfoRow(title: "网络速度", value: networkSpeed)
+            InfoRow(title: "视频码率", value: videoBitrate)
+            InfoRow(title: "音频码率", value: audioBitrate)
         }
-        .backgroundStyle(Color.black.opacity(AppConstants.PlayerUI.Opacity.overlayLight))
     }
 
-    // 格式化字节数
+    private func sectionCard<Content: View>(
+        title: String,
+        systemImage: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Label(title, systemImage: systemImage)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(.white)
+
+            VStack(alignment: .leading, spacing: 12) {
+                content()
+            }
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .adaptiveRoundedRectGlassEffect(cornerRadius: 22)
+    }
+
+    private static func playerDisplayName(for playerType: MediaPlayerProtocol.Type) -> String {
+        let name = String(describing: playerType)
+        if name.contains("KSAVPlayer") {
+            return "AVPlayer"
+        }
+        if name.contains("KSMEPlayer") {
+            return "MEPlayer"
+        }
+        return name
+            .replacingOccurrences(of: "AngelLiveDependencies.", with: "")
+            .replacingOccurrences(of: "KSPlayer.", with: "")
+    }
+
+    private static func streamProtocol(for url: URL) -> String {
+        let lowercasedPath = url.path.lowercased()
+        if lowercasedPath.contains(".m3u8") {
+            return "HLS"
+        }
+        if lowercasedPath.contains(".flv") {
+            return "FLV"
+        }
+        return url.scheme?.uppercased() ?? "未知"
+    }
+
+    private static func formatStreamURL(_ url: URL) -> String {
+        let host = url.host() ?? url.host ?? url.absoluteString
+        let lastPathComponent = url.lastPathComponent
+        guard !lastPathComponent.isEmpty else { return host }
+
+        if lastPathComponent.count <= 36 {
+            return "\(host)/\(lastPathComponent)"
+        }
+
+        let prefix = lastPathComponent.prefix(16)
+        let suffix = lastPathComponent.suffix(12)
+        return "\(host)/\(prefix)...\(suffix)"
+    }
+
     private static func formatBytes(_ bytes: Int64) -> String {
         let kb = Double(bytes) / 1024.0
         if kb < 1024 {
@@ -638,20 +747,21 @@ struct VideoSettingHUDView: View {
     }
 }
 
-// HUD 信息行
 struct InfoRow: View {
     let title: String
     let value: String
 
     var body: some View {
-        HStack {
+        HStack(spacing: 16) {
             Text(title)
-                .foregroundStyle(.white.opacity(0.7))
-                .font(.caption)
+                .foregroundStyle(.white.opacity(0.72))
+                .font(.system(size: 14, weight: .medium))
             Spacer()
             Text(value)
                 .foregroundStyle(.white)
-                .font(.caption.monospacedDigit())
+                .font(.system(size: 15, weight: .semibold, design: .rounded).monospacedDigit())
+                .lineLimit(1)
+                .truncationMode(.middle)
         }
     }
 }
@@ -737,6 +847,18 @@ private extension View {
             self.glassEffect(.regular.interactive().tint(.black.opacity(AppConstants.PlayerUI.Opacity.overlayStrong)), in: .circle)
         } else {
             self.background(.ultraThinMaterial, in: Circle())
+        }
+    }
+
+    @ViewBuilder
+    func adaptiveRoundedRectGlassEffect(cornerRadius: CGFloat) -> some View {
+        if #available(iOS 26.0, *) {
+            self.glassEffect(
+                .regular.interactive().tint(.black.opacity(AppConstants.PlayerUI.Opacity.overlayStrong)),
+                in: .rect(cornerRadius: cornerRadius)
+            )
+        } else {
+            self.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
         }
     }
 }

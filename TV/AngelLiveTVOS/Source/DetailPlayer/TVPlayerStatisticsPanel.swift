@@ -3,9 +3,23 @@ import AngelLiveDependencies
 
 struct TVPlayerStatisticsPanel: View {
     @ObservedObject var playerCoordinator: KSVideoPlayer.Coordinator
+    let qualityTitle: String?
+    let streamURL: URL?
     let onClose: () -> Void
 
     @FocusState private var isCloseButtonFocused: Bool
+
+    init(
+        playerCoordinator: KSVideoPlayer.Coordinator,
+        qualityTitle: String? = nil,
+        streamURL: URL? = nil,
+        onClose: @escaping () -> Void
+    ) {
+        self.playerCoordinator = playerCoordinator
+        self.qualityTitle = qualityTitle
+        self.streamURL = streamURL
+        self.onClose = onClose
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
@@ -13,6 +27,8 @@ struct TVPlayerStatisticsPanel: View {
 
             TimelineView(.periodic(from: .now, by: 1.0)) { _ in
                 VStack(alignment: .leading, spacing: 20) {
+                    streamInfoSection
+
                     if let playerLayer = playerCoordinator.playerLayer {
                         videoInfoSection(playerLayer: playerLayer)
                         performanceInfoSection(playerLayer: playerLayer)
@@ -62,6 +78,21 @@ struct TVPlayerStatisticsPanel: View {
             .clipShape(.circle)
             .focused($isCloseButtonFocused)
             .accessibilityLabel("关闭统计信息")
+        }
+    }
+
+    private var streamInfoSection: some View {
+        sectionCard(title: "当前流", systemImage: "dot.radiowaves.left.and.right") {
+            StatisticsRow(title: "播放方案", value: Self.playerDisplayName(for: KSOptions.firstPlayerType))
+
+            if let qualityTitle, !qualityTitle.isEmpty {
+                StatisticsRow(title: "当前清晰度", value: qualityTitle)
+            }
+
+            if let streamURL {
+                StatisticsRow(title: "流协议", value: Self.streamProtocol(for: streamURL))
+                StatisticsRow(title: "流地址", value: Self.formatStreamURL(streamURL))
+            }
         }
     }
 
@@ -136,6 +167,36 @@ struct TVPlayerStatisticsPanel: View {
         .adaptiveGlassEffectRoundedRect(cornerRadius: 22)
     }
 
+    private static func playerDisplayName(for playerType: MediaPlayerProtocol.Type) -> String {
+        let name = String(describing: playerType)
+        return name.replacingOccurrences(of: "AngelLiveDependencies.", with: "")
+    }
+
+    private static func streamProtocol(for url: URL) -> String {
+        let lowercasedPath = url.path.lowercased()
+        if lowercasedPath.contains(".m3u8") {
+            return "HLS"
+        }
+        if lowercasedPath.contains(".flv") {
+            return "FLV"
+        }
+        return url.scheme?.uppercased() ?? "未知"
+    }
+
+    private static func formatStreamURL(_ url: URL) -> String {
+        let host = url.host() ?? url.host ?? url.absoluteString
+        let lastPathComponent = url.lastPathComponent
+        guard !lastPathComponent.isEmpty else { return host }
+
+        if lastPathComponent.count <= 36 {
+            return "\(host)/\(lastPathComponent)"
+        }
+
+        let prefix = lastPathComponent.prefix(16)
+        let suffix = lastPathComponent.suffix(12)
+        return "\(host)/\(prefix)...\(suffix)"
+    }
+
     private static func formatBytes(_ bytes: Int64) -> String {
         let kb = Double(bytes) / 1024.0
         if kb < 1024 {
@@ -167,6 +228,8 @@ private struct StatisticsRow: View {
             Text(value)
                 .font(.system(size: 20, weight: .semibold, design: .rounded).monospacedDigit())
                 .foregroundStyle(.white)
+                .lineLimit(1)
+                .truncationMode(.middle)
         }
     }
 }

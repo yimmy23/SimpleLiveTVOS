@@ -8,6 +8,12 @@ import PackageDescription
 /// 两者不能同时引入，否则内嵌的 FFmpeg 符号会冲突。
 private let useVLC = ProcessInfo.processInfo.environment["USE_VLC"] == "1"
 
+private func resolveFFmpegKitDependency() -> Package.Dependency? {
+    guard !useVLC else { return nil }
+    // Force KSPlayer/KSMEPlayer onto the LGPL FFmpegKit line.
+    return .package(url: "https://github.com/TracyPlayer/FFmpegKit", branch: "lgpl")
+}
+
 private func resolveKSPlayerDependency() -> (package: Package.Dependency, target: Target.Dependency)? {
     guard !useVLC else { return nil }
     return (
@@ -28,6 +34,10 @@ var packageDependencies: [Package.Dependency] = [
     .package(url: "https://github.com/onevcat/Kingfisher", from: "8.6.0"),
     .package(url: "https://github.com/yeatse/KingfisherWebP.git", from: "1.7.0"),
 ]
+
+if let ffmpegKitDependency = resolveFFmpegKitDependency() {
+    packageDependencies.append(ffmpegKitDependency)
+}
 
 // VLCKitSPM 仅在 USE_VLC=1 时引入（与 KSPlayer 互斥，避免 FFmpeg 符号冲突）
 if useVLC {

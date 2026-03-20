@@ -183,7 +183,11 @@ struct PlayerControlView: View {
                     GeometryReader { geometry in
                         HStack {
                             Spacer()
-                            TVPlayerStatisticsPanel(playerCoordinator: playerCoordinator) {
+                            TVPlayerStatisticsPanel(
+                                playerCoordinator: playerCoordinator,
+                                qualityTitle: roomInfoViewModel.currentPlayQualityString,
+                                streamURL: roomInfoViewModel.currentPlayURL
+                            ) {
                                 hideStatisticsPanel()
                             }
                             .frame(width: min(geometry.size.width * 0.4, 640), height: geometry.size.height - 80)
