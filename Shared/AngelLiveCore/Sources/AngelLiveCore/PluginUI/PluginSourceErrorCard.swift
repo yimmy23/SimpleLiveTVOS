@@ -44,6 +44,9 @@ public struct PluginSourceErrorCard: View {
     }
 
     private var headerSection: some View {
+        #if os(tvOS)
+        headerContent
+        #else
         ViewThatFits(in: .horizontal) {
             HStack(alignment: .top, spacing: headerSpacing) {
                 headerContent
@@ -56,6 +59,7 @@ public struct PluginSourceErrorCard: View {
                 copyButton
             }
         }
+        #endif
     }
 
     private var headerContent: some View {
@@ -153,6 +157,8 @@ public struct PluginSourceErrorCard: View {
     private var cardBackground: Color {
         #if os(macOS)
         Color(nsColor: .controlBackgroundColor)
+        #elseif os(tvOS)
+        Color.primary.opacity(0.08)
         #else
         Color(uiColor: .secondarySystemBackground)
         #endif
@@ -220,6 +226,8 @@ public struct PluginSourceErrorCard: View {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(value, forType: .string)
+        #elseif os(tvOS)
+        _ = value
         #else
         UIPasteboard.general.string = value
         #endif

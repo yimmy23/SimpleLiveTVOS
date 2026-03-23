@@ -15,6 +15,8 @@ public struct LiveParseRemotePluginItem: Codable, Equatable, Sendable {
     public let platform: String?
     /// Optional localized display name for UI metadata.
     public let platformName: String?
+    /// Optional localized platform description for UI metadata.
+    public let platformDescription: String?
     /// Optional icon URL/path for UI metadata.
     public let icon: String?
     /// Optional iOS asset/icon identifier.
@@ -45,6 +47,7 @@ public struct LiveParseRemotePluginItem: Codable, Equatable, Sendable {
         changelog: [String]? = nil,
         platform: String? = nil,
         platformName: String? = nil,
+        platformDescription: String? = nil,
         icon: String? = nil,
         iosIcon: String? = nil,
         macosIcon: String? = nil,
@@ -64,6 +67,7 @@ public struct LiveParseRemotePluginItem: Codable, Equatable, Sendable {
         self.changelog = changelog
         self.platform = platform
         self.platformName = platformName
+        self.platformDescription = platformDescription
         self.icon = icon
         self.iosIcon = iosIcon
         self.macosIcon = macosIcon
@@ -109,6 +113,7 @@ public struct LiveParseRemotePluginItem: Codable, Equatable, Sendable {
         case changelog
         case platform
         case platformName
+        case platformDescription
         case icon
         case iosIcon
         case macosIcon
@@ -131,6 +136,7 @@ public struct LiveParseRemotePluginItem: Codable, Equatable, Sendable {
         changelog = try container.decodeIfPresent([String].self, forKey: .changelog)
         platform = try container.decodeIfPresent(String.self, forKey: .platform)
         platformName = try container.decodeIfPresent(String.self, forKey: .platformName)
+        platformDescription = try container.decodeIfPresent(String.self, forKey: .platformDescription)
         icon = try container.decodeIfPresent(String.self, forKey: .icon)
         iosIcon = try container.decodeIfPresent(String.self, forKey: .iosIcon)
         macosIcon = try container.decodeIfPresent(String.self, forKey: .macosIcon)

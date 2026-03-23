@@ -18,6 +18,14 @@ class PlatformViewModel {
 
     init() {}
 
+    private func normalizedDescription(_ description: String?, liveType: LiveType) -> String {
+        let normalized = description?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !normalized.isEmpty {
+            return normalized
+        }
+        return LiveParseTools.getLivePlatformDescription(liveType)
+    }
+
     func refreshPlatforms(installedPluginIds: [String]) {
         let platformBaseByType = Dictionary(
             uniqueKeysWithValues: LiveParseTools.getAllSupportPlatform().map { ($0.liveType, $0) }
@@ -27,7 +35,10 @@ class PlatformViewModel {
         platformInfo = installedPlatforms.map { platform in
             let fallbackTitle = LiveParseTools.getLivePlatformName(platform.liveType)
             let title = platformBaseByType[platform.liveType]?.livePlatformName ?? fallbackTitle
-            let description = platformBaseByType[platform.liveType]?.description ?? "由沙盒插件提供"
+            let description = normalizedDescription(
+                platformBaseByType[platform.liveType]?.description,
+                liveType: platform.liveType
+            )
 
             return Platformdescription(
                 title: title,

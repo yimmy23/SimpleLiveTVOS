@@ -43,7 +43,16 @@ public final class LiveParseTools {
         LiveType.soop.rawValue: "韩国直播平台(原AfreecaTV)"
     ]
 
+    private static func normalizedText(_ value: String?) -> String? {
+        let normalized = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return normalized.isEmpty ? nil : normalized
+    }
+
     public class func getLivePlatformName(_ liveType: LiveType) -> String {
+        if let platform = LiveParseJSPlatformManager.platform(for: liveType),
+           let name = normalizedText(platform.platformName) {
+            return name
+        }
         if let name = builtInNames[liveType.rawValue] {
             return name
         }
@@ -53,6 +62,17 @@ public final class LiveParseTools {
         return "平台\(liveType.rawValue)"
     }
 
+    public class func getLivePlatformDescription(_ liveType: LiveType) -> String {
+        if let platform = LiveParseJSPlatformManager.platform(for: liveType),
+           let description = normalizedText(platform.platformDescription) {
+            return description
+        }
+        if let description = builtInDescriptions[liveType.rawValue] {
+            return description
+        }
+        return "由沙盒插件提供"
+    }
+
     public class func getAllSupportPlatform() -> [LiveParsePlatformInfo] {
         return LiveParseJSPlatformManager.availablePlatforms.map { platform in
             let liveType = platform.liveType
@@ -60,7 +80,7 @@ public final class LiveParseTools {
                 pluginId: platform.pluginId,
                 liveType: liveType,
                 livePlatformName: getLivePlatformName(liveType),
-                description: builtInDescriptions[liveType.rawValue] ?? ""
+                description: getLivePlatformDescription(liveType)
             )
         }
     }

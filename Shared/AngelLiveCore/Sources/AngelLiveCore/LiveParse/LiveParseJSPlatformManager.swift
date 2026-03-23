@@ -4,11 +4,18 @@ public struct LiveParseJSPlatform: Hashable, Codable, Sendable {
     public let pluginId: String
     public let liveTypes: [LiveType]
     public let platformName: String?
+    public let platformDescription: String?
 
-    public init(pluginId: String, liveTypes: [LiveType], platformName: String? = nil) {
+    public init(
+        pluginId: String,
+        liveTypes: [LiveType],
+        platformName: String? = nil,
+        platformDescription: String? = nil
+    ) {
         self.pluginId = pluginId
         self.liveTypes = liveTypes
         self.platformName = platformName
+        self.platformDescription = platformDescription
     }
 
     /// 兼容旧调用：取首个 liveType 作为主类型。
@@ -28,6 +35,7 @@ public struct LiveParseJSPlatformInfo: Codable, Sendable {
     public let liveType: LiveType
     public let liveTypes: [LiveType]
     public let displayName: String
+    public let platformDescription: String?
 }
 
 public enum LiveParseJSPlatformManager {
@@ -55,7 +63,8 @@ public enum LiveParseJSPlatformManager {
                 pluginId: $0.pluginId,
                 liveType: $0.liveType,
                 liveTypes: $0.liveTypes,
-                displayName: $0.displayName
+                displayName: $0.displayName,
+                platformDescription: $0.platformDescription
             )
         }
     }
@@ -397,7 +406,8 @@ public enum LiveParseJSPlatformManager {
         let platform = LiveParseJSPlatform(
             pluginId: manifest.pluginId,
             liveTypes: liveTypes,
-            platformName: manifest.displayName
+            platformName: manifest.displayName,
+            platformDescription: manifest.platformDescription
         )
         return ManifestCandidate(platform: platform, version: manifest.version, sourcePriority: sourcePriority)
     }
