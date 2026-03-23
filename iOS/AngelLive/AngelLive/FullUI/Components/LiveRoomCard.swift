@@ -12,6 +12,7 @@ import AngelLiveDependencies
 struct LiveRoomCard: View {
     let room: LiveModel
     let skipLiveCheck: Bool
+    let showsCoverBadge: Bool
     /// 可选的删除回调（用于历史记录）
     var onDelete: (() -> Void)? = nil
     /// 本地导航状态 - 仅在没有外部导航状态时使用
@@ -65,9 +66,10 @@ struct LiveRoomCard: View {
         return url
     }
 
-    init(room: LiveModel, width: CGFloat? = nil, skipLiveCheck: Bool = false) {
+    init(room: LiveModel, width: CGFloat? = nil, skipLiveCheck: Bool = false, showsCoverBadge: Bool = false) {
         self.room = room
         self.skipLiveCheck = skipLiveCheck
+        self.showsCoverBadge = showsCoverBadge
     }
 
     // 判断是否已收藏
@@ -84,6 +86,26 @@ struct LiveRoomCard: View {
     private var isLive: Bool {
         guard let liveState = room.liveState else { return true }
         return LiveState(rawValue: liveState) == .live
+    }
+
+    private var badgeLiveState: LiveState {
+        guard let liveState = room.liveState, let state = LiveState(rawValue: liveState) else {
+            return .live
+        }
+        return state
+    }
+
+    private var liveStatusText: String {
+        switch badgeLiveState {
+        case .live:
+            return "直播中"
+        case .close:
+            return "已下播"
+        case .video:
+            return "回放中"
+        case .unknow:
+            return "待确认"
+        }
     }
 
     var body: some View {
@@ -132,6 +154,12 @@ struct LiveRoomCard: View {
         VStack {
             // 封面图（带可靠的兜底占位）
             coverView
+                .overlay(alignment: .topTrailing) {
+                    if showsCoverBadge {
+                        coverInfoBadge
+                            .padding(6)
+                    }
+                }
                 .clipShape(RoundedRectangle(cornerRadius: AppConstants.CornerRadius.lg))
                 .modifier(MatchedTransitionSourceModifier(id: room.roomId, namespace: namespace))
 
@@ -165,6 +193,44 @@ struct LiveRoomCard: View {
 
     // MARK: - 子视图
 
+    private var coverInfoBadge: some View {
+        HStack(spacing: 6) {
+            platformBadgeIcon
+
+            Text(liveStatusText)
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 7)
+        .padding(.vertical, 4)
+        .background(
+            Capsule(style: .continuous)
+                .fill(Color.black.opacity(0.58))
+        )
+        .overlay(
+            Capsule(style: .continuous)
+                .stroke(Color.white.opacity(0.10), lineWidth: 0.5)
+        )
+        .shadow(color: .black.opacity(0.14), radius: 6, x: 0, y: 2)
+    }
+
+    @ViewBuilder
+    private var platformBadgeIcon: some View {
+        if let image = PlatformIconProvider.tabImage(for: room.liveType) {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 12, height: 12)
+                .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
+        } else {
+            Image(systemName: "dot.radiowaves.left.and.right")
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(.white.opacity(0.92))
+                .frame(width: 12, height: 12)
+        }
+    }
+
     /// 封面图容器：有 URL 时双层 KFImage（模糊背景 + 清晰前景，不变形），失败或无 URL 时用本地占位
     private var coverView: some View {
         Group {
@@ -196,9 +262,12 @@ struct LiveRoomCard: View {
     private var avatarView: some View {
         Group {
             if let url = avatarURL {
-                KFImage(url)
+                KFAnimatedImage(url)
+                    .configure { view in
+                        view.framePreloadCount = 2
+                    }
                     .placeholder { avatarPlaceholder }
-                    .resizable()
+                    .aspectRatio(contentMode: .fill)
             } else {
                 avatarPlaceholder
             }

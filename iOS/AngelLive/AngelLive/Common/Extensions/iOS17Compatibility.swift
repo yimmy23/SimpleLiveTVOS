@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 /// iOS 版本兼容的 zoom 过渡修饰符
 struct ZoomTransitionModifier: ViewModifier {
@@ -43,5 +44,71 @@ struct WelcomePresentationModifier: ViewModifier {
         } else {
             content
         }
+    }
+}
+
+private struct InteractivePopGestureConfigurator: UIViewControllerRepresentable {
+    let isEnabled: Bool
+
+    func makeUIViewController(context: Context) -> Controller {
+        Controller()
+    }
+
+    func updateUIViewController(_ uiViewController: Controller, context: Context) {
+        uiViewController.isGestureEnabled = isEnabled
+        uiViewController.applyInteractivePopConfiguration()
+    }
+
+    final class Controller: UIViewController {
+        var isGestureEnabled = false
+        private weak var trackedGestureRecognizer: UIGestureRecognizer?
+        private weak var originalDelegate: UIGestureRecognizerDelegate?
+        private var originalIsEnabled = true
+
+        override func viewDidAppear(_ animated: Bool) {
+            super.viewDidAppear(animated)
+            applyInteractivePopConfiguration()
+        }
+
+        override func viewWillDisappear(_ animated: Bool) {
+            super.viewWillDisappear(animated)
+            restoreInteractivePopConfiguration()
+        }
+
+        func applyInteractivePopConfiguration() {
+            guard let gestureRecognizer = navigationController?.interactivePopGestureRecognizer else {
+                return
+            }
+
+            if trackedGestureRecognizer !== gestureRecognizer {
+                trackedGestureRecognizer = gestureRecognizer
+                originalDelegate = gestureRecognizer.delegate
+                originalIsEnabled = gestureRecognizer.isEnabled
+            }
+
+            if isGestureEnabled {
+                gestureRecognizer.delegate = nil
+                gestureRecognizer.isEnabled = true
+            } else {
+                restoreInteractivePopConfiguration()
+            }
+        }
+
+        private func restoreInteractivePopConfiguration() {
+            guard let gestureRecognizer = trackedGestureRecognizer else {
+                return
+            }
+            gestureRecognizer.delegate = originalDelegate
+            gestureRecognizer.isEnabled = originalIsEnabled
+        }
+    }
+}
+
+extension View {
+    func interactivePopGestureEnabled(_ isEnabled: Bool) -> some View {
+        background(
+            InteractivePopGestureConfigurator(isEnabled: isEnabled)
+                .frame(width: 0, height: 0)
+        )
     }
 }

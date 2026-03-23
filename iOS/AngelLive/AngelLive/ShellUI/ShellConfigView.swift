@@ -126,35 +126,48 @@ struct SubscriptionContentSheet: View {
     let pluginAvailability: PluginAvailabilityService
     @Environment(\.dismiss) private var dismiss
 
+    private var shouldShowEmptyState: Bool {
+        !pluginSourceManager.isFetchingIndex
+            && pluginSourceManager.errorMessage == nil
+            && pluginSourceManager.remotePlugins.isEmpty
+    }
+
     var body: some View {
         NavigationStack {
-            List {
-                if let error = pluginSourceManager.errorMessage {
-                    Section {
-                        PluginSourceErrorCard(title: "插件源异常", message: error)
-                    }
-                }
-
-                if pluginSourceManager.isFetchingIndex {
-                    Section {
-                        HStack(spacing: AppConstants.Spacing.sm) {
-                            ProgressView()
-                            Text("正在加载订阅...")
-                                .foregroundStyle(AppConstants.Colors.secondaryText)
-                        }
-                        .padding(.vertical, AppConstants.Spacing.xs)
-                    }
-                } else if pluginSourceManager.remotePlugins.isEmpty {
-                    ContentUnavailableView {
-                        Label("暂无可用内容", systemImage: "tray")
-                    }
+            Group {
+                if shouldShowEmptyState {
+                    ErrorView.empty(
+                        title: "暂无可用内容",
+                        message: "暂时没有可安装的订阅内容，稍后刷新再试。",
+                        symbolName: "tray.circle",
+                        tint: .cyan
+                    )
                 } else {
-                    ForEach(pluginSourceManager.remotePlugins) { item in
-                        contentRow(item)
+                    List {
+                        if let error = pluginSourceManager.errorMessage {
+                            Section {
+                                PluginSourceErrorCard(title: "插件源异常", message: error)
+                            }
+                        }
+
+                        if pluginSourceManager.isFetchingIndex {
+                            Section {
+                                HStack(spacing: AppConstants.Spacing.sm) {
+                                    ProgressView()
+                                    Text("正在加载订阅...")
+                                        .foregroundStyle(AppConstants.Colors.secondaryText)
+                                }
+                                .padding(.vertical, AppConstants.Spacing.xs)
+                            }
+                        } else {
+                            ForEach(pluginSourceManager.remotePlugins) { item in
+                                contentRow(item)
+                            }
+                        }
                     }
+                    .listStyle(.insetGrouped)
                 }
             }
-            .listStyle(.insetGrouped)
             .navigationTitle("订阅内容")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

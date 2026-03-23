@@ -8,8 +8,14 @@
 import SwiftUI
 import AngelLiveCore
 
+enum ErrorViewPresentationStyle {
+    case error
+    case empty(symbolName: String, tint: Color)
+}
+
 /// 全局错误提示视图
 struct ErrorView: View {
+    let style: ErrorViewPresentationStyle
     let title: String
     let message: String
     let errorCode: String?
@@ -24,7 +30,6 @@ struct ErrorView: View {
     let onRetry: (() -> Void)?
     let onLogin: (() -> Void)?
 
-    @Environment(\.colorScheme) private var colorScheme
     @State private var showingDetailSheet = false
     @State private var showingCookieDebugView = false
     @StateObject private var syncService = BilibiliCookieSyncService.shared
@@ -39,6 +44,7 @@ struct ErrorView: View {
     }
 
     init(
+        style: ErrorViewPresentationStyle = .error,
         title: String = "加载失败",
         message: String,
         errorCode: String? = nil,
@@ -53,6 +59,7 @@ struct ErrorView: View {
         onRetry: (() -> Void)? = nil,
         onLogin: (() -> Void)? = nil
     ) {
+        self.style = style
         self.title = title
         self.message = message
         self.errorCode = errorCode
@@ -217,10 +224,10 @@ private extension ErrorView {
     var portraitLayout: some View {
         ScrollView {
             VStack(spacing: 20) {
-                Spacer(minLength: 60)
+                Spacer(minLength: isEmptyStyle ? 90 : 60)
 
                 iconView
-                    .padding(.bottom, 20)
+                    .padding(.bottom, isEmptyStyle ? 10 : 16)
 
                 infoBlock(alignment: .center)
                     .padding(.horizontal)
@@ -228,11 +235,13 @@ private extension ErrorView {
                 qrBlock
                     .padding(.top, 20)
 
-                Spacer(minLength: 20)
+                if hasVisibleActions {
+                    Spacer(minLength: 20)
 
-                actionButtons
-                    .padding(.top, 30)
-                    .padding(.horizontal, 20)
+                    actionButtons
+                        .padding(.top, 30)
+                        .padding(.horizontal, 20)
+                }
             }
             .padding(.vertical)
         }
@@ -245,8 +254,10 @@ private extension ErrorView {
 
                 infoBlock(alignment: .leading)
 
-                actionButtons
-                    .padding(.top, 10)
+                if hasVisibleActions {
+                    actionButtons
+                        .padding(.top, 10)
+                }
 
                 if showDetailButton, detailMessage != nil, !(detailMessage ?? "").isEmpty {
                     detailInlineBlock
@@ -262,33 +273,39 @@ private extension ErrorView {
     }
 
     var iconView: some View {
-        Image(systemName: "exclamationmark.triangle.fill")
-            .font(.system(size: 64))
-            .foregroundStyle(
-                LinearGradient(
-                    colors: [.red, .orange],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
+        switch style {
+        case .error:
+            iconSymbol(
+                symbolName: "exclamationmark.triangle.fill",
+                tint: Color(uiColor: .systemOrange),
+                size: 42,
+                shadowOpacity: 0.16
             )
-            .shadow(color: .red.opacity(0.3), radius: 10, y: 5)
+        case .empty(let symbolName, let tint):
+            iconSymbol(
+                symbolName: symbolName,
+                tint: tint.opacity(0.9),
+                size: 38,
+                shadowOpacity: 0.08
+            )
+        }
     }
 
     func infoBlock(alignment: HorizontalAlignment) -> some View {
         VStack(alignment: alignment, spacing: 12) {
             Text(title)
-                .font(.largeTitle.weight(.bold))
+                .font(.title3.weight(.semibold))
                 .foregroundStyle(.primary)
                 .multilineTextAlignment(alignment == .leading ? .leading : .center)
-                .frame(maxWidth: .infinity, alignment: alignment == .leading ? .leading : .center)
+                .frame(maxWidth: alignment == .leading ? 460 : 320, alignment: alignment == .leading ? .leading : .center)
 
             Text(message)
-                .font(.headline.weight(.regular))
-                .foregroundStyle(.secondary)
+                .font(.subheadline)
+                .foregroundStyle(AppConstants.Colors.secondaryText)
                 .multilineTextAlignment(alignment == .leading ? .leading : .center)
-                .lineSpacing(5)
-                .frame(maxWidth: .infinity, alignment: alignment == .leading ? .leading : .center)
-                .padding(.horizontal, alignment == .leading ? 0 : 16)
+                .lineSpacing(3)
+                .frame(maxWidth: alignment == .leading ? 460 : 340, alignment: alignment == .leading ? .leading : .center)
+                .padding(.horizontal, alignment == .leading ? 0 : 4)
 
             if let errorCode = errorCode, !errorCode.isEmpty {
                 Text("错误代码: \(errorCode)")
@@ -312,6 +329,30 @@ private extension ErrorView {
                     .padding(.horizontal, alignment == .leading ? 0 : 30)
             }
         }
+    }
+
+    @ViewBuilder
+    private func iconSymbol(symbolName: String, tint: Color, size: CGFloat, shadowOpacity: Double) -> some View {
+        Image(systemName: symbolName)
+            .font(.system(size: size, weight: .semibold))
+            .symbolRenderingMode(.hierarchical)
+            .foregroundStyle(tint)
+            .shadow(color: tint.opacity(shadowOpacity), radius: 10, x: 0, y: 4)
+            .frame(minWidth: size + 4, minHeight: size + 4)
+    }
+
+    var isEmptyStyle: Bool {
+        if case .empty = style {
+            return true
+        }
+        return false
+    }
+
+    var hasVisibleActions: Bool {
+        (showDismiss && onDismiss != nil)
+            || showLoginButton
+            || (showRetry && onRetry != nil)
+            || (showDetailButton && detailMessage?.isEmpty == false)
     }
 
     var qrBlock: some View {
@@ -530,6 +571,23 @@ extension ErrorView {
             detailMessage: "请检查网络连接后重试",
             showRetry: true,
             onRetry: onRetry
+        )
+    }
+
+    static func empty(
+        title: String,
+        message: String,
+        symbolName: String,
+        tint: Color = AppConstants.Colors.accent
+    ) -> ErrorView {
+        ErrorView(
+            style: .empty(symbolName: symbolName, tint: tint),
+            title: title,
+            message: message,
+            showDismiss: false,
+            showRetry: false,
+            showLoginButton: false,
+            showDetailButton: false
         )
     }
 }

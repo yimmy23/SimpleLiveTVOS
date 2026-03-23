@@ -292,58 +292,38 @@ class FavoriteListViewController: UIViewController {
 
     private func showErrorView(message: String) {
         let errorView = AnyView(
-            VStack(spacing: 20) {
-                Image(systemName: "exclamationmark.icloud")
-                    .font(.system(size: 60))
-                    .foregroundStyle(.red.opacity(0.7))
-
-                Text(message)
-                    .font(.title3)
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            ErrorView(
+                title: "获取收藏失败",
+                message: message,
+                showRetry: true,
+                onRetry: { [weak self] in
+                    self?.handleRefresh()
+                }
+            )
         )
         showStateView(errorView, storeIn: &errorHostingController)
     }
 
     private func showEmptyView() {
         let emptyView = AnyView(
-            VStack(spacing: 20) {
-                Image(systemName: "star.slash")
-                    .font(.system(size: 60))
-                    .foregroundStyle(.gray.opacity(0.5))
-
-                Text("暂无收藏")
-                    .font(.title2)
-                    .foregroundStyle(.secondary)
-
-                Text("在其他页面添加您喜欢的直播间")
-                    .font(.subheadline)
-                    .foregroundStyle(.tertiary)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            ErrorView.empty(
+                title: "暂无收藏",
+                message: "在其他页面添加喜欢的直播间后，会显示在这里。",
+                symbolName: "star.square.on.square",
+                tint: .pink
+            )
         )
         showStateView(emptyView, storeIn: &emptyHostingController)
     }
 
     private func showSearchEmptyView() {
         let emptyView = AnyView(
-            VStack(spacing: 20) {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 60))
-                    .foregroundStyle(.gray.opacity(0.5))
-
-                Text("未找到相关主播")
-                    .font(.title2)
-                    .foregroundStyle(.secondary)
-
-                Text("请尝试其他关键词")
-                    .font(.subheadline)
-                    .foregroundStyle(.tertiary)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            ErrorView.empty(
+                title: "未找到相关主播",
+                message: "换个关键词试试，或者直接搜索房间号和分享链接。",
+                symbolName: "person.crop.circle.badge.questionmark",
+                tint: .blue
+            )
         )
         showStateView(emptyView, storeIn: &emptyHostingController)
     }
@@ -409,7 +389,7 @@ extension FavoriteListViewController: UICollectionViewDataSource {
             return cell
         }
         let room = rooms[indexPath.item]
-        cell.configure(with: room, navigationState: navigationState, namespace: namespace)
+        cell.configure(with: room, navigationState: navigationState, namespace: namespace, showsCoverBadge: true)
 
         return cell
     }

@@ -76,12 +76,15 @@ struct StreamerInfoView: View {
                 Button {
                     showStreamerInfo = true
                 } label: {
-                    KFImage(URL(string: viewModel.currentRoom.userHeadImg))
+                    KFAnimatedImage(URL(string: viewModel.currentRoom.userHeadImg))
+                        .configure { view in
+                            view.framePreloadCount = 2
+                        }
                         .placeholder {
                             Circle()
                                 .fill(Color.gray.opacity(0.3))
                         }
-                        .resizable()
+                        .aspectRatio(contentMode: .fill)
                         .frame(width: 48, height: 48)
                         .clipShape(Circle())
                         .overlay(

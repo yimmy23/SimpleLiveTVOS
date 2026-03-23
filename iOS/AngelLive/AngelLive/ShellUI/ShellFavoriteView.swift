@@ -37,11 +37,12 @@ struct ShellFavoriteView: View {
     // MARK: - 空状态
 
     private var emptyView: some View {
-        ContentUnavailableView {
-            Label("暂无收藏", systemImage: "bookmark")
-        } description: {
-            Text("在「配置」页添加网络视频链接后，将在此处显示")
-        }
+        ErrorView.empty(
+            title: "暂无收藏",
+            message: "在“配置”页添加网络视频链接后，会显示在这里。",
+            symbolName: "bookmark.circle",
+            tint: .mint
+        )
     }
 
     // MARK: - 列表

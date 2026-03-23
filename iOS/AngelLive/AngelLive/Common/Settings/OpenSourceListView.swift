@@ -46,16 +46,12 @@ struct OpenSourceListView: View {
             } else if let list = acknowList {
                 AcknowListSwiftUIView(acknowList: list)
             } else {
-                VStack(spacing: AppConstants.Spacing.lg) {
-                    Image(systemName: "doc.text.fill")
-                        .font(.system(size: 50))
-                        .foregroundStyle(AppConstants.Colors.secondaryText.opacity(0.5))
-
-                    Text("暂无开源许可信息")
-                        .font(.headline)
-                        .foregroundStyle(AppConstants.Colors.primaryText)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                ErrorView.empty(
+                    title: "暂无开源许可信息",
+                    message: "当前没有可展示的依赖许可内容，请稍后再试。",
+                    symbolName: "doc.text.magnifyingglass",
+                    tint: .teal
+                )
             }
         }
         .navigationTitle("开源许可")

@@ -10,6 +10,10 @@ import Foundation
 public extension Error {
     /// 从错误中提取用户友好的错误消息（带详细位置信息）
     var liveParseMessage: String {
+        if isBilibiliAuthRequired {
+            return "当前内容需要登录 B站 账号后才能访问，请前往设置页登录后重试。"
+        }
+
         if let liveParseError = self as? LiveParseError {
             let detail = liveParseError.detail
 
@@ -22,6 +26,18 @@ public extension Error {
             // 如果没有详细信息，返回标题
             return liveParseError.title
         }
+
+        if let pluginError = self as? LiveParsePluginError {
+            switch pluginError {
+            case .standardized(let error):
+                return error.message.isEmpty ? pluginError.localizedDescription : error.message
+            case .jsException(let message):
+                return message
+            default:
+                return pluginError.localizedDescription
+            }
+        }
+
         return localizedDescription
     }
 
@@ -31,6 +47,12 @@ public extension Error {
             let detail = liveParseError.detail
             return detail.isEmpty ? nil : detail
         }
+
+        if let pluginError = self as? LiveParsePluginError {
+            let detail = pluginError.localizedDescription
+            return detail.isEmpty ? nil : detail
+        }
+
         return nil
     }
 
@@ -44,11 +66,41 @@ public extension Error {
 
     /// 检查是否是 Bilibili -352 风控错误（需要登录）
     var isBilibiliAuthRequired: Bool {
-        if let liveParseError = self as? LiveParseError {
-            let detail = liveParseError.detail
-            // 检查是否包含 "错误代码: -352" 或 "错误代码: 352"
-            return detail.contains("错误代码: -352") || detail.contains("错误代码: 352")
+        if let pluginError = self as? LiveParsePluginError {
+            switch pluginError {
+            case .standardized(let error):
+                if error.code == .authRequired {
+                    return true
+                }
+            default:
+                break
+            }
         }
-        return false
+
+        let searchableText: String
+        if let liveParseError = self as? LiveParseError {
+            searchableText = [
+                liveParseError.title,
+                liveParseError.detail,
+                localizedDescription
+            ]
+            .joined(separator: "\n")
+        } else {
+            searchableText = localizedDescription
+        }
+
+        let authRequiredPatterns = [
+            #"错误代码:\s*-?352"#,
+            #"code\s*=\s*\"?-?352\"?"#,
+            #"\"code\"\s*:\s*\"?-?352\"?"#,
+            #"AUTH_REQUIRED"#
+        ]
+
+        return authRequiredPatterns.contains { pattern in
+            searchableText.range(
+                of: pattern,
+                options: [.regularExpression, .caseInsensitive]
+            ) != nil
+        }
     }
 }

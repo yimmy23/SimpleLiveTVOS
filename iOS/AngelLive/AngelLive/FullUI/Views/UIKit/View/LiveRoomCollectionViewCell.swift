@@ -29,13 +29,13 @@ class LiveRoomCollectionViewCell: UICollectionViewCell {
         backgroundColor = .clear
     }
 
-    func configure(with room: LiveModel) {
+    func configure(with room: LiveModel, showsCoverBadge: Bool = false) {
         // 移除旧的 hosting controller
         hostingController?.view.removeFromSuperview()
         hostingController?.removeFromParent()
 
         // 创建新的 SwiftUI 视图
-        let roomCard = LiveRoomCard(room: room, skipLiveCheck: true)
+        let roomCard = LiveRoomCard(room: room, skipLiveCheck: true, showsCoverBadge: showsCoverBadge)
         let hosting = UIHostingController(rootView: AnyView(roomCard))
         hosting.view.backgroundColor = .clear
         hosting.view.translatesAutoresizingMaskIntoConstraints = false
@@ -53,13 +53,13 @@ class LiveRoomCollectionViewCell: UICollectionViewCell {
     }
 
     /// 配置 cell（带外部导航状态和命名空间，用于解决 PiP 导航状态丢失问题）
-    func configure(with room: LiveModel, navigationState: LiveRoomNavigationState, namespace: Namespace.ID, onDelete: (() -> Void)? = nil) {
+    func configure(with room: LiveModel, navigationState: LiveRoomNavigationState, namespace: Namespace.ID, onDelete: (() -> Void)? = nil, showsCoverBadge: Bool = false) {
         // 移除旧的 hosting controller
         hostingController?.view.removeFromSuperview()
         hostingController?.removeFromParent()
 
         // 创建新的 SwiftUI 视图，注入外部导航状态和命名空间
-        var roomCard = LiveRoomCard(room: room, skipLiveCheck: true)
+        var roomCard = LiveRoomCard(room: room, skipLiveCheck: true, showsCoverBadge: showsCoverBadge)
         roomCard.onDelete = onDelete
         let cardView = roomCard
             .environment(\.liveRoomNavigationState, navigationState)

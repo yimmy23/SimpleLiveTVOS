@@ -57,8 +57,10 @@ struct StreamerInfoSheet: View {
         VStack(spacing: 12) {
             // 主播头像
             if let avatarURL = URL(string: room.userHeadImg), !room.userHeadImg.isEmpty {
-                KFImage(avatarURL)
-                    .resizable()
+                KFAnimatedImage(avatarURL)
+                    .configure { view in
+                        view.framePreloadCount = 2
+                    }
                     .placeholder {
                         Circle()
                             .fill(.quaternary)
@@ -68,7 +70,7 @@ struct StreamerInfoSheet: View {
                                     .foregroundStyle(.tertiary)
                             }
                     }
-                    .scaledToFill()
+                    .aspectRatio(contentMode: .fill)
                     .frame(width: 80, height: 80)
                     .clipShape(Circle())
                     .overlay {

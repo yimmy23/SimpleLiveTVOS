@@ -40,6 +40,39 @@ struct DetailPlayerView: View {
     /// 触发跳到底部的请求
     @State private var scrollToBottomRequest: Bool = false
 
+    private var currentPlaybackError: Error? {
+        viewModel.playError
+    }
+
+    private var playbackErrorTitle: String {
+        if currentPlaybackError?.isBilibiliAuthRequired == true {
+            return "播放失败-请登录B站账号并检查官方页面"
+        }
+        return "播放失败"
+    }
+
+    private var playbackErrorMessage: String {
+        if let error = currentPlaybackError {
+            return error.liveParseMessage
+        }
+        return viewModel.playErrorMessage ?? "播放失败"
+    }
+
+    private var shouldShowBilibiliLoginPrompt: Bool {
+        currentPlaybackError?.isBilibiliAuthRequired == true
+    }
+
+    private var shouldHideSystemBackButton: Bool {
+        true
+    }
+
+    private var shouldEnableInteractivePopGesture: Bool {
+        if #available(iOS 18.0, *) {
+            return false
+        }
+        return !isIPhoneLandscape
+    }
+
     // MARK: - Body
 
     var body: some View {
@@ -121,19 +154,28 @@ struct DetailPlayerView: View {
                 }
                 // 错误视图 - 当播放出错时显示
                 else if viewModel.playError != nil || viewModel.playErrorMessage != nil {
-                    ErrorView.playback(
-                        message: viewModel.playErrorMessage ?? "播放失败",
+                    ErrorView(
+                        title: playbackErrorTitle,
+                        message: playbackErrorMessage,
                         errorCode: nil,
-                        detailMessage: viewModel.playError?.liveParseDetail,
-                        curlCommand: viewModel.playError?.liveParseCurl,
+                        detailMessage: currentPlaybackError?.liveParseDetail,
+                        curlCommand: currentPlaybackError?.liveParseCurl,
+                        showDismiss: true,
+                        showRetry: true,
+                        showLoginButton: shouldShowBilibiliLoginPrompt,
+                        showDetailButton: currentPlaybackError?.liveParseDetail?.isEmpty == false,
                         onDismiss: {
                             dismiss()
                         },
                         onRetry: {
                             Task {
-                                await viewModel.loadPlayURL()
+                                await viewModel.loadPlayURL(force: true)
                             }
-                        }
+                        },
+                        onLogin: shouldShowBilibiliLoginPrompt ? {
+                            dismiss()
+                            NotificationCenter.default.post(name: .switchToSettings, object: nil)
+                        } : nil
                     )
                     .zIndex(100)
                 } else {
@@ -196,7 +238,8 @@ struct DetailPlayerView: View {
             }
         }
         .environment(\.isIPadFullscreen, $isIPadFullscreen)
-        .navigationBarBackButtonHidden(true)
+        .navigationBarBackButtonHidden(shouldHideSystemBackButton)
+        .interactivePopGestureEnabled(shouldEnableInteractivePopGesture)
         .interactiveDismissDisabled(isIPhoneLandscape)
         .onChange(of: scenePhase) { _, newPhase in
             Logger.debug("[PlayerFlow] Detail scenePhase -> \(newPhase), roomId=\(viewModel.currentRoom.roomId)", category: .player)

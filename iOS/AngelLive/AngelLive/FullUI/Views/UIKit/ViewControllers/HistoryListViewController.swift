@@ -166,20 +166,12 @@ class HistoryListViewController: UIViewController {
 
     private func showEmptyView() {
         let emptyView = AnyView(
-            VStack(spacing: AppConstants.Spacing.lg) {
-                Image(systemName: "clock.arrow.circlepath")
-                    .font(.system(size: 60))
-                    .foregroundStyle(AppConstants.Colors.secondaryText.opacity(0.5))
-
-                Text("暂无观看记录")
-                    .font(.title3)
-                    .foregroundStyle(AppConstants.Colors.primaryText)
-
-                Text("开始观看直播后会显示在这里")
-                    .font(.caption)
-                    .foregroundStyle(AppConstants.Colors.secondaryText)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            ErrorView.empty(
+                title: "暂无观看记录",
+                message: "开始观看直播后，最近打开的内容会显示在这里。",
+                symbolName: "clock.badge.questionmark",
+                tint: .orange
+            )
         )
 
         let hostingController = UIHostingController(rootView: emptyView)
@@ -218,11 +210,11 @@ extension HistoryListViewController: UICollectionViewDataSource {
         }
 
         let room = historyModel.watchList[indexPath.item]
-        cell.configure(with: room, navigationState: navigationState, namespace: namespace) { [weak self] in
+        cell.configure(with: room, navigationState: navigationState, namespace: namespace, onDelete: { [weak self] in
             // 删除历史记录回调
             self?.historyModel.removeHistory(room: room)
             self?.updateViewState()
-        }
+        }, showsCoverBadge: true)
 
         return cell
     }
