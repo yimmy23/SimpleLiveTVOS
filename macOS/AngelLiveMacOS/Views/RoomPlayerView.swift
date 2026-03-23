@@ -14,6 +14,7 @@ import AppKit
 
 struct RoomPlayerView: View {
     let room: LiveModel
+    @Environment(HistoryModel.self) private var historyModel
     @State private var viewModel: RoomInfoViewModel
     @StateObject private var coordinator = KSVideoPlayer.Coordinator()
     @State private var sleepActivity: NSObjectProtocol?
@@ -48,6 +49,7 @@ struct RoomPlayerView: View {
         .background(PlayerWindowReferenceView(window: $playerWindow))
         .onAppear {
             disableWindowBackgroundDrag()
+            historyModel.addHistory(room: viewModel.currentRoom)
         }
         .onKeyPress(.space) {
             if viewModel.isPlaying {

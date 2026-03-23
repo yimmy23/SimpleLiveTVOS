@@ -6,8 +6,57 @@
 //
 
 import SwiftUI
+import AppKit
+
+enum ErrorViewPresentationStyle {
+    case error
+    case empty(symbolName: String, tint: Color)
+
+    var symbolName: String {
+        switch self {
+        case .error:
+            return "exclamationmark.triangle.fill"
+        case .empty(let symbolName, _):
+            return symbolName
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .error:
+            return .orange
+        case .empty(_, let tint):
+            return tint
+        }
+    }
+
+    var symbolSize: CGFloat {
+        switch self {
+        case .error:
+            return 36
+        case .empty:
+            return 32
+        }
+    }
+
+    var shadowOpacity: Double {
+        switch self {
+        case .error:
+            return 0.16
+        case .empty:
+            return 0.08
+        }
+    }
+}
+
+enum ErrorViewLayout {
+    case fill
+    case compact(minHeight: CGFloat)
+}
 
 struct ErrorView: View {
+    let style: ErrorViewPresentationStyle
+    let layout: ErrorViewLayout
     let title: String
     let message: String
     let errorCode: String?
@@ -23,6 +72,8 @@ struct ErrorView: View {
     @State private var showCopiedAlert = false
 
     init(
+        style: ErrorViewPresentationStyle = .error,
+        layout: ErrorViewLayout = .fill,
         title: String = "加载失败",
         message: String,
         errorCode: String? = nil,
@@ -35,6 +86,8 @@ struct ErrorView: View {
         onRetry: (() -> Void)? = nil,
         onLogin: (() -> Void)? = nil
     ) {
+        self.style = style
+        self.layout = layout
         self.title = title
         self.message = message
         self.errorCode = errorCode
@@ -48,182 +101,235 @@ struct ErrorView: View {
         self.onLogin = onLogin
     }
 
+    private var hasVisibleActions: Bool {
+        (showDismiss && onDismiss != nil)
+            || (showRetry && onRetry != nil)
+            || (showLoginButton && onLogin != nil)
+    }
+
     var body: some View {
-        VStack(spacing: 24) {
-            Spacer()
-
-            // 错误图标
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 56))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [.red, .orange],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-
-            // 标题和消息
-            VStack(spacing: 8) {
-                Text(title)
-                    .font(.title.bold())
-
-                Text(message)
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-
-                if let errorCode = errorCode {
-                    Text("错误代码: \(errorCode)")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .background(Capsule().fill(.quaternary))
-                }
+        Group {
+            switch layout {
+            case .fill:
+                fillLayout
+            case .compact(let minHeight):
+                compactLayout(minHeight: minHeight)
             }
-
-            // CURL 命令（如果有）
-            if let curlCommand = curlCommand, !curlCommand.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text("CURL 调试命令")
-                            .font(.headline)
-                            .foregroundColor(.secondary)
-
-                        Spacer()
-
-                        Button(action: {
-                            NSPasteboard.general.clearContents()
-                            NSPasteboard.general.setString(curlCommand, forType: .string)
-                            showCopiedAlert = true
-                        }) {
-                            HStack(spacing: 4) {
-                                Image(systemName: "doc.on.doc")
-                                    .font(.system(size: 11, weight: .semibold))
-                                Text("复制")
-                                    .font(.system(size: 12, weight: .semibold))
-                            }
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 5)
-                            .background(
-                                Capsule()
-                                    .fill(Color.accentColor)
-                            )
-                        }
-                        .buttonStyle(.plain)
-                    }
-
-                    ScrollView {
-                        Text(curlCommand)
-                            .font(.system(.body, design: .monospaced))
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .frame(maxHeight: 120)
-
-                    Text("提示：复制此命令到终端执行可以复现请求")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                .padding()
-                .frame(maxWidth: 600)
-                .background(Color.gray.opacity(0.1))
-                .cornerRadius(12)
-            }
-
-            // 直接显示错误详情（macOS 屏幕大，直接展示）
-            if let detailMessage = detailMessage, !detailMessage.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("详细信息")
-                        .font(.headline)
-                        .foregroundColor(.secondary)
-
-                    ScrollView {
-                        Text(detailMessage)
-                            .font(.system(.body, design: .monospaced))
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .frame(maxHeight: 200)
-                }
-                .padding()
-                .frame(maxWidth: 600)
-                .background(Color.gray.opacity(0.1))
-                .cornerRadius(12)
-            }
-
-            // 按钮
-            HStack(spacing: 16) {
-                if showDismiss, let onDismiss = onDismiss {
-                    Button(action: onDismiss) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "arrow.left")
-                                .font(.system(size: 13, weight: .semibold))
-                            Text("返回")
-                                .font(.system(size: 14, weight: .semibold))
-                        }
-                        .foregroundStyle(.primary)
-                        .padding(.horizontal, 24)
-                        .padding(.vertical, 10)
-                        .background(Capsule().fill(Color.gray.opacity(0.15)))
-                    }
-                    .buttonStyle(.plain)
-                }
-
-                if showLoginButton, let onLogin = onLogin {
-                    Button(action: onLogin) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "person.crop.circle.badge.checkmark")
-                                .font(.system(size: 13, weight: .semibold))
-                            Text("去登录")
-                                .font(.system(size: 14, weight: .semibold))
-                        }
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 24)
-                        .padding(.vertical, 10)
-                        .background(Capsule().fill(Color.green))
-                    }
-                    .buttonStyle(.plain)
-                }
-
-                if showRetry, let onRetry = onRetry {
-                    Button(action: onRetry) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "arrow.clockwise")
-                                .font(.system(size: 13, weight: .semibold))
-                            Text("重试")
-                                .font(.system(size: 14, weight: .semibold))
-                        }
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 24)
-                        .padding(.vertical, 10)
-                        .background(Capsule().fill(Color.accentColor))
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.top, 8)
-
-            Spacer()
         }
-        .padding(40)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .alert("已复制", isPresented: $showCopiedAlert) {
             Button("好的", role: .cancel) {}
         } message: {
             Text("CURL 命令已复制到剪贴板")
         }
     }
+
+    private var fillLayout: some View {
+        VStack(spacing: 18) {
+            Spacer(minLength: 28)
+            contentStack
+            Spacer(minLength: 28)
+        }
+        .padding(.horizontal, 28)
+        .padding(.vertical, 20)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(AppConstants.Colors.primaryBackground)
+    }
+
+    private func compactLayout(minHeight: CGFloat) -> some View {
+        contentStack
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, minHeight: minHeight)
+    }
+
+    private var contentStack: some View {
+        VStack(spacing: 16) {
+            heroCard
+
+            if let curlCommand, !curlCommand.isEmpty {
+                curlBlock(curlCommand)
+            }
+
+            if let detailMessage, !detailMessage.isEmpty {
+                detailBlock(detailMessage)
+            }
+        }
+        .frame(maxWidth: 720)
+    }
+
+    private var heroCard: some View {
+        VStack(spacing: 18) {
+            VStack(spacing: 12) {
+                iconView
+
+                VStack(spacing: 10) {
+                    Text(title)
+                        .font(.title2.weight(.semibold))
+                        .multilineTextAlignment(.center)
+
+                    Text(message)
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: 470)
+                }
+
+                if let errorCode, !errorCode.isEmpty {
+                    Text("错误代码  \(errorCode)")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(
+                            Capsule(style: .continuous)
+                                .fill(.quaternary.opacity(0.9))
+                        )
+                }
+            }
+
+            if hasVisibleActions {
+                HStack(spacing: 10) {
+                    actionButtons
+                }
+                .padding(.top, 4)
+            }
+        }
+        .padding(.horizontal, 28)
+        .padding(.vertical, 26)
+        .frame(maxWidth: .infinity)
+    }
+
+    private var iconView: some View {
+        Image(systemName: style.symbolName)
+            .font(.system(size: style.symbolSize, weight: .semibold))
+            .symbolRenderingMode(.hierarchical)
+            .foregroundStyle(style.tint)
+            .shadow(color: style.tint.opacity(style.shadowOpacity), radius: 10, x: 0, y: 4)
+            .frame(minWidth: style.symbolSize + 4, minHeight: style.symbolSize + 4)
+    }
+
+    private var blockBackground: some View {
+        RoundedRectangle(cornerRadius: 16, style: .continuous)
+            .fill(AppConstants.Colors.secondaryBackground)
+    }
+
+    private func curlBlock(_ curlCommand: String) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                Label("CURL 调试命令", systemImage: "terminal")
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+
+                Spacer()
+
+                Button(action: copyCurlCommand) {
+                    Label("复制", systemImage: "doc.on.doc")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+
+            Text(curlCommand)
+                .font(.system(.body, design: .monospaced))
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(14)
+                .background(blockBackground)
+
+            Text("提示：复制此命令到终端执行，可以快速复现当前请求。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 4)
+        .frame(maxWidth: .infinity)
+    }
+
+    private func detailBlock(_ detailMessage: String) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("详细信息", systemImage: "text.alignleft")
+                .font(.headline)
+                .foregroundStyle(.primary)
+
+            ScrollView {
+                Text(detailMessage)
+                    .font(.system(.body, design: .monospaced))
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(14)
+                    .background(blockBackground)
+            }
+            .frame(maxHeight: 220)
+        }
+        .padding(.horizontal, 4)
+        .frame(maxWidth: .infinity)
+    }
+
+    @ViewBuilder
+    private var actionButtons: some View {
+        if showDismiss, let onDismiss {
+            Button(action: onDismiss) {
+                Label("返回", systemImage: "arrow.left")
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.large)
+        }
+
+        if showLoginButton, let onLogin {
+            Button(action: onLogin) {
+                Label("去登录", systemImage: "person.crop.circle.badge.checkmark")
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.green)
+            .controlSize(.large)
+        }
+
+        if showRetry, let onRetry {
+            Button(action: onRetry) {
+                Label("重试", systemImage: "arrow.clockwise")
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+        }
+    }
+
+    private func copyCurlCommand() {
+        guard let curlCommand, !curlCommand.isEmpty else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(curlCommand, forType: .string)
+        showCopiedAlert = true
+    }
+}
+
+extension ErrorView {
+    static func empty(
+        title: String,
+        message: String,
+        symbolName: String,
+        tint: Color = .accentColor,
+        layout: ErrorViewLayout = .fill
+    ) -> ErrorView {
+        ErrorView(
+            style: .empty(symbolName: symbolName, tint: tint),
+            layout: layout,
+            title: title,
+            message: message,
+            showDismiss: false,
+            showRetry: false,
+            showLoginButton: false
+        )
+    }
 }
 
 #Preview {
     ErrorView(
         title: "加载失败",
-        message: "无法获取直播间列表，请检查网络连接",
-        detailMessage: "网络请求超时\n==================== 网络请求详情 ====================\nURL: https://api.live.bilibili.com/...\n方法: GET",
+        message: "无法获取直播间列表，请检查网络连接后稍后再试。",
+        detailMessage: """
+网络请求超时
+==================== 网络请求详情 ====================
+URL: https://api.live.bilibili.com/...
+方法: GET
+""",
         onRetry: {}
     )
-    .frame(width: 800, height: 600)
+    .frame(width: 820, height: 620)
 }

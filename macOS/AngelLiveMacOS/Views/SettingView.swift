@@ -13,10 +13,13 @@ struct SettingView: View {
     @StateObject private var syncService = BilibiliCookieSyncService.shared
     @EnvironmentObject private var updaterViewModel: UpdaterViewModel
     @Environment(PluginAvailabilityService.self) private var pluginAvailability
-    @State private var danmuModel = DanmuSettingModel()
+    @Environment(HistoryModel.self) private var historyModel
+
     @State private var showBilibiliLogin = false
     @State private var showOpenSourceList = false
     @State private var showPluginManagement = false
+    @State private var showHistory = false
+    @State private var showDanmuSetting = false
     @State private var selectedCookiePlatform: MacOSPlatformAccountItem?
     @State private var platformLoginStatus: [PlatformSessionID: Bool] = [:]
 
@@ -31,159 +34,35 @@ struct SettingView: View {
                     bilibiliAccountRow
 
                     ForEach(MacOSPlatformAccountItem.allCases) { platform in
-                        Button {
-                            selectedCookiePlatform = platform
-                        } label: {
-                            HStack {
-                                Group {
-                                    if let icon = accountIcon(for: platform) {
-                                        Image(nsImage: icon)
-                                            .resizable()
-                                            .scaledToFit()
-                                    } else {
-                                        Image(systemName: platform.iconSystemName)
-                                            .foregroundStyle(platform.iconTint.gradient)
-                                    }
-                                }
-                                .frame(width: 20, height: 20)
-                                .frame(width: 24, height: 24)
-
-                                Text(platform.title)
-
-                                Spacer()
-
-                                if platformLoginStatus[platform.sessionID] == true {
-                                    Text("已登录")
-                                        .foregroundStyle(AppConstants.Colors.success)
-                                } else {
-                                    Text("未登录")
-                                        .foregroundStyle(AppConstants.Colors.secondaryText)
-                                }
-
-                                Image(systemName: "chevron.right")
-                                    .font(.caption)
-                                    .foregroundStyle(AppConstants.Colors.secondaryText)
-                            }
-                        }
-                        .buttonStyle(.plain)
+                        platformAccountRow(platform)
                     }
                 }
             }
 
             if pluginAvailability.hasAvailablePlugins {
-                Section("插件管理") {
-                    Button {
-                        showPluginManagement = true
-                    } label: {
-                        HStack {
-                            Image(systemName: "puzzlepiece.extension.fill")
-                                .foregroundStyle(Color.orange.gradient)
-                                .frame(width: 24, height: 24)
-
-                            Text("插件管理")
-
-                            Spacer()
-
-                            Text("管理订阅与安装")
-                                .foregroundStyle(AppConstants.Colors.secondaryText)
-
-                            Image(systemName: "chevron.right")
-                                .font(.caption)
-                                .foregroundStyle(AppConstants.Colors.secondaryText)
-                        }
-                    }
-                    .buttonStyle(.plain)
+                Section("插件与扩展") {
+                    pluginManagementRow
                 }
             }
 
-            Section("弹幕设置") {
-                Toggle("显示弹幕", isOn: $danmuModel.showDanmu)
-
-                Toggle("彩色弹幕", isOn: $danmuModel.showColorDanmu)
-
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text("字体大小")
-                        Spacer()
-                        Text("\(danmuModel.danmuFontSize) pt")
-                            .foregroundColor(.secondary)
-                    }
-                    Slider(value: Binding(
-                        get: { Double(danmuModel.danmuFontSize) },
-                        set: { newValue in
-                            danmuModel.danmuFontSize = Int(newValue.rounded())
-                        }
-                    ), in: 20...80, step: 1)
-                    Text("示例：这是一条弹幕")
-                        .font(.system(size: CGFloat(danmuModel.danmuFontSize)))
-                        .foregroundColor(.secondary)
-                }
-
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text("透明度")
-                        Spacer()
-                        Text(String(format: "%.1f", danmuModel.danmuAlpha))
-                            .foregroundColor(.secondary)
-                    }
-                    Slider(value: $danmuModel.danmuAlpha, in: 0.1...1.0, step: 0.1)
-                }
-
-                Picker("弹幕速度", selection: $danmuModel.danmuSpeedIndex) {
-                    ForEach(DanmuSettingModel.danmuSpeedArray.indices, id: \.self) { index in
-                        Text(DanmuSettingModel.danmuSpeedArray[index])
-                            .tag(index)
-                    }
-                }
-                .onChange(of: danmuModel.danmuSpeedIndex) { _, newValue in
-                    danmuModel.getDanmuSpeed(index: newValue)
-                }
-
-                Picker("显示区域", selection: $danmuModel.danmuAreaIndex) {
-                    ForEach(DanmuSettingModel.danmuAreaArray.indices, id: \.self) { index in
-                        Text(DanmuSettingModel.danmuAreaArray[index])
-                            .tag(index)
-                    }
-                }
+            Section("数据与记录") {
+                historyRow
             }
 
-            Section("关于&问题反馈") {
-                Button {
-                    updaterViewModel.checkForUpdates()
-                } label: {
-                    HStack {
-                        Label("检查更新", systemImage: "arrow.triangle.2.circlepath")
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .buttonStyle(.plain)
-                .disabled(!updaterViewModel.canCheckForUpdates)
+            Section("播放") {
+                danmuSettingRow
+            }
 
-                Button {
-                    showOpenSourceList = true
-                } label: {
-                    HStack {
-                        Label("开源许可", systemImage: "doc.text.fill")
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .buttonStyle(.plain)
-
-                Link(destination: URL(string: "https://github.com/pcccccc/SimpleLiveTVOS")!) {
-                    Label("访问 GitHub", systemImage: "link")
-                }
+            Section("关于与支持") {
+                checkUpdateRow
+                openSourceRow
+                githubRow
             }
 
             Section {
-                Text("AngelLive - macOS 直播应用")
+                Text("AngelLive · macOS")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)
             }
         }
@@ -226,48 +105,203 @@ struct SettingView: View {
             }
             .frame(minWidth: 600, minHeight: 500)
         }
+        .sheet(isPresented: $showHistory) {
+            NavigationStack {
+                MacHistoryView()
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("关闭") {
+                                showHistory = false
+                            }
+                        }
+                    }
+            }
+            .frame(minWidth: 720, minHeight: 520)
+        }
+        .sheet(isPresented: $showDanmuSetting) {
+            NavigationStack {
+                MacDanmuSettingView()
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("关闭") {
+                                showDanmuSetting = false
+                            }
+                        }
+                    }
+            }
+            .frame(minWidth: 640, minHeight: 560)
+        }
     }
-
-    // MARK: - Bilibili Account Row
 
     private var bilibiliAccountRow: some View {
         Button {
             showBilibiliLogin = true
         } label: {
-            HStack {
-                Group {
-                    if let bilibiliAccountIcon {
-                        Image(nsImage: bilibiliAccountIcon)
-                            .resizable()
-                            .scaledToFit()
-                    } else {
-                        Image("bilibili")
-                            .resizable()
-                            .scaledToFit()
-                    }
-                }
-                .frame(width: 20, height: 20)
-                .frame(width: 24, height: 24)
-                .cornerRadius(4)
-
-                Text("哔哩哔哩")
-
-                Spacer()
-
-                if syncService.isLoggedIn {
-                    Text("已登录")
-                        .foregroundStyle(AppConstants.Colors.success)
-                } else {
-                    Text("未登录")
-                        .foregroundStyle(AppConstants.Colors.secondaryText)
-                }
-
-                Image(systemName: "chevron.right")
-                    .font(.caption)
-                    .foregroundStyle(AppConstants.Colors.secondaryText)
+            PanelNavigationRow(
+                title: "哔哩哔哩",
+                subtitle: "同步登录状态，获取更完整的搜索与解析能力"
+            ) {
+                accountIconView(image: bilibiliAccountIcon, fallbackImageName: "bilibili")
+            } trailing: {
+                loginStatusBadge(syncService.isLoggedIn)
             }
         }
         .buttonStyle(.plain)
+    }
+
+    private func platformAccountRow(_ platform: MacOSPlatformAccountItem) -> some View {
+        Button {
+            selectedCookiePlatform = platform
+        } label: {
+            PanelNavigationRow(
+                title: platform.title,
+                subtitle: "网页登录 Cookie 同步"
+            ) {
+                if let icon = accountIcon(for: platform) {
+                    Image(nsImage: icon)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 20, height: 20)
+                } else {
+                    Image(systemName: platform.iconSystemName)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(platform.iconTint.gradient)
+                }
+            } trailing: {
+                loginStatusBadge(platformLoginStatus[platform.sessionID] == true)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var pluginManagementRow: some View {
+        Button {
+            showPluginManagement = true
+        } label: {
+            PanelNavigationRow(
+                title: "插件管理",
+                subtitle: "统一管理订阅源、安装状态和版本更新"
+            ) {
+                Image(systemName: "puzzlepiece.extension.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Color.orange.gradient)
+            } trailing: {
+                PanelStatusBadge(pluginAvailability.hasAvailablePlugins ? "已启用" : "未启用", tint: .orange)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var historyRow: some View {
+        Button {
+            showHistory = true
+        } label: {
+            PanelNavigationRow(
+                title: "历史记录",
+                subtitle: "查看最近播放过的直播间"
+            ) {
+                Image(systemName: "clock.arrow.circlepath")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Color.indigo.gradient)
+            } trailing: {
+                if !historyModel.watchList.isEmpty {
+                    PanelStatusBadge("\(historyModel.watchList.count)", tint: .indigo)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var danmuSettingRow: some View {
+        Button {
+            showDanmuSetting = true
+        } label: {
+            PanelNavigationRow(
+                title: "弹幕设置",
+                subtitle: "显示、字体、速度和区域"
+            ) {
+                Image(systemName: "bubble.left.and.bubble.right.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(AppConstants.Colors.success.gradient)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var checkUpdateRow: some View {
+        Button {
+            updaterViewModel.checkForUpdates()
+        } label: {
+            PanelNavigationRow(
+                title: "检查更新",
+                subtitle: updaterViewModel.canCheckForUpdates ? "查看新版本与更新说明" : "当前无法发起更新检查"
+            ) {
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Color.accentColor.gradient)
+            } trailing: {
+                if !updaterViewModel.canCheckForUpdates {
+                    PanelStatusBadge("不可用")
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(!updaterViewModel.canCheckForUpdates)
+    }
+
+    private var openSourceRow: some View {
+        Button {
+            showOpenSourceList = true
+        } label: {
+            PanelNavigationRow(
+                title: "开源许可",
+                subtitle: "查看第三方依赖与授权信息"
+            ) {
+                Image(systemName: "doc.text.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Color.blue.gradient)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var githubRow: some View {
+        Link(destination: URL(string: "https://github.com/pcccccc/SimpleLiveTVOS")!) {
+            PanelNavigationRow(
+                title: "访问 GitHub",
+                subtitle: "项目主页、问题反馈与更新记录",
+                showsChevron: false
+            ) {
+                Image(systemName: "link")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Color.purple.gradient)
+            } trailing: {
+                Image(systemName: "arrow.up.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func accountIconView(image: NSImage?, fallbackImageName: String) -> some View {
+        Group {
+            if let image {
+                Image(nsImage: image)
+                    .resizable()
+                    .scaledToFit()
+            } else {
+                Image(fallbackImageName)
+                    .resizable()
+                    .scaledToFit()
+            }
+        }
+        .frame(width: 20, height: 20)
+        .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+    }
+
+    private func loginStatusBadge(_ isLoggedIn: Bool) -> some View {
+        PanelStatusBadge(isLoggedIn ? "已登录" : "未登录", tint: isLoggedIn ? AppConstants.Colors.success : .secondary)
     }
 
     private func accountIcon(for platform: MacOSPlatformAccountItem) -> NSImage? {
@@ -291,7 +325,219 @@ struct SettingView: View {
     }
 }
 
+private struct MacHistoryView: View {
+    @Environment(HistoryModel.self) private var historyModel
+    @State private var showClearAlert = false
+
+    var body: some View {
+        Group {
+            if historyModel.watchList.isEmpty {
+                ErrorView.empty(
+                    title: "暂无历史记录",
+                    message: "开始播放直播间后，会自动记录在这里。",
+                    symbolName: "clock.arrow.circlepath",
+                    tint: .secondary
+                )
+            } else {
+                List {
+                    ForEach(historyModel.watchList) { room in
+                        NavigationLink {
+                            RoomPlayerView(room: room)
+                        } label: {
+                            PanelNavigationRow(
+                                title: room.roomTitle,
+                                subtitle: room.userName,
+                                showsChevron: false
+                            ) {
+                                historyIcon(for: room)
+                            } trailing: {
+                                Text(LiveParseTools.getLivePlatformName(room.liveType))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+
+                                Image(systemName: "play.fill")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.tertiary)
+                            }
+                            .padding(.vertical, 2)
+                        }
+                        .contextMenu {
+                            Button(role: .destructive) {
+                                historyModel.removeHistory(room: room)
+                            } label: {
+                                Label("删除", systemImage: "trash")
+                            }
+                        }
+                        .swipeActions(edge: .trailing) {
+                            Button("删除", role: .destructive) {
+                                historyModel.removeHistory(room: room)
+                            }
+                        }
+                    }
+                }
+                .listStyle(.inset)
+            }
+        }
+        .navigationTitle("历史记录")
+        .toolbar {
+            if !historyModel.watchList.isEmpty {
+                ToolbarItem(placement: .primaryAction) {
+                    Button("清空") {
+                        showClearAlert = true
+                    }
+                }
+            }
+        }
+        .alert("清空历史记录", isPresented: $showClearAlert) {
+            Button("取消", role: .cancel) {}
+            Button("清空", role: .destructive) {
+                historyModel.clearAll()
+            }
+        } message: {
+            Text("确定要清空所有历史记录吗？")
+        }
+    }
+
+    @ViewBuilder
+    private func historyIcon(for room: LiveModel) -> some View {
+        if let image = MacPlatformIconProvider.tabImage(for: room.liveType) {
+            Image(nsImage: image)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 20, height: 20)
+                .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+        } else {
+            Image(systemName: "clock.arrow.circlepath")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(Color.indigo.gradient)
+        }
+    }
+}
+
+private struct MacDanmuSettingView: View {
+    @State private var danmuModel = DanmuSettingModel()
+
+    var body: some View {
+        List {
+            Section {
+                Toggle("开启弹幕", isOn: $danmuModel.showDanmu)
+                    .tint(AppConstants.Colors.accent)
+
+                Toggle("开启彩色弹幕", isOn: $danmuModel.showColorDanmu)
+                    .tint(AppConstants.Colors.accent)
+            } header: {
+                Text("基本设置")
+            }
+
+            Section {
+                VStack(alignment: .leading, spacing: AppConstants.Spacing.md) {
+                    HStack {
+                        Text("字体大小")
+                            .foregroundStyle(AppConstants.Colors.primaryText)
+                        Spacer()
+                        Text("\(danmuModel.danmuFontSize)")
+                            .foregroundStyle(AppConstants.Colors.secondaryText)
+                    }
+
+                    HStack(spacing: AppConstants.Spacing.md) {
+                        Button {
+                            if danmuModel.danmuFontSize > 15 {
+                                danmuModel.danmuFontSize -= 5
+                            }
+                        } label: {
+                            Image(systemName: "minus.circle.fill")
+                                .font(.title2)
+                                .foregroundStyle(AppConstants.Colors.error.gradient)
+                        }
+                        .buttonStyle(.borderless)
+
+                        Button {
+                            if danmuModel.danmuFontSize > 10 {
+                                danmuModel.danmuFontSize -= 1
+                            }
+                        } label: {
+                            Image(systemName: "minus.circle")
+                                .font(.title3)
+                                .foregroundStyle(AppConstants.Colors.warning.gradient)
+                        }
+                        .buttonStyle(.borderless)
+
+                        Spacer()
+
+                        Text("这是测试弹幕")
+                            .font(.system(size: CGFloat(danmuModel.danmuFontSize)))
+                            .foregroundStyle(AppConstants.Colors.primaryText)
+
+                        Spacer()
+
+                        Button {
+                            if danmuModel.danmuFontSize < 100 {
+                                danmuModel.danmuFontSize += 1
+                            }
+                        } label: {
+                            Image(systemName: "plus.circle")
+                                .font(.title3)
+                                .foregroundStyle(AppConstants.Colors.success.gradient)
+                        }
+                        .buttonStyle(.borderless)
+
+                        Button {
+                            if danmuModel.danmuFontSize < 95 {
+                                danmuModel.danmuFontSize += 5
+                            }
+                        } label: {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.title2)
+                                .foregroundStyle(AppConstants.Colors.link.gradient)
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                }
+                .padding(.vertical, AppConstants.Spacing.sm)
+            } header: {
+                Text("字体设置")
+            }
+
+            Section {
+                VStack(alignment: .leading, spacing: AppConstants.Spacing.md) {
+                    HStack {
+                        Text("透明度")
+                        Spacer()
+                        Text(String(format: "%.1f", danmuModel.danmuAlpha))
+                            .foregroundStyle(AppConstants.Colors.secondaryText)
+                    }
+
+                    Slider(value: $danmuModel.danmuAlpha, in: 0.1...1.0, step: 0.1)
+                        .tint(AppConstants.Colors.link)
+                }
+
+                Picker("弹幕速度", selection: $danmuModel.danmuSpeedIndex) {
+                    ForEach(DanmuSettingModel.danmuSpeedArray.indices, id: \.self) { index in
+                        Text(DanmuSettingModel.danmuSpeedArray[index])
+                            .tag(index)
+                    }
+                }
+                .onChange(of: danmuModel.danmuSpeedIndex) { _, newValue in
+                    danmuModel.getDanmuSpeed(index: newValue)
+                }
+
+                Picker("显示区域", selection: $danmuModel.danmuAreaIndex) {
+                    ForEach(DanmuSettingModel.danmuAreaArray.indices, id: \.self) { index in
+                        Text(DanmuSettingModel.danmuAreaArray[index])
+                            .tag(index)
+                    }
+                }
+            } header: {
+                Text("显示设置")
+            }
+        }
+        .listStyle(.inset)
+        .navigationTitle("弹幕设置")
+    }
+}
+
 #Preview {
     SettingView()
+        .environment(HistoryModel())
         .environmentObject(UpdaterViewModel())
 }

@@ -70,6 +70,7 @@ struct AngelLiveMacOSApp: App {
     @State private var welcomeManager = WelcomeManager()
     // 全局 ViewModels（用于共享到所有窗口）
     @State private var favoriteViewModel = AppFavoriteModel()
+    @State private var historyViewModel = HistoryModel()
     @State private var toastManager = ToastManager()
     @State private var fullscreenPlayerManager = FullscreenPlayerManager()
 
@@ -78,6 +79,7 @@ struct AngelLiveMacOSApp: App {
             ContentView()
                 .environment(welcomeManager)
                 .environment(favoriteViewModel)
+                .environment(historyViewModel)
                 .environment(toastManager)
                 .environment(fullscreenPlayerManager)
                 .environmentObject(updaterViewModel)
@@ -105,6 +107,7 @@ struct AngelLiveMacOSApp: App {
             if let room = room {
                 RoomPlayerView(room: room)
                     .environment(favoriteViewModel)
+                    .environment(historyViewModel)
                     .environment(toastManager)
                     .background(PlayerWindowChromeView(hidesWindowButtons: true, allowsBackgroundDrag: false))
             }

@@ -9,63 +9,44 @@ struct MacShellFavoriteView: View {
     @State private var bookmarkToDelete: StreamBookmark?
     @State private var playingBookmark: StreamBookmark?
 
+    private let featureRowInsets = EdgeInsets(top: 10, leading: 12, bottom: 4, trailing: 12)
+    private let emptyRowInsets = EdgeInsets(top: 12, leading: 8, bottom: 8, trailing: 8)
+
     var body: some View {
         NavigationStack {
-            Group {
-                if bookmarkService.bookmarks.isEmpty {
-                    ContentUnavailableView {
-                        Label("暂无收藏", systemImage: "bookmark")
-                    } description: {
-                        Text("在「配置」页添加网络视频链接后，将在此处显示")
-                    }
-                } else {
-                    List {
+            List {
+                Section {
+                    PanelHintCard(
+                        title: "管理常用直链",
+                        message: "点按条目即可直接播放；长按或右键可以继续编辑标题、地址和删除内容。",
+                        systemImage: "bookmark.circle.fill",
+                        tint: .accentColor
+                    )
+                    .listRowSeparator(.hidden)
+                    .listRowInsets(featureRowInsets)
+                }
+
+                Section {
+                    if bookmarkService.bookmarks.isEmpty {
+                        ErrorView.empty(
+                            title: "暂无收藏",
+                            message: "在“配置”页添加网络视频链接后，将在此处显示。",
+                            symbolName: "bookmark",
+                            tint: .secondary,
+                            layout: .compact(minHeight: 220)
+                        )
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(emptyRowInsets)
+                    } else {
                         ForEach(bookmarkService.bookmarks) { bookmark in
-                            Button {
-                                playBookmark(bookmark)
-                            } label: {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(bookmark.title)
-                                        .font(.body)
-                                        .foregroundStyle(.primary)
-                                        .lineLimit(1)
-
-                                    Text(bookmark.url)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                        .lineLimit(1)
-
-                                    if let lastPlayed = bookmark.lastPlayedAt {
-                                        Text("上次播放: \(lastPlayed.formatted(.relative(presentation: .named)))")
-                                            .font(.caption2)
-                                            .foregroundStyle(.tertiary)
-                                    }
-                                }
-                                .padding(.vertical, 4)
-                            }
-                            .buttonStyle(.plain)
-                            .contextMenu {
-                                Button("编辑") {
-                                    editingBookmark = bookmark
-                                }
-                                Button("删除", role: .destructive) {
-                                    bookmarkToDelete = bookmark
-                                    showDeleteAlert = true
-                                }
-                            }
-                            .swipeActions(edge: .trailing) {
-                                Button("删除", role: .destructive) {
-                                    bookmarkToDelete = bookmark
-                                    showDeleteAlert = true
-                                }
-                            }
-                            .swipeActions(edge: .leading) {
-                                Button("编辑") {
-                                    editingBookmark = bookmark
-                                }
-                                .tint(.blue)
-                            }
+                            bookmarkRow(bookmark)
                         }
+                    }
+                } header: {
+                    Text("已保存内容")
+                } footer: {
+                    if !bookmarkService.bookmarks.isEmpty {
+                        Text("共 \(bookmarkService.bookmarks.count) 条收藏")
                     }
                 }
             }
@@ -93,6 +74,55 @@ struct MacShellFavoriteView: View {
                         .frame(minWidth: 900, minHeight: 560)
                 }
             }
+        }
+    }
+
+    private func bookmarkRow(_ bookmark: StreamBookmark) -> some View {
+        Button {
+            playBookmark(bookmark)
+        } label: {
+            PanelNavigationRow(
+                title: bookmark.title,
+                subtitle: bookmark.url,
+                showsChevron: false
+            ) {
+                Image(systemName: "bookmark.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Color.accentColor.gradient)
+            } trailing: {
+                HStack(spacing: 10) {
+                    if let lastPlayed = bookmark.lastPlayedAt {
+                        PanelStatusBadge(lastPlayed.formatted(.relative(presentation: .named)), tint: .accentColor)
+                    }
+
+                    Image(systemName: "play.fill")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .padding(.vertical, 2)
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button("编辑") {
+                editingBookmark = bookmark
+            }
+            Button("删除", role: .destructive) {
+                bookmarkToDelete = bookmark
+                showDeleteAlert = true
+            }
+        }
+        .swipeActions(edge: .trailing) {
+            Button("删除", role: .destructive) {
+                bookmarkToDelete = bookmark
+                showDeleteAlert = true
+            }
+        }
+        .swipeActions(edge: .leading) {
+            Button("编辑") {
+                editingBookmark = bookmark
+            }
+            .tint(.blue)
         }
     }
 

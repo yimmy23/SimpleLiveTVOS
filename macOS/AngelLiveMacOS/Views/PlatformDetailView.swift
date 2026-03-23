@@ -59,12 +59,12 @@ struct PlatformDetailView: View {
                 // 房间列表
                 roomListView
             } else {
-                ContentUnavailableView(
-                    "暂无分类",
-                    systemImage: "list.bullet",
-                    description: Text("当前平台没有可用的分类")
+                ErrorView.empty(
+                    title: "暂无分类",
+                    message: "当前页面还没有可用分类，请稍后再试。",
+                    symbolName: "list.bullet.rectangle",
+                    tint: .secondary
                 )
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .navigationTitle(viewModel.platform.title)
@@ -297,12 +297,12 @@ struct PlatformDetailView: View {
                 } : nil
             )
         } else if rooms.isEmpty {
-            ContentUnavailableView(
-                "暂无直播",
-                systemImage: "video.slash",
-                description: Text("当前分类下没有正在直播的房间")
+            ErrorView.empty(
+                title: "暂无直播",
+                message: "当前分类下没有正在直播的房间。",
+                symbolName: "video.slash",
+                tint: .secondary
             )
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             ScrollView {
                 LazyVGrid(
@@ -364,55 +364,63 @@ struct PlatformDetailView: View {
 // MARK: - 直播间卡片
 struct LiveRoomCard: View {
     let room: LiveModel
+    let showsCoverBadge: Bool
+
     @Environment(AppFavoriteModel.self) private var favoriteModel
     @Environment(ToastManager.self) private var toastManager
-    @State private var showOfflineAlert = false
     @State private var isFavoriteLoading = false
     @State private var isFavoriteAnimating = false
 
-    // 判断是否已收藏
+    init(room: LiveModel, showsCoverBadge: Bool = false) {
+        self.room = room
+        self.showsCoverBadge = showsCoverBadge
+    }
+
     private var isFavorited: Bool {
         favoriteModel.roomList.contains(where: { $0.roomId == room.roomId })
     }
 
-    // 判断是否正在直播
-    private var isLive: Bool {
-        guard let liveState = room.liveState else { return true }
-        return LiveState(rawValue: liveState) == .live
+    private var badgeLiveState: LiveState {
+        guard let liveState = room.liveState, let state = LiveState(rawValue: liveState) else {
+            return .live
+        }
+        return state
+    }
+
+    private var coverURL: URL? {
+        guard !room.roomCover.isEmpty, let url = URL(string: room.roomCover) else { return nil }
+        return url
+    }
+
+    private var liveStatusText: String {
+        switch badgeLiveState {
+        case .live:
+            return "直播中"
+        case .close:
+            return "已下播"
+        case .video:
+            return "回放中"
+        case .unknow:
+            return "待确认"
+        }
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // 封面图
-            KFImage(URL(string: room.roomCover))
-                .placeholder {
-                    Rectangle()
-                        .fill(Color.gray.opacity(0.2))
-                }
-                .resizable()
-                .blur(radius: 10)
-                .overlay(
-                    KFImage(URL(string: room.roomCover))
-                        .placeholder {
-                            Rectangle()
-                                .fill(Color.gray.opacity(0.2))
-                        }
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                )
-                .aspectRatio(16/9, contentMode: .fill)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-
-            // 主播信息
-            HStack(spacing: 8) {
-                KFImage(URL(string: room.userHeadImg))
-                    .placeholder {
-                        Circle()
-                            .fill(Color.gray.opacity(0.3))
+            coverView
+                .overlay(alignment: .topTrailing) {
+                    if showsCoverBadge {
+                        coverInfoBadge
+                            .padding(6)
                     }
-                    .resizable()
-                    .frame(width: 32, height: 32)
-                    .clipShape(Circle())
+                }
+                .clipShape(RoundedRectangle(cornerRadius: AppConstants.CornerRadius.lg))
+
+            HStack(spacing: 8) {
+                RemoteAvatarView(url: URL(string: room.userHeadImg), size: 32) {
+                    Circle()
+                        .fill(Color.gray.opacity(0.3))
+                }
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(room.roomTitle)
@@ -449,6 +457,80 @@ struct LiveRoomCard: View {
         }
     }
 
+    private var coverView: some View {
+        Group {
+            if let coverURL {
+                KFImage(coverURL)
+                    .placeholder {
+                        placeholderCover()
+                    }
+                    .resizable()
+                    .blur(radius: 20)
+                    .overlay(
+                        KFImage(coverURL)
+                            .placeholder {
+                                placeholderCover()
+                            }
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                    )
+            } else {
+                placeholderCover()
+            }
+        }
+        .aspectRatio(AppConstants.AspectRatio.pic, contentMode: .fit)
+    }
+
+    private func placeholderCover() -> some View {
+        ZStack {
+            Rectangle()
+                .fill(AppConstants.Colors.placeholderGradient())
+
+            Image(systemName: "photo")
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(.white.opacity(0.72))
+        }
+        .aspectRatio(AppConstants.AspectRatio.pic, contentMode: .fit)
+    }
+
+    private var coverInfoBadge: some View {
+        HStack(spacing: 6) {
+            platformBadgeIcon
+
+            Text(liveStatusText)
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 7)
+        .padding(.vertical, 4)
+        .background(
+            Capsule(style: .continuous)
+                .fill(Color.black.opacity(0.58))
+        )
+        .overlay(
+            Capsule(style: .continuous)
+                .stroke(Color.white.opacity(0.10), lineWidth: 0.5)
+        )
+        .shadow(color: .black.opacity(0.14), radius: 6, x: 0, y: 2)
+    }
+
+    @ViewBuilder
+    private var platformBadgeIcon: some View {
+        if let image = MacPlatformIconProvider.tabImage(for: room.liveType) {
+            Image(nsImage: image)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 12, height: 12)
+                .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
+        } else {
+            Image(systemName: "dot.radiowaves.left.and.right")
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(.white.opacity(0.92))
+                .frame(width: 12, height: 12)
+        }
+    }
+
     @ViewBuilder
     private var favoriteContextMenu: some View {
         if isFavorited {
@@ -468,27 +550,6 @@ struct LiveRoomCard: View {
                 Label("收藏", systemImage: "heart.fill")
             }
         }
-
-        // TODO: 复制功能暂时注释，后续有好想法再开启
-        // Divider()
-        //
-        // Button {
-        //     // 复制房间标题
-        //     NSPasteboard.general.clearContents()
-        //     NSPasteboard.general.setString(room.roomTitle, forType: .string)
-        //     showToastMessage(icon: "doc.on.doc.fill", message: "已复制房间标题")
-        // } label: {
-        //     Label("复制房间标题", systemImage: "doc.on.doc")
-        // }
-        //
-        // Button {
-        //     // 复制主播名称
-        //     NSPasteboard.general.clearContents()
-        //     NSPasteboard.general.setString(room.userName, forType: .string)
-        //     showToastMessage(icon: "doc.on.doc.fill", message: "已复制主播名称")
-        // } label: {
-        //     Label("复制主播名称", systemImage: "person.fill")
-        // }
     }
 
     @MainActor

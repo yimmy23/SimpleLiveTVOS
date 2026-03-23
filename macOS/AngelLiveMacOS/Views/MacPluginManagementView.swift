@@ -17,6 +17,15 @@ struct MacPluginManagementView: View {
 
     var body: some View {
         Form {
+            Section {
+                PanelHintCard(
+                    title: "统一管理扩展来源与版本",
+                    message: "这里集中展示已安装扩展、远程可安装内容和订阅源地址，方便后续更新和清理。",
+                    systemImage: "puzzlepiece.extension",
+                    tint: .orange
+                )
+            }
+
             // 已安装插件
             installedPluginsSection
 
@@ -49,36 +58,38 @@ struct MacPluginManagementView: View {
     private var installedPluginsSection: some View {
         Section {
             if pluginAvailability.installedPluginIds.isEmpty {
-                Text("暂无已安装的插件")
-                    .foregroundStyle(AppConstants.Colors.secondaryText)
+                ErrorView.empty(
+                    title: "暂无已安装插件",
+                    message: "安装完成的扩展会显示在这里，后续也会在这里管理更新与卸载。",
+                    symbolName: "puzzlepiece.extension",
+                    tint: .secondary,
+                    layout: .compact(minHeight: 180)
+                )
             } else {
                 ForEach(pluginAvailability.installedPluginIds, id: \.self) { pluginId in
-                    HStack(spacing: 10) {
+                    PanelNavigationRow(
+                        title: pluginDisplayName(for: pluginId),
+                        subtitle: installedSubtitle(for: pluginId),
+                        showsChevron: false
+                    ) {
                         pluginIconView(for: pluginId)
+                    } trailing: {
+                        HStack(spacing: 10) {
+                            pluginStatusView(for: pluginId)
 
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(pluginDisplayName(for: pluginId))
-                                .font(.body)
-
-                            versionSubtitleView(for: pluginId)
-                        }
-
-                        Spacer()
-
-                        pluginStatusView(for: pluginId)
-
-                        Button(role: .destructive) {
-                            Task {
-                                _ = pluginSourceManager.uninstallPlugin(pluginId: pluginId)
-                                await pluginAvailability.refresh()
-                                await pluginSourceManager.fetchAllSourceIndexes()
-                                await pluginSourceManager.refreshAvailableUpdates()
+                            Button(role: .destructive) {
+                                Task {
+                                    _ = pluginSourceManager.uninstallPlugin(pluginId: pluginId)
+                                    await pluginAvailability.refresh()
+                                    await pluginSourceManager.fetchAllSourceIndexes()
+                                    await pluginSourceManager.refreshAvailableUpdates()
+                                }
+                            } label: {
+                                Image(systemName: "trash")
+                                    .foregroundStyle(.red)
                             }
-                        } label: {
-                            Image(systemName: "trash")
-                                .foregroundStyle(.red)
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
                     }
                     .padding(.vertical, 2)
                 }
@@ -102,21 +113,15 @@ struct MacPluginManagementView: View {
         if !notInstalled.isEmpty {
             Section {
                 ForEach(notInstalled) { displayItem in
-                    HStack(spacing: 10) {
-                        Image(systemName: "puzzlepiece.extension")
-                            .frame(width: 28, height: 28)
-                            .foregroundStyle(AppConstants.Colors.secondaryText)
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(displayItem.displayName)
-                                .font(.body)
-                            Text("版本 \(displayItem.item.version)")
-                                .font(.caption)
-                                .foregroundStyle(AppConstants.Colors.secondaryText)
-                        }
-
-                        Spacer()
-
+                    PanelNavigationRow(
+                        title: displayItem.displayName,
+                        subtitle: "版本 \(displayItem.item.version)",
+                        showsChevron: false
+                    ) {
+                        Image(systemName: "puzzlepiece.extension.fill")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(Color.orange.gradient)
+                    } trailing: {
                         remotePluginActionView(for: displayItem)
                     }
                     .padding(.vertical, 2)
@@ -148,15 +153,15 @@ struct MacPluginManagementView: View {
     private var subscriptionSourcesSection: some View {
         Section {
             ForEach(pluginSourceManager.sourceURLs, id: \.self) { url in
-                HStack {
-                    Text(url)
-                        .font(.caption)
-                        .foregroundStyle(AppConstants.Colors.primaryText)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-
-                    Spacer()
-
+                PanelNavigationRow(
+                    title: "订阅源",
+                    subtitle: url,
+                    showsChevron: false
+                ) {
+                    Image(systemName: "dot.radiowaves.left.and.right")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(Color.blue.gradient)
+                } trailing: {
                     Button(role: .destructive) {
                         Task {
                             await pluginSourceManager.removeSourceAndAssociatedPlugins(url)
@@ -180,6 +185,13 @@ struct MacPluginManagementView: View {
 
     private var addSourceSection: some View {
         Section {
+            PanelHintCard(
+                title: "添加新的订阅源",
+                message: "输入 JSON 索引地址后，会自动检查远程扩展版本并同步到当前列表。",
+                systemImage: "tray.and.arrow.down.fill",
+                tint: .accentColor
+            )
+
             TextField("输入订阅源地址 (.json)", text: $inputURL)
 
             Button {
@@ -191,11 +203,12 @@ struct MacPluginManagementView: View {
                             .controlSize(.small)
                     } else {
                         Image(systemName: "plus.circle.fill")
-                            .foregroundStyle(AppConstants.Colors.success.gradient)
                     }
                     Text("添加订阅源")
                 }
             }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
             .disabled(inputURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isProcessing)
 
             if let error = pluginSourceManager.errorMessage {
@@ -204,7 +217,7 @@ struct MacPluginManagementView: View {
         } header: {
             Text("添加订阅源")
         } footer: {
-            Text("输入包含插件索引的 JSON 地址，添加后将自动检查插件更新")
+            Text("输入包含插件索引的 JSON 地址，添加后会自动刷新可安装与可更新内容。")
         }
     }
 
@@ -217,11 +230,11 @@ struct MacPluginManagementView: View {
             Image(nsImage: image)
                 .resizable()
                 .scaledToFit()
-                .frame(width: 28, height: 28)
-                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .frame(width: 20, height: 20)
+                .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
         } else {
-            Image(systemName: "puzzlepiece.extension")
-                .frame(width: 28, height: 28)
+            Image(systemName: "puzzlepiece.extension.fill")
+                .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(AppConstants.Colors.secondaryText)
         }
     }
@@ -235,33 +248,22 @@ struct MacPluginManagementView: View {
         LiveParseJSPlatformManager.availablePlatforms.first { $0.pluginId == pluginId }
     }
 
-    @ViewBuilder
-    private func versionSubtitleView(for pluginId: String) -> some View {
+    private func installedSubtitle(for pluginId: String) -> String {
         let installed = pluginSourceManager.installedVersion(for: pluginId) ?? "未知"
         if let latest = pluginSourceManager.latestVersion(for: pluginId),
            pluginSourceManager.hasUpdate(for: pluginId) {
-            (
-                Text(installed).foregroundStyle(Color.red) +
-                Text(" → ").foregroundStyle(AppConstants.Colors.secondaryText) +
-                Text(latest).foregroundStyle(Color.green)
-            )
-            .font(.caption)
-        } else {
-            Text("版本 \(installed)")
-                .font(.caption)
-                .foregroundStyle(AppConstants.Colors.secondaryText)
+            return "版本 \(installed) · 可更新到 \(latest)"
         }
+        return "版本 \(installed)"
     }
 
     @ViewBuilder
     private func pluginStatusView(for pluginId: String) -> some View {
         if pluginSourceManager.updatingPluginIds.contains(pluginId) {
-            HStack(spacing: 4) {
+            HStack(spacing: 6) {
                 ProgressView()
                     .controlSize(.small)
-                Text("更新中")
-                    .font(.caption)
-                    .foregroundStyle(AppConstants.Colors.secondaryText)
+                PanelStatusBadge("更新中")
             }
         } else if pluginSourceManager.hasUpdate(for: pluginId) {
             Button {
@@ -273,13 +275,12 @@ struct MacPluginManagementView: View {
                     await pluginSourceManager.refreshAvailableUpdates()
                 }
             } label: {
-                Label("更新", systemImage: "arrow.triangle.2.circlepath.circle.fill")
-                    .foregroundStyle(AppConstants.Colors.link)
+                Label("更新", systemImage: "arrow.triangle.2.circlepath")
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
         } else {
-            Image(systemName: "checkmark.circle.fill")
-                .foregroundStyle(AppConstants.Colors.success)
+            PanelStatusBadge("已安装", tint: AppConstants.Colors.success)
         }
     }
 

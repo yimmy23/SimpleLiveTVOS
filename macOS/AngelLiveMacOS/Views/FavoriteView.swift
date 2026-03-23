@@ -133,52 +133,24 @@ struct FavoriteView: View {
 
     @ViewBuilder
     private func emptyStateView() -> some View {
-        VStack(spacing: 20) {
-            Image(systemName: "star.slash")
-                .font(.system(size: 60))
-                .foregroundStyle(.gray.opacity(0.5))
-
-            Text("暂无收藏")
-                .font(.title2)
-                .foregroundStyle(.secondary)
-
-            Text("在其他页面添加您喜欢的直播间")
-                .font(.subheadline)
-                .foregroundStyle(.tertiary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.top, 100)
+        ErrorView.empty(
+            title: "暂无收藏",
+            message: "在其他页面添加您喜欢的直播间，这里会自动显示收藏内容。",
+            symbolName: "star",
+            tint: .secondary
+        )
     }
 
     @ViewBuilder
     private func cloudKitErrorView() -> some View {
-        VStack(spacing: 20) {
-            Image(systemName: "exclamationmark.icloud")
-                .font(.system(size: 60))
-                .foregroundStyle(.red.opacity(0.7))
-
-            Text(viewModel.cloudKitStateString)
-                .font(.title3)
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal)
-
-            Button(action: {
+        ErrorView(
+            title: "收藏同步不可用",
+            message: viewModel.cloudKitStateString,
+            showRetry: true,
+            onRetry: {
                 startFavoriteSync(force: true)
-            }) {
-                Label("重试", systemImage: "arrow.counterclockwise")
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 8)
-                    .background(
-                        Capsule()
-                            .fill(Color.accentColor)
-                    )
             }
-            .buttonStyle(.plain)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        )
     }
 
     private func startFavoriteSync(force: Bool) {
@@ -277,21 +249,12 @@ struct FavoriteView: View {
 
         if displayList.isEmpty && !searchText.isEmpty {
             // 搜索无结果
-            VStack(spacing: 20) {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 60))
-                    .foregroundStyle(.gray.opacity(0.5))
-
-                Text("未找到相关主播")
-                    .font(.title2)
-                    .foregroundStyle(.secondary)
-
-                Text("请尝试其他关键词")
-                    .font(.subheadline)
-                    .foregroundStyle(.tertiary)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding(.top, 100)
+            ErrorView.empty(
+                title: "未找到相关主播",
+                message: "试试其他关键词，或者清空搜索看看全部收藏内容。",
+                symbolName: "magnifyingglass",
+                tint: .secondary
+            )
         } else {
             LazyVStack(spacing: 32) {
                 ForEach(displayList, id: \.id) { section in
@@ -349,7 +312,7 @@ struct FavoriteView: View {
         ) {
             ForEach(roomList, id: \.roomId) { room in
                 LiveRoomCardButton(room: room) {
-                    LiveRoomCard(room: room)
+                    LiveRoomCard(room: room, showsCoverBadge: true)
                 }
             }
         }

@@ -383,14 +383,10 @@ struct PlayerControlView: View {
     private var streamerInfoCard: some View {
         HStack(spacing: 10) {
             // 主播头像
-            KFImage(URL(string: room.userHeadImg))
-                .placeholder {
-                    Circle()
-                        .fill(Color.gray.opacity(0.3))
-                }
-                .resizable()
-                .frame(width: 36, height: 36)
-                .clipShape(Circle())
+            RemoteAvatarView(url: URL(string: room.userHeadImg), size: 36) {
+                Circle()
+                    .fill(Color.gray.opacity(0.3))
+            }
 
             VStack(alignment: .leading, spacing: 2) {
                 // 主播名称

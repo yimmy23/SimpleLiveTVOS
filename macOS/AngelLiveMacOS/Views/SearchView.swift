@@ -91,58 +91,22 @@ struct SearchView: View {
 
     @ViewBuilder
     private func searchEmptyState() -> some View {
-        VStack(spacing: 20) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 60))
-                .foregroundStyle(.gray.opacity(0.5))
-
-            Text("搜索直播间")
-                .font(.title2)
-                .foregroundStyle(.secondary)
-
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 8) {
-                    Image(systemName: "1.circle.fill")
-                        .foregroundStyle(.blue)
-                    Text("链接/口令：直接打开分享链接或房间号")
-                        .font(.subheadline)
-                        .foregroundStyle(.tertiary)
-                }
-
-                HStack(spacing: 8) {
-                    Image(systemName: "2.circle.fill")
-                        .foregroundStyle(.purple)
-                    Text("关键词：搜索主播名或直播间标题（不推荐）")
-                        .font(.subheadline)
-                        .foregroundStyle(.tertiary)
-                }
-            }
-            .padding()
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.primary.opacity(0.05))
-            )
-            .padding(.horizontal)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        ErrorView.empty(
+            title: "搜索直播间",
+            message: "输入链接、分享口令或房间号开始搜索，也可以使用关键词搜索主播名或标题。",
+            symbolName: "magnifyingglass",
+            tint: .secondary
+        )
     }
 
     @ViewBuilder
     private func searchNoResultsState() -> some View {
-        VStack(spacing: 20) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 60))
-                .foregroundStyle(.gray.opacity(0.5))
-
-            Text("暂无搜索结果")
-                .font(.title2)
-                .foregroundStyle(.secondary)
-
-            Text("换个关键词试试吧")
-                .font(.subheadline)
-                .foregroundStyle(.tertiary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        ErrorView.empty(
+            title: "暂无搜索结果",
+            message: "换个关键词，或者改用链接、分享口令和房间号试试。",
+            symbolName: "magnifyingglass",
+            tint: .secondary
+        )
     }
 
     private func searchResultsGrid(geometry: GeometryProxy) -> some View {
@@ -159,7 +123,7 @@ struct SearchView: View {
             ) {
                 ForEach(searchResults, id: \.roomId) { room in
                     LiveRoomCardButton(room: room) {
-                        LiveRoomCard(room: room)
+                        LiveRoomCard(room: room, showsCoverBadge: true)
                     }
                     .transition(.opacity.combined(with: .move(edge: .top)))
                 }

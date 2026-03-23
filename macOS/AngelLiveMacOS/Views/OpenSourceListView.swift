@@ -17,49 +17,62 @@ struct OpenSourceListView: View {
     var body: some View {
         Group {
             if isLoading {
-                VStack(spacing: 16) {
-                    ProgressView()
-                        .scaleEffect(1.2)
-
-                    Text("加载开源许可...")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                loadingStateView
             } else if let errorMsg = errorMessage {
-                VStack(spacing: 16) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: 50))
-                        .foregroundStyle(.orange)
-
-                    Text("无法加载开源许可")
-                        .font(.headline)
-
-                    Text(errorMsg)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                ErrorView(
+                    title: "无法加载开源许可",
+                    message: errorMsg,
+                    showRetry: true,
+                    onRetry: {
+                        loadAcknowledgements()
+                    }
+                )
             } else if let list = acknowList {
                 AcknowListSwiftUIView(acknowList: list)
             } else {
-                VStack(spacing: 16) {
-                    Image(systemName: "doc.text.fill")
-                        .font(.system(size: 50))
-                        .foregroundStyle(.secondary.opacity(0.5))
-
-                    Text("暂无开源许可信息")
-                        .font(.headline)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                ErrorView.empty(
+                    title: "暂无开源许可信息",
+                    message: "当前没有可展示的依赖许可内容。",
+                    symbolName: "doc.text",
+                    tint: .secondary
+                )
             }
         }
         .navigationTitle("开源许可")
         .task {
             loadAcknowledgements()
         }
+    }
+
+    private var loadingStateView: some View {
+        VStack(spacing: 16) {
+            PanelHintCard(
+                title: "正在整理开源许可",
+                message: "稍后会列出当前构建包含的第三方依赖与授权信息，方便你快速核对来源。",
+                systemImage: "doc.text.magnifyingglass",
+                tint: .blue
+            )
+
+            HStack(spacing: 10) {
+                ProgressView()
+                    .controlSize(.small)
+                Text("正在解析 Package.resolved")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+            }
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(.thinMaterial)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .strokeBorder(.white.opacity(0.08), lineWidth: 1)
+                    )
+            )
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func loadAcknowledgements() {

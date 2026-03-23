@@ -40,8 +40,14 @@ struct MacShellConfigView: View {
 
     private var addSection: some View {
         Section {
-            TextField("标题（可选）", text: $inputTitle)
+            PanelHintCard(
+                title: "添加视频或订阅",
+                message: "输入直播链接可直接加入收藏；输入订阅源地址时，会自动检查远程内容并展示可安装扩展。",
+                systemImage: "square.and.arrow.down.on.square",
+                tint: .accentColor
+            )
 
+            TextField("标题（可选）", text: $inputTitle)
             TextField("输入地址", text: $inputURL)
 
             Button {
@@ -52,12 +58,13 @@ struct MacShellConfigView: View {
                         ProgressView()
                             .controlSize(.small)
                     } else {
-                        Image(systemName: "plus.circle.fill")
-                            .foregroundStyle(AppConstants.Colors.success.gradient)
+                        Image(systemName: isSubscriptionURL ? "tray.and.arrow.down.fill" : "plus.circle.fill")
                     }
-                    Text("添加")
+                    Text(isSubscriptionURL ? "添加并检查订阅" : "添加内容")
                 }
             }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
             .disabled(trimmedURL.isEmpty || isProcessing)
 
             if let error = pluginSourceManager.errorMessage {
@@ -66,7 +73,7 @@ struct MacShellConfigView: View {
         } header: {
             Text("添加视频或订阅")
         } footer: {
-            Text("输入视频地址添加到收藏，可在收藏页直接播放")
+            Text("输入视频地址可在收藏页直接播放；输入订阅地址后会在弹窗里继续处理安装。")
         }
     }
 
@@ -126,9 +133,13 @@ private struct MacSubscriptionContentSheet: View {
                     .listRowSeparator(.hidden)
                     .listRowInsets(rowInsets)
                 } else if pluginSourceManager.remotePlugins.isEmpty {
-                    ContentUnavailableView {
-                        Label("暂无可用内容", systemImage: "tray")
-                    }
+                    ErrorView.empty(
+                        title: "暂无可用内容",
+                        message: "当前订阅里还没有可安装内容，可以稍后刷新或更换订阅源。",
+                        symbolName: "tray",
+                        tint: .secondary,
+                        layout: .compact(minHeight: 180)
+                    )
                     .listRowSeparator(.hidden)
                     .listRowInsets(rowInsets)
                 } else {
@@ -168,17 +179,15 @@ private struct MacSubscriptionContentSheet: View {
     }
 
     private func contentRow(_ item: RemotePluginDisplayItem) -> some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(item.displayName)
-                    .font(.body)
-                Text("v\(item.item.version)")
-                    .font(.caption)
-                    .foregroundStyle(AppConstants.Colors.secondaryText)
-            }
-
-            Spacer()
-
+        PanelNavigationRow(
+            title: item.displayName,
+            subtitle: "版本 \(item.item.version)",
+            showsChevron: false
+        ) {
+            Image(systemName: "puzzlepiece.extension.fill")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(Color.orange.gradient)
+        } trailing: {
             itemStateView(item)
         }
         .padding(.vertical, 4)
