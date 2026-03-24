@@ -56,13 +56,24 @@ struct DetailPlayerView: View {
                 }
             )
         } else if roomInfoViewModel.currentPlayURL == nil {
-            VStack(spacing: 10) {
-                ProgressView()
-                    .tint(.white)
-                Text("正在解析直播地址")
+            ZStack {
+                KFImage(URL(string: roomInfoViewModel.currentRoom.roomCover))
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 1920, height: 1080)
+                    .clipped()
+                    .blur(radius: 24)
+                    .overlay {
+                        Color.black.opacity(0.5)
+                    }
+
+                VStack(spacing: 14) {
+                    ProgressView()
+                        .tint(.white)
+                    Text("正在解析直播地址")
+                }
             }
             .font(.headline)
-            .foregroundColor(.white)
             .frame(width: 1920, height: 1080)
             .background(.black)
         }else {
@@ -114,6 +125,7 @@ struct DetailPlayerView: View {
             .onPlayPauseCommand {
                 roomInfoViewModel.togglePlayPause()
             }
+            .frame(width: 1920, height: 1080)
         }
     }
     

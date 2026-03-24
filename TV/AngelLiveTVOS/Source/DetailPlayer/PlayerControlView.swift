@@ -37,6 +37,8 @@ struct PlayerControlView: View {
     @State var sectionList: [LiveModel] = []
     @State var selectIndex = 0
     @State private var showStatisticsPanel = false
+    @State private var suppressHiddenFocusActivation = false
+    @State private var pendingVisibleFocusAfterReveal: PlayControlFocusableField?
 
     @FocusState var state: PlayControlFocusableField?
     @FocusState var topState: PlayControlTopField?
@@ -59,6 +61,7 @@ struct PlayerControlView: View {
             .padding(.vertical, 8)
             .contentShape(Capsule())
     }
+
 
     var body: some View {
         
@@ -133,7 +136,13 @@ struct PlayerControlView: View {
                         withAnimation {
                             roomInfoViewModel.showTop = false
                         }
-                        state = roomInfoViewModel.lastOptionState
+                        DispatchQueue.main.async {
+                            if roomInfoViewModel.showControl {
+                                restoreControlFocus()
+                            } else {
+                                restoreHiddenControlFocus()
+                            }
+                        }
                     })
                     
                     Spacer()
@@ -198,33 +207,39 @@ struct PlayerControlView: View {
                     }
                     .zIndex(5)
                 }
+
+                if shouldShowHiddenControlAnchors {
+                    hiddenControlAnchorOverlay
+                        .zIndex(1)
+                }
                 
-                VStack() {
-                    ZStack {
-                        HStack {
-                            Text("\(roomInfoViewModel.currentRoom.userName) - \(roomInfoViewModel.currentRoom.roomTitle)")
-                                .font(.title3)
-                                .padding(.leading, 15)
-                                .foregroundStyle(.white)
-                            Spacer()
-                        }
-                        .background {
-                            LinearGradient(colors: [
-                                .black,
-                                .black.opacity(0.5),
-                                .black.opacity(0.1),
-                                .clear,
-                                .clear,
-                                .clear,
-                                .clear,
-                                .clear,
-                            ], startPoint: .top, endPoint: .bottom)
+                if roomInfoViewModel.showControl {
+                    VStack {
+                        ZStack {
+                            HStack {
+                                Text("\(roomInfoViewModel.currentRoom.userName) - \(roomInfoViewModel.currentRoom.roomTitle)")
+                                    .font(.title3)
+                                    .padding(.leading, 15)
+                                    .foregroundStyle(.white)
+                                Spacer()
+                            }
+                            .background {
+                                LinearGradient(colors: [
+                                    .black,
+                                    .black.opacity(0.5),
+                                    .black.opacity(0.1),
+                                    .clear,
+                                    .clear,
+                                    .clear,
+                                    .clear,
+                                    .clear,
+                                ], startPoint: .top, endPoint: .bottom)
+                                .frame(height: 150)
+                            }
                             .frame(height: 150)
                         }
-                        .frame(height: 150)
-                    }
-                    Spacer()
-                    HStack(alignment: .center, spacing: 15) {
+                        Spacer()
+                        HStack(alignment: .center, spacing: 15) {
 
                             Button(action: {}, label: {
 
@@ -421,52 +436,70 @@ struct PlayerControlView: View {
                         .frame(height: 150)
                     }
                     .frame(height: 150)
-                }
-                .environment(\.colorScheme, .dark)
-                .transition(.opacity)
-                .opacity(roomInfoViewModel.showControl ? 1 : 0)
-                .onExitCommand {
-                    if showStatisticsPanel {
-                        hideStatisticsPanel()
-                        return
                     }
-                    if roomInfoViewModel.showControl == true {
-                        roomInfoViewModel.showControl = false
-                        return
-                    }
-                    if roomInfoViewModel.showDanmuSettingView == true {
-                        state = roomInfoViewModel.lastOptionState
-                        return
-                    }
-                    if roomInfoViewModel.showControl == false {
-                        roomInfoViewModel.liveFlagTimer?.invalidate()
-                        roomInfoViewModel.liveFlagTimer = nil
-                        NotificationCenter.default.post(name: SimpleLiveNotificationNames.playerEndPlay, object: nil)
-                    }
+                    .environment(\.colorScheme, .dark)
+                    .focusSection()
+                    .transition(.opacity)
                 }
             }
         }
         .onAppear {
-            state = .playPause
             roomInfoViewModel.showControl = true
+            restoreControlFocus()
+        }
+        .onChange(of: roomInfoViewModel.showControl) { oldValue, isVisible in
+            if isVisible {
+                restoreControlFocus()
+            } else {
+                pendingVisibleFocusAfterReveal = nil
+                restoreHiddenControlFocus()
+            }
         }
         .onChange(of: state, { oldValue, newValue in
             roomInfoViewModel.controlViewOptionSecond = 5
-            
+
             if oldValue != .list && isListContentField(oldValue) == false && oldValue != nil {
                 roomInfoViewModel.lastOptionState = oldValue
             }
+
+            guard roomInfoViewModel.showTop == false,
+                  roomInfoViewModel.showDanmuSettingView == false,
+                  showStatisticsPanel == false else {
+                return
+            }
+
+            if roomInfoViewModel.showControl == false {
+                if suppressHiddenFocusActivation {
+                    suppressHiddenFocusActivation = false
+                }
+                return
+            }
+
             if newValue == .left {
                 state = .danmu
             }else if newValue == .right {
                 state = .playPause
             }else if newValue == .list {
-                withAnimation {
-                    roomInfoViewModel.showTop = true
-                    state = .listContent(0)
-                }
+                showRelatedRoomsPanel()
             }
         })
+        .onExitCommand {
+            guard roomInfoViewModel.showTop == false,
+                  roomInfoViewModel.showDanmuSettingView == false,
+                  showStatisticsPanel == false else {
+                return
+            }
+
+            if roomInfoViewModel.showControl {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    roomInfoViewModel.showControl = false
+                }
+            } else {
+                roomInfoViewModel.liveFlagTimer?.invalidate()
+                roomInfoViewModel.liveFlagTimer = nil
+                NotificationCenter.default.post(name: SimpleLiveNotificationNames.playerEndPlay, object: nil)
+            }
+        }
     }
 
     private func showStatisticsAction() {
@@ -484,9 +517,202 @@ struct PlayerControlView: View {
             showStatisticsPanel = false
             roomInfoViewModel.showControl = true
         }
+    }
+
+    private var shouldShowHiddenControlAnchors: Bool {
+        roomInfoViewModel.showControl == false &&
+        roomInfoViewModel.showTop == false &&
+        roomInfoViewModel.showDanmuSettingView == false &&
+        showStatisticsPanel == false
+    }
+
+    @ViewBuilder
+    private var hiddenControlAnchorOverlay: some View {
+        VStack {
+            Spacer()
+            HStack(alignment: .bottom, spacing: 15) {
+                hiddenControlAnchor(width: 40, height: 40, focus: .left)
+                    .padding(.leading, -80)
+
+                VStack(spacing: 20) {
+                    HStack(spacing: 0) {
+                        hiddenControlAnchor(width: 50, height: 60, focus: .playPause)
+                        hiddenControlAnchor(width: 50, height: 60, focus: .refresh)
+                        hiddenControlAnchor(width: 50, height: 60, focus: .favorite)
+                    }
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 10)
+
+                    hiddenControlAnchor(width: 150, height: 40, focus: .list)
+                }
+
+                Spacer()
+
+                VStack(spacing: 20) {
+                    HStack(spacing: 0) {
+                        hiddenControlAnchor(width: 150, height: 60, focus: .playQuality)
+                        Color.clear.frame(width: 15)
+                        hiddenControlAnchor(width: 50, height: 60, focus: .danmuSetting)
+                        hiddenControlAnchor(width: 50, height: 60, focus: .danmu)
+                    }
+                    .padding(.leading, 15)
+                    .padding(.vertical, 10)
+
+                    hiddenControlAnchor(width: 150, height: 40, focus: .list)
+                }
+
+                hiddenControlAnchor(width: 40, height: 40, focus: .right)
+                    .padding(.trailing, -80)
+            }
+            .frame(height: 150)
+            .offset(y: 220)
+        }
+        .ignoresSafeArea()
+    }
+
+    private func hiddenControlAnchor(width: CGFloat, height: CGFloat, focus: PlayControlFocusableField) -> some View {
+        Button(action: {}) {
+            Color.clear
+                .frame(width: width, height: height)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .focused($state, equals: focus)
+        .onMoveCommand { direction in
+            handleHiddenAnchorMove(from: focus, direction: direction)
+        }
+    }
+
+    private func restoreControlFocus() {
+        guard roomInfoViewModel.showTop == false,
+              roomInfoViewModel.showDanmuSettingView == false,
+              showStatisticsPanel == false else {
+            return
+        }
+
+        let preferredFocus = pendingVisibleFocusAfterReveal ?? (state == .list ? roomInfoViewModel.lastOptionState : (state ?? roomInfoViewModel.lastOptionState))
+        let target = resolvedVisibleControlFocus(from: preferredFocus)
+        DispatchQueue.main.async {
+            state = nil
+            DispatchQueue.main.async {
+                state = target
+                pendingVisibleFocusAfterReveal = nil
+            }
+        }
+    }
+
+    private func handleHiddenAnchorMove(from focus: PlayControlFocusableField, direction: MoveCommandDirection) {
+        guard shouldShowHiddenControlAnchors else {
+            return
+        }
+
+
+        switch direction {
+        case .down:
+            showRelatedRoomsPanel()
+        case .left, .right:
+            guard let target = nextVisibleFocus(from: focus, direction: direction) else {
+                return
+            }
+
+            pendingVisibleFocusAfterReveal = target
+            withAnimation(.easeInOut(duration: 0.2)) {
+                roomInfoViewModel.showControl = true
+            }
+        default:
+            break
+        }
+    }
+
+    private func restoreHiddenControlFocus() {
+        guard shouldShowHiddenControlAnchors else {
+            return
+        }
+
+        let preferredFocus = state == .list ? roomInfoViewModel.lastOptionState : (state ?? roomInfoViewModel.lastOptionState)
+        let target = resolvedHiddenAnchorFocus(from: preferredFocus)
+
+        suppressHiddenFocusActivation = true
+        DispatchQueue.main.async {
+            state = nil
+            DispatchQueue.main.async {
+                state = target
+            }
+        }
+    }
+
+    private func showRelatedRoomsPanel() {
+        let initialSection = preferredTopSectionIndex()
+        changeList(initialSection)
+
+        withAnimation(.easeInOut(duration: 0.2)) {
+            roomInfoViewModel.showTop = true
+        }
 
         DispatchQueue.main.async {
-            state = roomInfoViewModel.lastOptionState ?? .playPause
+            topState = .section(initialSection)
+        }
+    }
+
+    private func preferredTopSectionIndex() -> Int {
+        if roomInfoViewModel.roomType == .live {
+            return 2
+        }
+        return appViewModel.favoriteViewModel.cloudKitReady ? 0 : 1
+    }
+
+    private func resolvedVisibleControlFocus(from candidate: PlayControlFocusableField?) -> PlayControlFocusableField {
+        switch candidate {
+        case .refresh, .favorite, .playQuality, .danmu, .danmuSetting, .left, .right:
+            return candidate ?? .playPause
+        case .playPause:
+            return .playPause
+        default:
+            return .playPause
+        }
+    }
+
+    private func resolvedHiddenAnchorFocus(from candidate: PlayControlFocusableField?) -> PlayControlFocusableField {
+        switch candidate {
+        case .playPause, .refresh, .favorite, .playQuality, .danmu, .list, .left, .right, .danmuSetting:
+            return candidate ?? .playPause
+        default:
+            return .playPause
+        }
+    }
+
+    private func nextVisibleFocus(from focus: PlayControlFocusableField, direction: MoveCommandDirection) -> PlayControlFocusableField? {
+        switch (focus, direction) {
+        case (.left, .right):
+            return .playPause
+        case (.playPause, .left):
+            return .left
+        case (.playPause, .right):
+            return .refresh
+        case (.refresh, .left):
+            return .playPause
+        case (.refresh, .right):
+            return .favorite
+        case (.favorite, .left):
+            return .refresh
+        case (.favorite, .right):
+            return .playQuality
+        case (.playQuality, .left):
+            return .favorite
+        case (.playQuality, .right):
+            return .danmuSetting
+        case (.danmuSetting, .left):
+            return .playQuality
+        case (.danmuSetting, .right):
+            return .danmu
+        case (.danmu, .left):
+            return .danmuSetting
+        case (.danmu, .right):
+            return .right
+        case (.right, .left):
+            return .danmu
+        default:
+            return nil
         }
     }
     
