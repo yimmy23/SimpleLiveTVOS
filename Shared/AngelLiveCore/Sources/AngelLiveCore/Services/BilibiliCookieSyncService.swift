@@ -318,6 +318,15 @@ public final class BilibiliCookieSyncService: ObservableObject {
             return false
         }
 
+        // 如果本地已有更新的已认证 session，跳过 iCloud 覆盖
+        if let local = await PlatformSessionManager.shared.getSession(platformId: .bilibili),
+           local.state == .authenticated,
+           let localCookie = local.cookie, !localCookie.isEmpty,
+           local.updatedAt >= syncedData.timestamp {
+            print("[BilibiliCookieSyncService] 本地 Cookie 比 iCloud 更新，跳过")
+            return false
+        }
+
         // 验证 Cookie
         let result = await validateCookie(syncedData.cookie)
 
@@ -877,6 +886,14 @@ extension BilibiliCookieSyncService {
                 guard let data = record[CloudCookieFields.cookieDataField] as? Data,
                       let syncedData = try? JSONDecoder().decode(SyncedCookieData.self, from: data),
                       !syncedData.cookie.isEmpty else {
+                    continue
+                }
+
+                // 如果本地已有更新的 authenticated session，跳过 iCloud 覆盖
+                if let local = await PlatformSessionManager.shared.getSession(platformId: platformId),
+                   local.state == .authenticated,
+                   let localCookie = local.cookie, !localCookie.isEmpty,
+                   local.updatedAt >= syncedData.timestamp {
                     continue
                 }
 
