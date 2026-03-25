@@ -578,6 +578,7 @@ struct VideoSettingHUDView: View {
         .overlay {
             RoundedRectangle(cornerRadius: 26, style: .continuous)
                 .stroke(.white.opacity(0.12), lineWidth: 1)
+                .allowsHitTesting(false)
         }
         .shadow(color: .black.opacity(0.2), radius: 20, y: 10)
     }
@@ -603,9 +604,10 @@ struct VideoSettingHUDView: View {
                     .font(.system(size: 16, weight: .bold))
                     .foregroundStyle(.white)
                     .frame(width: 40, height: 40)
+                    .contentShape(Circle())
+                    .adaptiveCircleGlassEffect()
             }
             .buttonStyle(.plain)
-            .adaptiveCircleGlassEffect()
         }
     }
 
