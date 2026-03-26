@@ -236,6 +236,26 @@ class FavoriteListViewController: UIViewController {
         updateFilteredSections()
     }
 
+    /// 仅更新状态视图（skeleton/error/empty），不触发 collectionView.reloadData()
+    /// 用于 syncStatus、isLoading 等状态变化但数据未变时
+    func updateStateViewsOnly() {
+        hideAllStateViews()
+
+        if viewModel.isLoading && filteredSections.isEmpty {
+            // 仅在没有旧数据时显示骨架屏
+            showSkeletonView()
+        } else if viewModel.cloudReturnError || !viewModel.cloudKitReady {
+            showErrorView(message: viewModel.cloudKitStateString)
+        } else if filteredSections.isEmpty {
+            if searchText.isEmpty {
+                showEmptyView()
+            } else {
+                showSearchEmptyView()
+            }
+        }
+        // 有数据时什么都不做 - 保持当前 collection 不变
+    }
+
     private func updateViewState() {
         hideAllStateViews()
 

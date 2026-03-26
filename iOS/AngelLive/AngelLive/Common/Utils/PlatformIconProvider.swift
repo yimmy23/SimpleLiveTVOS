@@ -12,20 +12,45 @@ enum PlatformIconProvider {
     private static let installedCardIconPrefix = "assets/tv_"
     private static let installedTabIconPrefix = "assets/mini_live_card_"
 
+    /// 内存缓存：避免滚动时反复进行磁盘 I/O
+    private static var tabImageCache: [String: UIImage] = [:]
+    private static var cardImageCache: [String: UIImage] = [:]
+
+    /// 清除缓存（插件更新后调用）
+    static func clearCache() {
+        tabImageCache.removeAll()
+        cardImageCache.removeAll()
+    }
+
     static func tabImage(for liveType: LiveType) -> UIImage? {
+        let cacheKey = liveType.rawValue
+        if let cached = tabImageCache[cacheKey] {
+            return cached
+        }
+
         guard let platform = SandboxPluginCatalog.platform(for: liveType) else {
             return nil
         }
         let pluginId = platform.pluginId
 
         if let installedImage = loadInstalledIcon(pluginId: pluginId, fileName: installedTabIconPrefix + pluginId) {
+            tabImageCache[cacheKey] = installedImage
             return installedImage
         }
 
-        return legacyTabImage(liveType: liveType)
+        let legacyImage = legacyTabImage(liveType: liveType)
+        if let legacyImage {
+            tabImageCache[cacheKey] = legacyImage
+        }
+        return legacyImage
     }
 
     static func configCardImage(for liveType: LiveType, isDarkMode: Bool) -> UIImage? {
+        let cacheKey = "\(liveType.rawValue)_\(isDarkMode)"
+        if let cached = cardImageCache[cacheKey] {
+            return cached
+        }
+
         guard let platform = SandboxPluginCatalog.platform(for: liveType) else {
             return nil
         }
@@ -35,10 +60,15 @@ enum PlatformIconProvider {
 
         if let installedImage = loadInstalledIcon(pluginId: pluginId, fileName: primaryName)
             ?? loadInstalledIcon(pluginId: pluginId, fileName: fallbackName) {
+            cardImageCache[cacheKey] = installedImage
             return installedImage
         }
 
-        return legacyCardImage(liveType: liveType, isDarkMode: isDarkMode)
+        let legacyImage = legacyCardImage(liveType: liveType, isDarkMode: isDarkMode)
+        if let legacyImage {
+            cardImageCache[cacheKey] = legacyImage
+        }
+        return legacyImage
     }
 
     private static func loadInstalledIcon(pluginId: String, fileName: String) -> UIImage? {

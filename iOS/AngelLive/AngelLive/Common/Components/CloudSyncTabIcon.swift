@@ -16,7 +16,7 @@ struct CloudSyncTabIcon: View {
             Image(systemName: iconName)
                 .symbolEffect(
                     .rotate.byLayer,
-                    options: .repeat(.periodic(delay: 0.0)),
+                    options: .repeat(.periodic(delay: 0.5)),
                     isActive: syncStatus == .syncing
                 )
                 .symbolRenderingMode(.hierarchical)

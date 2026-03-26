@@ -160,7 +160,8 @@ struct LiveRoomCard: View {
                             .padding(6)
                     }
                 }
-                .clipShape(RoundedRectangle(cornerRadius: AppConstants.CornerRadius.lg))
+                .cornerRadius(AppConstants.CornerRadius.lg)
+                .clipped()
                 .modifier(MatchedTransitionSourceModifier(id: room.roomId, namespace: namespace))
 
             // 主播信息
@@ -184,10 +185,6 @@ struct LiveRoomCard: View {
                 Spacer()
             }
         }
-        .background(
-            RoundedRectangle(cornerRadius: AppConstants.CornerRadius.lg)
-                .fill(.clear)
-        )
         .contentShape(Rectangle())
     }
 
@@ -204,15 +201,8 @@ struct LiveRoomCard: View {
         }
         .padding(.horizontal, 7)
         .padding(.vertical, 4)
-        .background(
-            Capsule(style: .continuous)
-                .fill(Color.black.opacity(0.58))
-        )
-        .overlay(
-            Capsule(style: .continuous)
-                .stroke(Color.white.opacity(0.10), lineWidth: 0.5)
-        )
-        .shadow(color: .black.opacity(0.14), radius: 6, x: 0, y: 2)
+        .background(Color.black.opacity(0.58))
+        .clipShape(Capsule(style: .continuous))
     }
 
     @ViewBuilder
@@ -235,14 +225,17 @@ struct LiveRoomCard: View {
     private var coverView: some View {
         Group {
             if let url = coverURL {
-                // 背景模糊层：填充整个容器，不设置 aspectRatio
+                // 背景模糊层：模糊在缓存时预处理，避免滚动时 GPU 实时模糊（减少 offscreen passes）
                 KFImage(url)
+                    .setProcessor(
+                        DownsamplingImageProcessor(size: CGSize(width: 80, height: 45))
+                        |> BlurImageProcessor(blurRadius: 8)
+                    )
                     .placeholder {
                         Rectangle()
                             .fill(AppConstants.Colors.placeholderGradient())
                     }
                     .resizable()
-                    .blur(radius: 20)
                     .overlay(
                         // 前景清晰层：保持原比例居中显示，不变形
                         KFImage(url)
@@ -262,11 +255,9 @@ struct LiveRoomCard: View {
     private var avatarView: some View {
         Group {
             if let url = avatarURL {
-                KFAnimatedImage(url)
-                    .configure { view in
-                        view.framePreloadCount = 2
-                    }
+                KFImage(url)
                     .placeholder { avatarPlaceholder }
+                    .resizable()
                     .aspectRatio(contentMode: .fill)
             } else {
                 avatarPlaceholder

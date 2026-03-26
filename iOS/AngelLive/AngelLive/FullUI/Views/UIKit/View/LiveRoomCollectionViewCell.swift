@@ -30,59 +30,41 @@ class LiveRoomCollectionViewCell: UICollectionViewCell {
     }
 
     func configure(with room: LiveModel, showsCoverBadge: Bool = false) {
-        // 移除旧的 hosting controller
-        hostingController?.view.removeFromSuperview()
-        hostingController?.removeFromParent()
-
-        // 创建新的 SwiftUI 视图
         let roomCard = LiveRoomCard(room: room, skipLiveCheck: true, showsCoverBadge: showsCoverBadge)
-        let hosting = UIHostingController(rootView: AnyView(roomCard))
-        hosting.view.backgroundColor = .clear
-        hosting.view.translatesAutoresizingMaskIntoConstraints = false
-
-        contentView.addSubview(hosting.view)
-
-        NSLayoutConstraint.activate([
-            hosting.view.topAnchor.constraint(equalTo: contentView.topAnchor),
-            hosting.view.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
-            hosting.view.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-            hosting.view.bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
-        ])
-
-        hostingController = hosting
+        applyRootView(AnyView(roomCard))
     }
 
     /// 配置 cell（带外部导航状态和命名空间，用于解决 PiP 导航状态丢失问题）
     func configure(with room: LiveModel, navigationState: LiveRoomNavigationState, namespace: Namespace.ID, onDelete: (() -> Void)? = nil, showsCoverBadge: Bool = false) {
-        // 移除旧的 hosting controller
-        hostingController?.view.removeFromSuperview()
-        hostingController?.removeFromParent()
-
-        // 创建新的 SwiftUI 视图，注入外部导航状态和命名空间
         var roomCard = LiveRoomCard(room: room, skipLiveCheck: true, showsCoverBadge: showsCoverBadge)
         roomCard.onDelete = onDelete
         let cardView = roomCard
             .environment(\.liveRoomNavigationState, navigationState)
             .environment(\.roomTransitionNamespace, namespace)
-        let hosting = UIHostingController(rootView: AnyView(cardView))
-        hosting.view.backgroundColor = .clear
-        hosting.view.translatesAutoresizingMaskIntoConstraints = false
+        applyRootView(AnyView(cardView))
+    }
 
-        contentView.addSubview(hosting.view)
-
-        NSLayoutConstraint.activate([
-            hosting.view.topAnchor.constraint(equalTo: contentView.topAnchor),
-            hosting.view.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
-            hosting.view.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-            hosting.view.bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
-        ])
-
-        hostingController = hosting
+    /// 复用已有 UIHostingController，避免滚动时反复创建/销毁的开销
+    private func applyRootView(_ rootView: AnyView) {
+        if let hosting = hostingController {
+            hosting.rootView = rootView
+        } else {
+            let hosting = UIHostingController(rootView: rootView)
+            hosting.view.backgroundColor = .clear
+            hosting.view.translatesAutoresizingMaskIntoConstraints = false
+            contentView.addSubview(hosting.view)
+            NSLayoutConstraint.activate([
+                hosting.view.topAnchor.constraint(equalTo: contentView.topAnchor),
+                hosting.view.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+                hosting.view.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+                hosting.view.bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
+            ])
+            hostingController = hosting
+        }
     }
 
     override func prepareForReuse() {
         super.prepareForReuse()
-        hostingController?.view.removeFromSuperview()
-        hostingController = nil
+        // 不销毁 hostingController，复用时直接更新 rootView
     }
 }

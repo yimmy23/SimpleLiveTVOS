@@ -64,11 +64,16 @@ public final class AppFavoriteModel {
         isSyncing = true
         defer { isSyncing = false }  // 确保无论成功或失败都重置状态
 
-        roomList.removeAll()
-        groupedRoomList.removeAll()
+        let hasExistingData = !roomList.isEmpty
+        // 有旧数据时保留列表，避免整页重建导致滚动卡顿
+        if !hasExistingData {
+            roomList.removeAll()
+            groupedRoomList.removeAll()
+        }
         cloudReturnError = false
         syncProgressInfo = ("", "", "", 0, 0)
-        self.isLoading = true
+        // 有旧数据时不显示 loading 骨架屏，保持列表可滚动
+        self.isLoading = !hasExistingData
         self.syncStatus = .syncing
 
         let state = await actor.getState()
