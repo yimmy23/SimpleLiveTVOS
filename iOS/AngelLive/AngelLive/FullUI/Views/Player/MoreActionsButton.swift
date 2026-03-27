@@ -15,6 +15,7 @@ struct MoreActionsButton: View {
     let room: LiveModel
     var onClearChat: () -> Void
     var showQualityOption: Bool = false
+    var onShowQualityPanel: (() -> Void)? = nil
 
     @Environment(RoomInfoViewModel.self) private var viewModel
     @State private var showStreamerInfo = false
@@ -26,6 +27,14 @@ struct MoreActionsButton: View {
                 showStreamerInfo = true
             }
 
+            if showQualityOption {
+                Button("清晰度 - \(viewModel.currentPlayQualityString)") {
+                    onShowQualityPanel?()
+                }
+            }
+
+            // MARK: - Legacy Quality Menu (commented out for rollback)
+            /*
             if showQualityOption, let playArgs = viewModel.currentRoomPlayArgs {
                 Menu("清晰度 - \(viewModel.currentPlayQualityString)") {
                     ForEach(Array(playArgs.enumerated()), id: \.offset) { cdnIndex, cdn in
@@ -46,6 +55,7 @@ struct MoreActionsButton: View {
                     }
                 }
             }
+            */
 
             Button("清屏") {
                 onClearChat()

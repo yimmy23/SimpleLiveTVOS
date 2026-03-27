@@ -25,6 +25,7 @@ struct VerticalLiveControllerView: View {
     @State private var backTapped = false
     @State private var isFavoriteAnimating = false
     @State private var showStreamerInfo = false
+    @State private var showQualityPanel = false
 
     /// 判断是否已收藏
     private var isFavorited: Bool {
@@ -71,9 +72,17 @@ struct VerticalLiveControllerView: View {
             // 右下角：更多按钮
             bottomRightArea
                 .padding(.bottom, safeAreaInsets.bottom)
+
+            // 清晰度选择面板（右侧滑入）
+            if showQualityPanel {
+                QualitySelectionPanel(isShowing: $showQualityPanel)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
         }
+        .animation(.easeInOut(duration: 0.3), value: showQualityPanel)
         .environment(\.colorScheme, .dark)
-        .opacity(model.config.isMaskShow ? 1 : 0)
+        .opacity(model.config.isMaskShow || showQualityPanel ? 1 : 0)
     }
 
     // MARK: - 顶部信息栏
@@ -227,7 +236,10 @@ struct VerticalLiveControllerView: View {
                             viewModel.danmuMessages.removeAll()
                         }
                     },
-                    showQualityOption: true
+                    showQualityOption: true,
+                    onShowQualityPanel: {
+                        showQualityPanel = true
+                    }
                 )
             }
             .padding(.trailing, 16)

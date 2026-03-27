@@ -415,6 +415,19 @@ public enum KSVideoPlayerViewBuilder {
     }
 
     @ViewBuilder
+    static func qualityMenuButton(viewModel: RoomInfoViewModel, showQualitySheet: Binding<Bool>) -> some View {
+        Button {
+            showQualitySheet.wrappedValue = true
+        } label: {
+            Text(viewModel.currentPlayQualityString)
+                .foregroundStyle(.white)
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Legacy Quality Menu (commented out for rollback)
+    /*
+    @ViewBuilder
     static func qualityMenuButton(viewModel: RoomInfoViewModel) -> some View {
         Menu {
             if let playArgs = viewModel.currentRoomPlayArgs {
@@ -445,6 +458,7 @@ public enum KSVideoPlayerViewBuilder {
         .menuStyle(.borderlessButton)
         .tint(.primary)
     }
+    */
 }
 
 private extension View {

@@ -24,6 +24,7 @@ struct UnifiedPlayerControlOverlay: View {
     @State private var isSettingsPopupOpen = false
     @State private var statusBarVM = StatusBarViewModel()
     @State private var videoScaleMode: VideoScaleMode = PlayerSettingModel().videoScaleMode
+    @State private var showQualityPanel = false
 
     // 将 bridge.isMaskShow 的值提取到本地 @State 以便 SwiftUI 能可靠追踪变化
     @State private var isMaskVisible: Bool = true
@@ -139,7 +140,7 @@ struct UnifiedPlayerControlOverlay: View {
 
     /// 是否有弹窗/菜单展开
     private var isPopupOpen: Bool {
-        showDanmakuSettings || showVideoSetting || isSettingsPopupOpen
+        showDanmakuSettings || showVideoSetting || isSettingsPopupOpen || showQualityPanel
     }
 
     var body: some View {
@@ -220,7 +221,14 @@ struct UnifiedPlayerControlOverlay: View {
                         }
                     }
             )
+            // 清晰度选择面板（右侧滑入）
+            if showQualityPanel {
+                QualitySelectionPanel(isShowing: $showQualityPanel)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
         }
+        .animation(.easeInOut(duration: 0.3), value: showQualityPanel)
         .tint(.white)
         // 双向同步 bridge.isMaskShow ↔ isMaskVisible
         .onChange(of: bridge.isMaskShow.wrappedValue) { _, newValue in
@@ -247,6 +255,13 @@ struct UnifiedPlayerControlOverlay: View {
             }
         }
         .onChange(of: showVideoSetting) { _, isShowing in
+            if !isShowing && isMaskVisible && !isPopupOpen {
+                startAutoHideTimer()
+            } else if isShowing {
+                cancelAutoHideTimer()
+            }
+        }
+        .onChange(of: showQualityPanel) { _, isShowing in
             if !isShowing && isMaskVisible && !isPopupOpen {
                 startAutoHideTimer()
             } else if isShowing {
@@ -470,6 +485,18 @@ struct UnifiedPlayerControlOverlay: View {
     // MARK: - Quality Menu
 
     private var qualityMenu: some View {
+        Button {
+            showQualityPanel = true
+        } label: {
+            Text(viewModel.currentPlayQualityString)
+                .foregroundStyle(.white)
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Legacy Quality Menu (commented out for rollback)
+    /*
+    private var qualityMenuLegacy: some View {
         Menu {
             if let playArgs = viewModel.currentRoomPlayArgs {
                 ForEach(displayedCDNIndices(from: playArgs), id: \.self) { cdnIndex in
@@ -501,6 +528,7 @@ struct UnifiedPlayerControlOverlay: View {
         .menuStyle(.borderlessButton)
         .tint(.primary)
     }
+    */
 
     private func displayedCDNIndices(from playArgs: [LiveQualityModel]) -> [Int] {
         let indices = Array(playArgs.indices)

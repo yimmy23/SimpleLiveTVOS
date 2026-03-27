@@ -29,12 +29,13 @@ struct VideoControllerView: View {
     @State private var showDanmakuSettings = false
     @State private var autoHideTask: Task<Void, Never>? // 自动隐藏控制层的任务
     @State private var isSettingsPopupOpen = false // SettingsButton 内部弹窗状态
+    @State private var showQualityPanel = false
     @State private var videoScaleMode: VideoScaleMode = PlayerSettingModel().videoScaleMode
     @State private var statusBarVM = StatusBarViewModel()
 
     /// 是否有弹窗/菜单展开（展开时暂停自动隐藏）
     private var isPopupOpen: Bool {
-        showDanmakuSettings || model.showVideoSetting || isSettingsPopupOpen
+        showDanmakuSettings || model.showVideoSetting || isSettingsPopupOpen || showQualityPanel
     }
 
     private var playerWidth: CGFloat {
@@ -421,7 +422,7 @@ struct VideoControllerView: View {
                                     KSVideoPlayerViewBuilder.danmakuButton(showDanmu: $viewModel.danmuSettings.showDanmu)
 
                                     // 清晰度设置菜单
-                                    KSVideoPlayerViewBuilder.qualityMenuButton(viewModel: viewModel)
+                                    KSVideoPlayerViewBuilder.qualityMenuButton(viewModel: viewModel, showQualitySheet: $showQualityPanel)
 
                                     // 竖屏按钮（仅在视频为竖屏时显示）
                                     if let naturalSize = model.config.playerLayer?.player.naturalSize,
@@ -465,11 +466,20 @@ struct VideoControllerView: View {
                         .transition(.move(edge: .trailing).combined(with: .opacity))
                         .ignoresSafeArea(shouldIgnoreSafeArea ? .all : [])
                 }
+
+                // 清晰度选择面板（右侧滑入）
+                if showQualityPanel {
+                    QualitySelectionPanel(isShowing: $showQualityPanel)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                        .ignoresSafeArea(shouldIgnoreSafeArea ? .all : [])
+                }
             }
             .ksIsFocused($model.focusableView, equals: .controller)
             .font(.body)
             .buttonStyle(.borderless)
             .animation(.easeInOut(duration: 0.3), value: model.showVideoSetting)
+            .animation(.easeInOut(duration: 0.3), value: showQualityPanel)
             .sheet(isPresented: $showDanmakuSettings) {
                 DanmakuSettingsSheet(isPresented: $showDanmakuSettings)
                     .presentationDetents([.medium, .large])
