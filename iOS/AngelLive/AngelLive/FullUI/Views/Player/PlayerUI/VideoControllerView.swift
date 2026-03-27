@@ -233,6 +233,13 @@ struct VideoControllerView: View {
                     windowScene.requestGeometryUpdate(geometryPreferences) { error in
                         print("❌ 退出全屏失败: \(error)")
                     }
+                    // 旋转完成后恢复自由旋转
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        KSOptions.supportedInterfaceOrientations = .allButUpsideDown
+                        if let rootVC = windowScene.windows.first(where: { $0.isKeyWindow })?.rootViewController {
+                            rootVC.setNeedsUpdateOfSupportedInterfaceOrientations()
+                        }
+                    }
                 }
             } else {
                 // iOS 16 以下降级方案

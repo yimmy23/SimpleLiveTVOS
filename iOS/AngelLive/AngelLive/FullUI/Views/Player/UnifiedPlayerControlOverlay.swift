@@ -585,7 +585,7 @@ struct UnifiedPlayerControlOverlay: View {
             isIPadFullscreen.wrappedValue = false
             return
         } else if !AppConstants.Device.isIPad && isCurrentLandscape {
-            // iPhone 横屏：先切回竖屏
+            // iPhone 横屏：先切回竖屏，旋转完成后恢复自由旋转
             KSOptions.supportedInterfaceOrientations = .portrait
 
             guard let windowScene = UIApplication.shared.connectedScenes
@@ -604,6 +604,13 @@ struct UnifiedPlayerControlOverlay: View {
             DispatchQueue.main.async {
                 windowScene.requestGeometryUpdate(geometryPreferences) { error in
                     print("❌ 退出全屏失败: \(error)")
+                }
+                // 旋转完成后恢复自由旋转，允许再次横屏自动全屏
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    KSOptions.supportedInterfaceOrientations = .allButUpsideDown
+                    if let rootVC = windowScene.windows.first(where: { $0.isKeyWindow })?.rootViewController {
+                        rootVC.setNeedsUpdateOfSupportedInterfaceOrientations()
+                    }
                 }
             }
         } else {
@@ -639,6 +646,13 @@ struct UnifiedPlayerControlOverlay: View {
             )
             windowScene.requestGeometryUpdate(geometryPreferences) { error in
                 print("❌ 方向更新失败: \(error)")
+            }
+            // 旋转完成后恢复自由旋转
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                KSOptions.supportedInterfaceOrientations = .allButUpsideDown
+                if let rootVC = windowScene.windows.first(where: { $0.isKeyWindow })?.rootViewController {
+                    rootVC.setNeedsUpdateOfSupportedInterfaceOrientations()
+                }
             }
         }
     }

@@ -207,6 +207,13 @@ struct PlayerGestureView: View {
                 windowScene.requestGeometryUpdate(geometryPreferences) { error in
                     print("❌ 切换屏幕方向失败: \(error)")
                 }
+                // 旋转完成后恢复自由旋转，允许后续横屏自动全屏
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    KSOptions.supportedInterfaceOrientations = .allButUpsideDown
+                    if let rootVC = windowScene.windows.first(where: { $0.isKeyWindow })?.rootViewController {
+                        rootVC.setNeedsUpdateOfSupportedInterfaceOrientations()
+                    }
+                }
             }
         } else {
             let orientation: UIInterfaceOrientation = isCurrentlyLandscape ? .portrait : .landscapeRight

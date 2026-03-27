@@ -252,6 +252,17 @@ struct DetailPlayerView: View {
                 break
             }
         }
+        .onChange(of: isVerticalLiveMode) { _, isVertical in
+            // 竖屏直播模式下锁定竖屏，不允许自动横屏全屏
+            if !AppConstants.Device.isIPad && isVertical {
+                KSOptions.supportedInterfaceOrientations = .portrait
+                if let rootVC = UIApplication.shared.connectedScenes
+                    .compactMap({ $0 as? UIWindowScene })
+                    .first?.windows.first(where: { $0.isKeyWindow })?.rootViewController {
+                    rootVC.setNeedsUpdateOfSupportedInterfaceOrientations()
+                }
+            }
+        }
         .onChange(of: viewModel.isPlaying) { _, isPlaying in
             NowPlayingManager.updatePlaybackState(isPlaying: isPlaying)
         }
@@ -264,6 +275,15 @@ struct DetailPlayerView: View {
             // 设置 Now Playing 信息
             NowPlayingManager.update(room: viewModel.currentRoom, isPlaying: false)
             setupRemoteCommandCenter()
+            // iPhone 进入播放页时允许自由旋转，横屏时自动全屏
+            if !AppConstants.Device.isIPad {
+                KSOptions.supportedInterfaceOrientations = .allButUpsideDown
+                if let rootVC = UIApplication.shared.connectedScenes
+                    .compactMap({ $0 as? UIWindowScene })
+                    .first?.windows.first(where: { $0.isKeyWindow })?.rootViewController {
+                    rootVC.setNeedsUpdateOfSupportedInterfaceOrientations()
+                }
+            }
         }
         .onDisappear {
             Logger.debug("[PlayerFlow] Detail onDisappear, roomId=\(viewModel.currentRoom.roomId), kernel=\(viewModel.selectedPlayerKernel.rawValue)", category: .player)

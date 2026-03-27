@@ -333,7 +333,7 @@ public enum KSVideoPlayerViewBuilder {
         
         // 更新 KSOptions
         KSOptions.supportedInterfaceOrientations = targetOrientation
-        
+
         // 先通知 ViewController 刷新支持的方向
         if let rootVC = windowScene.windows.first(where: { $0.isKeyWindow })?.rootViewController {
             rootVC.setNeedsUpdateOfSupportedInterfaceOrientations()
@@ -345,6 +345,13 @@ public enum KSVideoPlayerViewBuilder {
             )
             windowScene.requestGeometryUpdate(geometryPreferences) { error in
                 print("❌ 方向更新失败: \(error)")
+            }
+            // 旋转完成后恢复自由旋转
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                KSOptions.supportedInterfaceOrientations = .allButUpsideDown
+                if let rootVC = windowScene.windows.first(where: { $0.isKeyWindow })?.rootViewController {
+                    rootVC.setNeedsUpdateOfSupportedInterfaceOrientations()
+                }
             }
         }
     }
@@ -388,6 +395,13 @@ public enum KSVideoPlayerViewBuilder {
                 )
                 windowScene.requestGeometryUpdate(geometryPreferences) { error in
                     print("❌ 方向更新失败: \(error)")
+                }
+                // 旋转完成后恢复自由旋转
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    KSOptions.supportedInterfaceOrientations = .allButUpsideDown
+                    if let rootVC = windowScene.windows.first(where: { $0.isKeyWindow })?.rootViewController {
+                        rootVC.setNeedsUpdateOfSupportedInterfaceOrientations()
+                    }
                 }
             }
 
