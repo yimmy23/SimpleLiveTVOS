@@ -292,7 +292,11 @@ final class RoomInfoViewModel {
         if platform == .douyin && currentPlayURL != nil {
             let context = RoomPlaybackResolver.douyinPlaybackContext(cdn: cdn, quality: quality)
             fetchPlayURL(platform: .douyin, context: context, debugContext: debugContext) { newPlayArgs in
-                if let selection = RoomPlaybackResolver.matchingSelection(in: newPlayArgs, preferredQuality: quality) {
+                if let selection = RoomPlaybackResolver.matchingSelection(
+                    in: newPlayArgs,
+                    preferredQuality: quality,
+                    preferredCDN: cdn
+                ) {
                     return URL(string: selection.quality.url)
                 }
                 return RoomPlaybackResolver.firstPlayableURL(from: newPlayArgs)
