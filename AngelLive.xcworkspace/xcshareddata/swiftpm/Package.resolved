@@ -131,8 +131,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/TracyPlayer/KSPlayer",
       "state" : {
-        "revision" : "831769b468bce44cfd4cc67fec64c35f09085705",
-        "version" : "2.8.0"
+        "branch" : "lgpl",
+        "revision" : "03d21e8252ac98b3487afd3c5ee2c7b69cd0b901"
       }
     },
     {
@@ -158,8 +158,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/EmergeTools/Pow",
       "state" : {
-        "revision" : "a504eb6d144bcf49f4f33029a2795345cb39e6b4",
-        "version" : "1.0.5"
+        "branch" : "main",
+        "revision" : "1b4b1dda28c50b95f0872927ee2226fe8b58950e"
       }
     },
     {

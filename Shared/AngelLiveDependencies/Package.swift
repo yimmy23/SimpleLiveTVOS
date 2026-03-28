@@ -17,7 +17,7 @@ private func resolveFFmpegKitDependency() -> Package.Dependency? {
 private func resolveKSPlayerDependency() -> (package: Package.Dependency, target: Target.Dependency)? {
     guard !useVLC else { return nil }
     return (
-        .package(url: "https://github.com/TracyPlayer/KSPlayer", exact: "2.8.0"),
+        .package(url: "https://github.com/TracyPlayer/KSPlayer", branch: "lgpl"),
         "KSPlayer"
     )
 }
@@ -47,7 +47,7 @@ if useVLC {
 }
 
 packageDependencies += [
-    .package(url: "https://github.com/EmergeTools/Pow", from: "1.0.5"),
+    .package(url: "https://github.com/EmergeTools/Pow", branch: "main"),
     .package(url: "https://github.com/sanzaru/SimpleToast", from: "0.11.0"),
     .package(url: "https://github.com/apple/swift-nio.git", from: "2.86.2"),
     .package(url: "https://github.com/markiv/SwiftUI-Shimmer", branch: "iOS17-animate-start-end-points"),
