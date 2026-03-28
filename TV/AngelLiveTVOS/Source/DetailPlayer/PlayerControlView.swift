@@ -37,6 +37,7 @@ struct PlayerControlView: View {
     @State var sectionList: [LiveModel] = []
     @State var selectIndex = 0
     @State private var showStatisticsPanel = false
+    @State private var showQualityPanel = false
     @State private var suppressHiddenFocusActivation = false
     @State private var pendingVisibleFocusAfterReveal: PlayControlFocusableField?
 
@@ -208,6 +209,36 @@ struct PlayerControlView: View {
                     .zIndex(5)
                 }
 
+                if showQualityPanel {
+                    GeometryReader { geometry in
+                        HStack {
+                            Spacer()
+                            TVQualitySelectionPanel(
+                                onSelect: { cdnIndex, urlIndex in
+                                    roomInfoViewModel.changePlayUrl(cdnIndex: cdnIndex, urlIndex: urlIndex)
+                                    hideQualityPanel()
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                        if playerCoordinator.playerLayer?.player.isPlaying ?? false == false {
+                                            playerCoordinator.playerLayer?.play()
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                                                roomInfoViewModel.showControlView = false
+                                            }
+                                        }
+                                    }
+                                },
+                                onClose: {
+                                    hideQualityPanel()
+                                }
+                            )
+                            .frame(width: min(geometry.size.width * 0.4, 640), height: geometry.size.height - 80)
+                            .padding(.vertical, 40)
+                            .padding(.trailing, 48)
+                            .transition(.move(edge: .trailing).combined(with: .opacity))
+                        }
+                    }
+                    .zIndex(5)
+                }
+
                 if shouldShowHiddenControlAnchors {
                     hiddenControlAnchorOverlay
                         .zIndex(1)
@@ -321,33 +352,8 @@ struct PlayerControlView: View {
                         VStack {
                             HStack(spacing: 0) {
                                 if roomInfoViewModel.showControl {
-                                    Menu {
-                                        if let playArgs = roomInfoViewModel.currentRoomPlayArgs, !playArgs.isEmpty {
-                                            ForEach(playArgs.indices, id: \.self) { index in
-                                                let cdn = playArgs[index]
-                                                let cdnName = cdn.cdn.isEmpty ? "线路 \(index + 1)" : cdn.cdn
-                                                Menu(cdnName) {
-                                                    ForEach(cdn.qualitys.indices, id: \.self) { subIndex in
-                                                        Button {
-                                                            roomInfoViewModel.changePlayUrl(cdnIndex: index, urlIndex: subIndex)
-                                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: {
-                                                                if playerCoordinator.playerLayer?.player.isPlaying ?? false == false {
-                                                                    playerCoordinator.playerLayer?.play()
-                                                                    DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: {
-                                                                        roomInfoViewModel.showControlView = false
-                                                                    })
-                                                                }
-                                                            })
-                                                        } label: {
-                                                            Text(cdn.qualitys[subIndex].title)
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        } else {
-                                            Button("暂无线路") {}
-                                                .disabled(true)
-                                        }
+                                    Button {
+                                        showQualityAction()
                                     } label: {
                                         qualityLabel()
                                     }
@@ -464,7 +470,8 @@ struct PlayerControlView: View {
 
             guard roomInfoViewModel.showTop == false,
                   roomInfoViewModel.showDanmuSettingView == false,
-                  showStatisticsPanel == false else {
+                  showStatisticsPanel == false,
+                  showQualityPanel == false else {
                 return
             }
 
@@ -486,7 +493,8 @@ struct PlayerControlView: View {
         .onExitCommand {
             guard roomInfoViewModel.showTop == false,
                   roomInfoViewModel.showDanmuSettingView == false,
-                  showStatisticsPanel == false else {
+                  showStatisticsPanel == false,
+                  showQualityPanel == false else {
                 return
             }
 
@@ -519,11 +527,29 @@ struct PlayerControlView: View {
         }
     }
 
+    private func showQualityAction() {
+        guard ensureControlVisible() else { return }
+        roomInfoViewModel.lastOptionState = state ?? .playQuality
+        state = nil
+        withAnimation(.easeInOut(duration: 0.28)) {
+            showQualityPanel = true
+            roomInfoViewModel.showControl = false
+        }
+    }
+
+    private func hideQualityPanel() {
+        withAnimation(.easeInOut(duration: 0.28)) {
+            showQualityPanel = false
+            roomInfoViewModel.showControl = true
+        }
+    }
+
     private var shouldShowHiddenControlAnchors: Bool {
         roomInfoViewModel.showControl == false &&
         roomInfoViewModel.showTop == false &&
         roomInfoViewModel.showDanmuSettingView == false &&
-        showStatisticsPanel == false
+        showStatisticsPanel == false &&
+        showQualityPanel == false
     }
 
     @ViewBuilder
@@ -586,7 +612,8 @@ struct PlayerControlView: View {
     private func restoreControlFocus() {
         guard roomInfoViewModel.showTop == false,
               roomInfoViewModel.showDanmuSettingView == false,
-              showStatisticsPanel == false else {
+              showStatisticsPanel == false,
+              showQualityPanel == false else {
             return
         }
 

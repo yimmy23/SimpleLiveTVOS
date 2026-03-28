@@ -56,26 +56,26 @@ struct TVPlayerStatisticsPanel: View {
     }
 
     private var header: some View {
-        HStack(alignment: .top, spacing: 16) {
-            VStack(alignment: .leading, spacing: 8) {
+        HStack(alignment: .center, spacing: 16) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text("视频信息统计")
-                    .font(.system(size: 36, weight: .bold))
+                    .font(.system(size: 38, weight: .bold))
                     .foregroundStyle(.white)
 
                 Text("实时查看当前解码、码率和播放性能。")
                     .font(.system(size: 21, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.72))
+                    .foregroundStyle(.white.opacity(0.6))
             }
 
-            Spacer()
+            Spacer(minLength: 8)
 
             Button(action: onClose) {
                 Image(systemName: "xmark")
-                    .font(.system(size: 28, weight: .bold))
+                    .font(.system(size: 22, weight: .bold))
                     .foregroundStyle(.white)
-                    .frame(width: 60, height: 60)
+                    .frame(width: 50, height: 50)
             }
-            .clipShape(.circle)
+            .buttonStyle(TVStatsPanelCloseButtonStyle(isFocused: isCloseButtonFocused))
             .focused($isCloseButtonFocused)
             .accessibilityLabel("关闭统计信息")
         }
@@ -231,5 +231,20 @@ private struct StatisticsRow: View {
                 .lineLimit(1)
                 .truncationMode(.middle)
         }
+    }
+}
+
+/// 关闭按钮样式：圆形 glass 背景 + 聚焦缩放，与清晰度面板对齐
+private struct TVStatsPanelCloseButtonStyle: ButtonStyle {
+    let isFocused: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background {
+                Circle()
+                    .fill(.white.opacity(isFocused ? 0.3 : 0.1))
+            }
+            .scaleEffect(isFocused ? 1.1 : 1.0)
+            .animation(.easeInOut(duration: 0.18), value: isFocused)
     }
 }

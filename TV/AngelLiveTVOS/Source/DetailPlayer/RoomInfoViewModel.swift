@@ -48,6 +48,8 @@ final class RoomInfoViewModel {
     var currentPlayURL: URL?
     var currentPlayQualityString = "清晰度"
     var currentPlayQualityQn = 0 //当前清晰度，虎牙用来存放回放时间
+    var currentCdnIndex = 0      // 当前选中的线路索引
+    var currentQualityIndex = 0  // 当前选中的清晰度索引
     var showControlView: Bool = true
     var isPlaying = false
     var userPaused = false  // 跟踪用户是否手动暂停
@@ -163,6 +165,8 @@ final class RoomInfoViewModel {
 
         currentPlayQualityString = effectiveQuality.title
         currentPlayQualityQn = effectiveQuality.qn
+        self.currentCdnIndex = effectiveSelection?.cdnIndex ?? cdnIndex
+        self.currentQualityIndex = effectiveSelection?.qualityIndex ?? urlIndex
 
         applyPlaybackRequestOptions(for: effectiveQuality)
 
