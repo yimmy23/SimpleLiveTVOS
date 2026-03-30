@@ -102,7 +102,7 @@ struct QualitySelectionPanel: View {
             // Section 标题（可折叠时变为按钮）
             if canCollapse {
                 Button {
-                    withAnimation(.easeInOut(duration: 0.25)) {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
                         if isExpanded {
                             expandedSections.remove(cdnIndex)
                         } else {
@@ -152,7 +152,12 @@ struct QualitySelectionPanel: View {
                 .padding(4)
                 .background(.white.opacity(0.06))
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .transition(.opacity.combined(with: .move(edge: .top)))
+                .transition(
+                    .asymmetric(
+                        insertion: .opacity.combined(with: .scale(scale: 0.96, anchor: .top)),
+                        removal: .opacity.combined(with: .scale(scale: 0.96, anchor: .top))
+                    )
+                )
             }
         }
     }

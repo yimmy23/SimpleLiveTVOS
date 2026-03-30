@@ -119,7 +119,7 @@ struct TVQualitySelectionPanel: View {
             // Section 标题（可折叠时变为按钮）
             if canCollapse {
                 Button {
-                    withAnimation(.easeInOut(duration: 0.25)) {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
                         if isExpanded {
                             expandedSections.remove(cdnIndex)
                         } else {
@@ -177,7 +177,13 @@ struct TVQualitySelectionPanel: View {
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
                         .fill(.white.opacity(0.06))
                 )
-                .transition(.opacity.combined(with: .move(edge: .top)))
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .transition(
+                    .asymmetric(
+                        insertion: .opacity.combined(with: .scale(scale: 0.96, anchor: .top)),
+                        removal: .opacity.combined(with: .scale(scale: 0.96, anchor: .top))
+                    )
+                )
             }
         }
     }
