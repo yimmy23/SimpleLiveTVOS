@@ -380,40 +380,42 @@ struct LiveRoomCard: View {
         favoriteModel.roomList.contains(where: { $0.roomId == room.roomId })
     }
 
-    private var badgeLiveState: LiveState {
-        guard let liveState = room.liveState, let state = LiveState(rawValue: liveState) else {
-            return .live
-        }
-        return state
-    }
+    // TODO: 平台图标和直播状态暂时隐藏，待重新设计后恢复
+//    private var badgeLiveState: LiveState {
+//        guard let liveState = room.liveState, let state = LiveState(rawValue: liveState) else {
+//            return .live
+//        }
+//        return state
+//    }
 
     private var coverURL: URL? {
         guard !room.roomCover.isEmpty, let url = URL(string: room.roomCover) else { return nil }
         return url
     }
 
-    private var liveStatusText: String {
-        switch badgeLiveState {
-        case .live:
-            return "直播中"
-        case .close:
-            return "已下播"
-        case .video:
-            return "回放中"
-        case .unknow:
-            return "待确认"
-        }
-    }
+//    private var liveStatusText: String {
+//        switch badgeLiveState {
+//        case .live:
+//            return "直播中"
+//        case .close:
+//            return "已下播"
+//        case .video:
+//            return "回放中"
+//        case .unknow:
+//            return "待确认"
+//        }
+//    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             coverView
-                .overlay(alignment: .topTrailing) {
-                    if showsCoverBadge {
-                        coverInfoBadge
-                            .padding(6)
-                    }
-                }
+                // TODO: 平台图标和直播状态暂时隐藏，待重新设计后恢复
+//                .overlay(alignment: .topTrailing) {
+//                    if showsCoverBadge {
+//                        coverInfoBadge
+//                            .padding(6)
+//                    }
+//                }
                 .clipShape(RoundedRectangle(cornerRadius: AppConstants.CornerRadius.lg))
 
             HStack(spacing: 8) {
@@ -493,43 +495,43 @@ struct LiveRoomCard: View {
         .aspectRatio(AppConstants.AspectRatio.pic, contentMode: .fit)
     }
 
-    private var coverInfoBadge: some View {
-        HStack(spacing: 6) {
-            platformBadgeIcon
-
-            Text(liveStatusText)
-                .font(.caption2.weight(.medium))
-                .foregroundStyle(.white)
-                .lineLimit(1)
-        }
-        .padding(.horizontal, 7)
-        .padding(.vertical, 4)
-        .background(
-            Capsule(style: .continuous)
-                .fill(Color.black.opacity(0.58))
-        )
-        .overlay(
-            Capsule(style: .continuous)
-                .stroke(Color.white.opacity(0.10), lineWidth: 0.5)
-        )
-        .shadow(color: .black.opacity(0.14), radius: 6, x: 0, y: 2)
-    }
-
-    @ViewBuilder
-    private var platformBadgeIcon: some View {
-        if let image = MacPlatformIconProvider.tabImage(for: room.liveType) {
-            Image(nsImage: image)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 12, height: 12)
-                .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
-        } else {
-            Image(systemName: "dot.radiowaves.left.and.right")
-                .font(.caption2.weight(.bold))
-                .foregroundStyle(.white.opacity(0.92))
-                .frame(width: 12, height: 12)
-        }
-    }
+//    private var coverInfoBadge: some View {
+//        HStack(spacing: 6) {
+//            platformBadgeIcon
+//
+//            Text(liveStatusText)
+//                .font(.caption2.weight(.medium))
+//                .foregroundStyle(.white)
+//                .lineLimit(1)
+//        }
+//        .padding(.horizontal, 7)
+//        .padding(.vertical, 4)
+//        .background(
+//            Capsule(style: .continuous)
+//                .fill(Color.black.opacity(0.58))
+//        )
+//        .overlay(
+//            Capsule(style: .continuous)
+//                .stroke(Color.white.opacity(0.10), lineWidth: 0.5)
+//        )
+//        .shadow(color: .black.opacity(0.14), radius: 6, x: 0, y: 2)
+//    }
+//
+//    @ViewBuilder
+//    private var platformBadgeIcon: some View {
+//        if let image = MacPlatformIconProvider.tabImage(for: room.liveType) {
+//            Image(nsImage: image)
+//                .resizable()
+//                .scaledToFit()
+//                .frame(width: 12, height: 12)
+//                .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
+//        } else {
+//            Image(systemName: "dot.radiowaves.left.and.right")
+//                .font(.caption2.weight(.bold))
+//                .foregroundStyle(.white.opacity(0.92))
+//                .frame(width: 12, height: 12)
+//        }
+//    }
 
     @ViewBuilder
     private var favoriteContextMenu: some View {

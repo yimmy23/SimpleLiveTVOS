@@ -88,25 +88,26 @@ struct LiveRoomCard: View {
         return LiveState(rawValue: liveState) == .live
     }
 
-    private var badgeLiveState: LiveState {
-        guard let liveState = room.liveState, let state = LiveState(rawValue: liveState) else {
-            return .live
-        }
-        return state
-    }
-
-    private var liveStatusText: String {
-        switch badgeLiveState {
-        case .live:
-            return "直播中"
-        case .close:
-            return "已下播"
-        case .video:
-            return "回放中"
-        case .unknow:
-            return "待确认"
-        }
-    }
+    // TODO: 平台图标和直播状态暂时隐藏，待重新设计后恢复
+//    private var badgeLiveState: LiveState {
+//        guard let liveState = room.liveState, let state = LiveState(rawValue: liveState) else {
+//            return .live
+//        }
+//        return state
+//    }
+//
+//    private var liveStatusText: String {
+//        switch badgeLiveState {
+//        case .live:
+//            return "直播中"
+//        case .close:
+//            return "已下播"
+//        case .video:
+//            return "回放中"
+//        case .unknow:
+//            return "待确认"
+//        }
+//    }
 
     var body: some View {
         Group {
@@ -154,12 +155,13 @@ struct LiveRoomCard: View {
         VStack {
             // 封面图（带可靠的兜底占位）
             coverView
-                .overlay(alignment: .topTrailing) {
-                    if showsCoverBadge {
-                        coverInfoBadge
-                            .padding(6)
-                    }
-                }
+                // TODO: 平台图标和直播状态暂时隐藏，待重新设计后恢复
+//                .overlay(alignment: .topTrailing) {
+//                    if showsCoverBadge {
+//                        coverInfoBadge
+//                            .padding(6)
+//                    }
+//                }
                 .cornerRadius(AppConstants.CornerRadius.lg)
                 .clipped()
                 .modifier(MatchedTransitionSourceModifier(id: room.roomId, namespace: namespace))
@@ -190,36 +192,37 @@ struct LiveRoomCard: View {
 
     // MARK: - 子视图
 
-    private var coverInfoBadge: some View {
-        HStack(spacing: 6) {
-            platformBadgeIcon
-
-            Text(liveStatusText)
-                .font(.caption2.weight(.medium))
-                .foregroundStyle(.white)
-                .lineLimit(1)
-        }
-        .padding(.horizontal, 7)
-        .padding(.vertical, 4)
-        .background(Color.black.opacity(0.58))
-        .clipShape(Capsule(style: .continuous))
-    }
-
-    @ViewBuilder
-    private var platformBadgeIcon: some View {
-        if let image = PlatformIconProvider.tabImage(for: room.liveType) {
-            Image(uiImage: image)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 12, height: 12)
-                .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
-        } else {
-            Image(systemName: "dot.radiowaves.left.and.right")
-                .font(.caption2.weight(.bold))
-                .foregroundStyle(.white.opacity(0.92))
-                .frame(width: 12, height: 12)
-        }
-    }
+    // TODO: 平台图标和直播状态暂时隐藏，待重新设计后恢复
+//    private var coverInfoBadge: some View {
+//        HStack(spacing: 6) {
+//            platformBadgeIcon
+//
+//            Text(liveStatusText)
+//                .font(.caption2.weight(.medium))
+//                .foregroundStyle(.white)
+//                .lineLimit(1)
+//        }
+//        .padding(.horizontal, 7)
+//        .padding(.vertical, 4)
+//        .background(Color.black.opacity(0.58))
+//        .clipShape(Capsule(style: .continuous))
+//    }
+//
+//    @ViewBuilder
+//    private var platformBadgeIcon: some View {
+//        if let image = PlatformIconProvider.tabImage(for: room.liveType) {
+//            Image(uiImage: image)
+//                .resizable()
+//                .scaledToFit()
+//                .frame(width: 12, height: 12)
+//                .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
+//        } else {
+//            Image(systemName: "dot.radiowaves.left.and.right")
+//                .font(.caption2.weight(.bold))
+//                .foregroundStyle(.white.opacity(0.92))
+//                .frame(width: 12, height: 12)
+//        }
+//    }
 
     /// 封面图容器：有 URL 时双层 KFImage（模糊背景 + 清晰前景，不变形），失败或无 URL 时用本地占位
     private var coverView: some View {

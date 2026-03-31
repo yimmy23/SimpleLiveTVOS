@@ -107,10 +107,11 @@ struct LiveCardView: View {
                 }
                 .frame(width: cardWidth, height: coverHeight)
 
-                // 平台和直播状态标签（非直播列表页面显示）
-                if liveViewModel.roomListType != .live {
-                    platformAndStatusOverlay(currentLiveModel: currentLiveModel)
-                }
+                // TODO: 平台图标和直播状态暂时隐藏，待重新设计后恢复
+//                // 平台和直播状态标签（非直播列表页面显示）
+//                if liveViewModel.roomListType != .live {
+//                    platformAndStatusOverlay(currentLiveModel: currentLiveModel)
+//                }
             }
             .clipShape(RoundedRectangle(cornerRadius: 12))
         }
@@ -200,52 +201,53 @@ struct LiveCardView: View {
         )
     }
 
-    /// 平台和直播状态覆盖层
-    @ViewBuilder
-    private func platformAndStatusOverlay(currentLiveModel: LiveModel) -> some View {
-        HStack {
-            // 平台图标
-            Image(uiImage: TVPlatformIconProvider.tabImage(for: currentLiveModel.liveType) ?? UIImage())
-                .resizable()
-                .frame(width: 36, height: 36)
-                .clipShape(RoundedRectangle(cornerRadius: 6))
-                .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
-                .padding(.top, 8)
-                .padding(.leading, 8)
-
-            Spacer()
-
-            // 直播状态标签
-            liveStatusBadge(currentLiveModel: currentLiveModel)
-                .padding(.top, 8)
-                .padding(.trailing, 8)
-        }
-        .task {
-            do {
-                try await refreshStateIfStateIsUnknow()
-            } catch {
-                // 静默处理错误
-            }
-        }
-    }
-
-    /// 直播状态标签
-    private func liveStatusBadge(currentLiveModel: LiveModel) -> some View {
-        HStack(spacing: 5) {
-            Circle()
-                .fill(formatLiveStateColor())
-                .frame(width: 8, height: 8)
-            Text(currentLiveModel.liveStateFormat())
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(.white)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(
-            Capsule()
-                .fill(Color.black.opacity(0.6))
-        )
-    }
+    // TODO: 平台图标和直播状态暂时隐藏，待重新设计后恢复
+//    /// 平台和直播状态覆盖层
+//    @ViewBuilder
+//    private func platformAndStatusOverlay(currentLiveModel: LiveModel) -> some View {
+//        HStack {
+//            // 平台图标
+//            Image(uiImage: TVPlatformIconProvider.tabImage(for: currentLiveModel.liveType) ?? UIImage())
+//                .resizable()
+//                .frame(width: 36, height: 36)
+//                .clipShape(RoundedRectangle(cornerRadius: 6))
+//                .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
+//                .padding(.top, 8)
+//                .padding(.leading, 8)
+//
+//            Spacer()
+//
+//            // 直播状态标签
+//            liveStatusBadge(currentLiveModel: currentLiveModel)
+//                .padding(.top, 8)
+//                .padding(.trailing, 8)
+//        }
+//        .task {
+//            do {
+//                try await refreshStateIfStateIsUnknow()
+//            } catch {
+//                // 静默处理错误
+//            }
+//        }
+//    }
+//
+//    /// 直播状态标签
+//    private func liveStatusBadge(currentLiveModel: LiveModel) -> some View {
+//        HStack(spacing: 5) {
+//            Circle()
+//                .fill(formatLiveStateColor())
+//                .frame(width: 8, height: 8)
+//            Text(currentLiveModel.liveStateFormat())
+//                .font(.system(size: 14, weight: .medium))
+//                .foregroundColor(.white)
+//        }
+//        .padding(.horizontal, 10)
+//        .padding(.vertical, 6)
+//        .background(
+//            Capsule()
+//                .fill(Color.black.opacity(0.6))
+//        )
+//    }
 
     /// Alert 按钮
     private var alertButtons: some View {
@@ -374,30 +376,30 @@ struct LiveCardView: View {
         }
     }
 
-    func formatLiveStateColor() -> Color {
-        let currentLiveModel = self.currentLiveModel == nil ? liveViewModel.roomList[index] : self.currentLiveModel!
-        if LiveState(rawValue: currentLiveModel.liveState ?? "3") == .live || LiveState(rawValue:currentLiveModel.liveState ?? "3") == .video {
-            return Color.green
-        }else {
-            return Color.gray
-        }
-    }
-
-    func refreshStateIfStateIsUnknow() async throws {
-        guard index < liveViewModel.roomList.count else { return }
-
-        let currentLiveModel: LiveModel
-        if let existingModel = self.currentLiveModel {
-            currentLiveModel = existingModel
-        } else {
-            currentLiveModel = liveViewModel.roomList[index]
-        }
-
-        if currentLiveModel.liveState == "" {
-            let newState = try await ApiManager.getCurrentRoomLiveState(roomId: currentLiveModel.roomId, userId: currentLiveModel.userId, liveType: currentLiveModel.liveType)
-            await MainActor.run {
-                self.currentLiveModel?.liveState = newState.rawValue
-            }
-        }
-    }
+//    func formatLiveStateColor() -> Color {
+//        let currentLiveModel = self.currentLiveModel == nil ? liveViewModel.roomList[index] : self.currentLiveModel!
+//        if LiveState(rawValue: currentLiveModel.liveState ?? "3") == .live || LiveState(rawValue:currentLiveModel.liveState ?? "3") == .video {
+//            return Color.green
+//        }else {
+//            return Color.gray
+//        }
+//    }
+//
+//    func refreshStateIfStateIsUnknow() async throws {
+//        guard index < liveViewModel.roomList.count else { return }
+//
+//        let currentLiveModel: LiveModel
+//        if let existingModel = self.currentLiveModel {
+//            currentLiveModel = existingModel
+//        } else {
+//            currentLiveModel = liveViewModel.roomList[index]
+//        }
+//
+//        if currentLiveModel.liveState == "" {
+//            let newState = try await ApiManager.getCurrentRoomLiveState(roomId: currentLiveModel.roomId, userId: currentLiveModel.userId, liveType: currentLiveModel.liveType)
+//            await MainActor.run {
+//                self.currentLiveModel?.liveState = newState.rawValue
+//            }
+//        }
+//    }
 }

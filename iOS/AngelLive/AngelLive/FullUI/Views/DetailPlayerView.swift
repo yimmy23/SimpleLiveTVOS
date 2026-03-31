@@ -192,6 +192,11 @@ struct DetailPlayerView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                         // iPhone 横屏时让播放器区域覆盖 Safe Area，避免控制层/统计被刘海遮挡
                         .edgesIgnoringSafeArea(iPhoneLandscapeMode ? .all : [])
+                        // iPad: 阻止播放器区域的下拉手势触发退出，聊天面板仍可下拉退出
+                        .simultaneousGesture(
+                            DragGesture(minimumDistance: 1)
+                                .onChanged { _ in }
+                        )
                         .onPreferenceChange(PlayerHeightPreferenceKey.self) { height in
                             if !AppConstants.Device.isIPad {
                                 iPhonePlayerHeight = height
