@@ -19,6 +19,8 @@ struct LiveRoomCard: View {
     @State private var localShowPlayer = false
     /// 本地 Namespace - 仅在没有外部 Namespace 时使用
     @Namespace private var localNamespace
+    /// 正在查询直播状态中
+    @State private var isCheckingLiveState = false
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(AppFavoriteModel.self) private var favoriteModel
@@ -112,17 +114,45 @@ struct LiveRoomCard: View {
     var body: some View {
         Group {
             let baseButton = Button {
-                if skipLiveCheck || isLive {
+                if skipLiveCheck {
+                    // 历史记录等场景：先实时查询直播状态
+                    guard !isCheckingLiveState else { return }
+                    Task {
+                        isCheckingLiveState = true
+                        defer { isCheckingLiveState = false }
+                        do {
+                            let state = try await ApiManager.getCurrentRoomLiveState(
+                                roomId: room.roomId,
+                                userId: room.userId,
+                                liveType: room.liveType
+                            )
+                            if state == .live {
+                                showPlayerBinding.wrappedValue = true
+                            } else {
+                                presentToast(ToastValue(icon: Image(systemName: "tv.slash"), message: "主播已下播"))
+                            }
+                        } catch {
+                            // 查询失败仍放行，让播放页自行处理
+                            showPlayerBinding.wrappedValue = true
+                        }
+                    }
+                } else if isLive {
                     showPlayerBinding.wrappedValue = true
                 } else {
-                    let toast = ToastValue(
-                        icon: Image(systemName: "tv.slash"),
-                        message: "主播已下播"
-                    )
-                    presentToast(toast)
+                    presentToast(ToastValue(icon: Image(systemName: "tv.slash"), message: "主播已下播"))
                 }
             } label: {
                 cardContent
+                    .overlay {
+                        if isCheckingLiveState {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: AppConstants.CornerRadius.lg)
+                                    .fill(.black.opacity(0.3))
+                                ProgressView()
+                                    .tint(.white)
+                            }
+                        }
+                    }
             }
             .buttonStyle(LiveRoomCardButtonStyle())
             .contextMenu {
