@@ -40,25 +40,46 @@ enum LiveParsePlatformSessionVault {
         let normalizedId = canonicalPlatformId(platformId)
         guard !normalizedId.isEmpty else { return nil }
 
-        var parts: [String] = []
-        if let defaultCookie = defaultCookie(for: normalizedId), !defaultCookie.isEmpty {
-            parts.append(defaultCookie)
+        var cookieMap: [(String, String)] = []
+
+        // 先解析 defaultCookie（低优先级）
+        if let defaultCookie = defaultCookie(for: normalizedId) {
+            cookieMap.append(contentsOf: parseCookiePairs(defaultCookie))
         }
 
         lock.lock()
         let sessionCookie = sessions[normalizedId]?.cookie
         lock.unlock()
 
+        // 再解析 sessionCookie（高优先级，同 key 覆盖）
         if let sessionCookie, !sessionCookie.isEmpty {
-            parts.append(sessionCookie)
+            cookieMap.append(contentsOf: parseCookiePairs(sessionCookie))
         }
 
-        let merged = parts
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-            .joined(separator: "; ")
+        // 去重：同 key 保留最后一个（session 优先于 default）
+        var seen: [String: Int] = [:]
+        var deduped: [(String, String)] = []
+        for (key, value) in cookieMap {
+            if let idx = seen[key] {
+                deduped[idx] = (key, value)
+            } else {
+                seen[key] = deduped.count
+                deduped.append((key, value))
+            }
+        }
 
+        let merged = deduped.map { "\($0.0)=\($0.1)" }.joined(separator: "; ")
         return merged.isEmpty ? nil : merged
+    }
+
+    private static func parseCookiePairs(_ cookie: String) -> [(String, String)] {
+        cookie.split(separator: ";").compactMap { pair in
+            let trimmed = pair.trimmingCharacters(in: .whitespaces)
+            guard let eqIdx = trimmed.firstIndex(of: "=") else { return nil }
+            let key = String(trimmed[..<eqIdx]).trimmingCharacters(in: .whitespaces)
+            let value = String(trimmed[trimmed.index(after: eqIdx)...]).trimmingCharacters(in: .whitespaces)
+            return key.isEmpty ? nil : (key, value)
+        }
     }
 
     static func canonicalPlatformId(_ platformId: String) -> String {
