@@ -6,6 +6,26 @@
         <description>Angel Live macOS 应用更新</description>
         <language>zh-cn</language>
         <item>
+            <title>Version 2.0.0 (Build 23)</title>
+            <sparkle:version>23</sparkle:version>
+            <sparkle:shortVersionString>2.0.0</sparkle:shortVersionString>
+            <description><![CDATA[
+                <h2>更新内容</h2>
+                <ul>
+                    <li>修复：历史记录页面显示异常、点击异常</li>
+                    <li>优化：列表展示，在想到更好的展示标签之前移除三端的标签显示</li>
+                </ul>
+                <p><strong>如遇到自动更新失败，请手动下载：</strong><a href="https://github.com/pcccccc/AngelLive/releases/download/v2.0.0/Angel.Live.2.0.0.universal.ver23.dmg">点击下载</a></p>
+                <p>使用中遇到问题？欢迎加入 <a href="https://t.me/angelliveapp">Telegram 群组</a> 反馈交流</p>
+            ]]></description>
+            <pubDate>Tue, 31 Mar 2026 18:00:00 +0800</pubDate>
+            <enclosure url="https://github.com/pcccccc/AngelLive/releases/download/v2.0.0/Angel.Live.2.0.0.universal.ver23.dmg"
+                       sparkle:edSignature="0P3c5m70cDa0p+QMgt6wr1j8QO4Z66Qve2muy1BfVGoTb15BWzJP6Q3E6w88x/sSWai0NbXckLSirlTeRUfIBA=="
+                       length="41278348"
+                       type="application/octet-stream"/>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+        </item>
+        <item>
             <title>Version 2.0.0 (Build 22)</title>
             <sparkle:version>22</sparkle:version>
             <sparkle:shortVersionString>2.0.0</sparkle:shortVersionString>
