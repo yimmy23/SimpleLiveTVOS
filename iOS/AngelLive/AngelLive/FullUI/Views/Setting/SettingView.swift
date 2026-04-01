@@ -15,7 +15,7 @@ struct SettingView: View {
     @Environment(PluginAvailabilityService.self) private var pluginAvailability
 
     private var accountManagementIcon: UIImage? {
-        let preferredTypes: [LiveType] = [.bilibili, .douyin, .ks, .soop]
+        let preferredTypes: [LiveType] = [.bilibili, .douyin, .ks, .kick, .soop]
         for type in preferredTypes {
             if let image = PlatformIconProvider.tabImage(for: type) {
                 return image
@@ -53,7 +53,7 @@ struct SettingView: View {
 
                                 Spacer()
 
-                                Text("哔哩/抖音/快手")
+                                Text("多平台")
                                     .font(.caption)
                                     .foregroundStyle(AppConstants.Colors.secondaryText)
                             }
@@ -201,7 +201,7 @@ struct SettingView: View {
                     } header: {
                         Text("tvOS")
                     } footer: {
-                        Text("将哔哩哔哩/抖音/快手/SOOP 登录信息同步到 Apple TV，支持局域网自动发现。")
+                        Text("将已登录的平台账号同步到 Apple TV，支持局域网自动发现。")
                             .font(.caption)
                             .foregroundStyle(AppConstants.Colors.secondaryText)
                     }

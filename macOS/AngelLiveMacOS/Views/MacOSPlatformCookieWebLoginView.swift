@@ -15,6 +15,7 @@ enum MacOSPlatformAccountItem: String, CaseIterable, Identifiable {
     case douyin
     case kuaishou
     case soop
+    case kick
 
     private static let desktopUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
 
@@ -25,6 +26,7 @@ enum MacOSPlatformAccountItem: String, CaseIterable, Identifiable {
         case .douyin: return "抖音"
         case .kuaishou: return "快手"
         case .soop: return "SOOP"
+        case .kick: return "Kick"
         }
     }
 
@@ -33,6 +35,7 @@ enum MacOSPlatformAccountItem: String, CaseIterable, Identifiable {
         case .douyin: return "music.note.tv"
         case .kuaishou: return "bolt.circle.fill"
         case .soop: return "globe.asia.australia.fill"
+        case .kick: return "k.circle.fill"
         }
     }
 
@@ -41,6 +44,7 @@ enum MacOSPlatformAccountItem: String, CaseIterable, Identifiable {
         case .douyin: return .orange
         case .kuaishou: return .blue
         case .soop: return .purple
+        case .kick: return .green
         }
     }
 
@@ -49,19 +53,26 @@ enum MacOSPlatformAccountItem: String, CaseIterable, Identifiable {
         case .douyin: return .douyin
         case .kuaishou: return .kuaishou
         case .soop: return .soop
+        case .kick: return .kick
         }
     }
 
     var loginURL: URL {
         switch self {
         case .douyin: return URL(string: "https://sso.douyin.com/login")!
-        case .kuaishou: return URL(string: "https://passport.kuaishou.com/pc/account/login")!
+        case .kuaishou: return URL(string: "https://www.kuaishou.com/")!
         case .soop: return URL(string: "https://auth.m.sooplive.co.kr/login")!
+        case .kick: return URL(string: "https://kick.com/")!
         }
     }
 
     var preferredUserAgent: String? {
-        Self.desktopUserAgent
+        switch self {
+        case .kuaishou, .kick:
+            return nil
+        case .douyin, .soop:
+            return Self.desktopUserAgent
+        }
     }
 
     var cookieDomainHints: [String] {
@@ -69,6 +80,7 @@ enum MacOSPlatformAccountItem: String, CaseIterable, Identifiable {
         case .douyin: return ["douyin.com", "iesdouyin.com"]
         case .kuaishou: return ["kuaishou.com", "gifshow.com"]
         case .soop: return ["sooplive.co.kr"]
+        case .kick: return ["kick.com"]
         }
     }
 
@@ -77,6 +89,7 @@ enum MacOSPlatformAccountItem: String, CaseIterable, Identifiable {
         case .douyin: return ["ttwid", "__ac_nonce", "msToken", "sessionid", "sessionid_ss", "uid_tt"]
         case .kuaishou: return ["userId", "user_id", "kuaishou.server.web_st", "kuaishou.server.web_ph"]
         case .soop: return ["AuthTicket", "BbsTicket", "UserTicket"]
+        case .kick: return ["kick_session", "session_token", "XSRF-TOKEN"]
         }
     }
 
@@ -91,6 +104,8 @@ enum MacOSPlatformAccountItem: String, CaseIterable, Identifiable {
                 || names.contains("kuaishou.server.web_ph")
         case .soop:
             return names.contains("AuthTicket")
+        case .kick:
+            return names.contains("kick_session") || names.contains("session_token")
         }
     }
 }
@@ -243,7 +258,7 @@ struct MacOSPlatformCookieWebLoginView: View {
             cookie: cookieString,
             uid: uid,
             source: .local,
-            validateBeforeSave: true
+            validateBeforeSave: platform != .kick && platform != .kuaishou
         )
 
         switch result {

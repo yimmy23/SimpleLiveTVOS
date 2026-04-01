@@ -28,7 +28,8 @@ public final class LiveParseTools {
         LiveType.ks.rawValue: "快手",
         LiveType.yy.rawValue: "YY直播",
         LiveType.youtube.rawValue: "YouTube",
-        LiveType.soop.rawValue: "SOOP"
+        LiveType.soop.rawValue: "SOOP",
+        LiveType.kick.rawValue: "Kick"
     ]
 
     private static let builtInDescriptions: [String: String] = [
@@ -40,7 +41,8 @@ public final class LiveParseTools {
         LiveType.ks.rawValue: "无法播放请手动打开任意直播间通过滑块验证码",
         LiveType.yy.rawValue: "全民娱乐的互动直播平台",
         LiveType.youtube.rawValue: "全球视频平台直播",
-        LiveType.soop.rawValue: "韩国直播平台(原AfreecaTV)"
+        LiveType.soop.rawValue: "韩国直播平台(原AfreecaTV)",
+        LiveType.kick.rawValue: "国际互动直播平台"
     ]
 
     private static func normalizedText(_ value: String?) -> String? {

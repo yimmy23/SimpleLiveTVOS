@@ -168,9 +168,10 @@ public struct LiveType: RawRepresentable, Hashable, Codable, Sendable, Expressib
     public static let yy: LiveType = .init(rawValue: "6")!
     public static let youtube: LiveType = .init(rawValue: "7")!
     public static let soop: LiveType = .init(rawValue: "8")!
+    public static let kick: LiveType = .init(rawValue: "9")!
 
     public static let builtIn: [LiveType] = [
-        .bilibili, .huya, .douyin, .douyu, .cc, .ks, .yy, .youtube, .soop
+        .bilibili, .huya, .douyin, .douyu, .cc, .ks, .yy, .youtube, .soop, .kick
     ]
 }
 

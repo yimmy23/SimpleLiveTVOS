@@ -13,6 +13,7 @@ public enum PlatformSessionID: String, Codable, Sendable, CaseIterable {
     case douyin
     case kuaishou
     case soop
+    case kick
 
     /// LiveParse 插件 ID，可能与会话 ID 不同（例如 kuaishou -> ks）。
     public var pluginId: String {
@@ -205,6 +206,8 @@ public actor PlatformSessionManager {
             return validateKuaishouSession(cookie: cookie)
         case .soop:
             return validateSoopSession(cookie: cookie)
+        case .kick:
+            return validateKickSession(cookie: cookie)
         }
     }
 
@@ -250,6 +253,14 @@ public actor PlatformSessionManager {
     private func validateSoopSession(cookie: String) -> PlatformSessionValidationResult {
         guard cookie.contains("AuthTicket=") else {
             return .invalid(reason: "SOOP Cookie 缺少 AuthTicket")
+        }
+        return .valid
+    }
+
+    private func validateKickSession(cookie: String) -> PlatformSessionValidationResult {
+        let normalizedCookie = cookie.lowercased()
+        guard normalizedCookie.contains("kick_session=") || normalizedCookie.contains("session_token=") else {
+            return .invalid(reason: "Kick Cookie 缺少 kick_session 或 session_token")
         }
         return .valid
     }

@@ -53,6 +53,7 @@ enum TVPlatformItem: String, CaseIterable, Identifiable, Equatable {
     case douyin
     case kuaishou
     case soop
+    case kick
 
     var id: String { rawValue }
 
@@ -62,6 +63,7 @@ enum TVPlatformItem: String, CaseIterable, Identifiable, Equatable {
         case .douyin: return "抖音"
         case .kuaishou: return "快手"
         case .soop: return "SOOP"
+        case .kick: return "Kick"
         }
     }
 
@@ -71,6 +73,7 @@ enum TVPlatformItem: String, CaseIterable, Identifiable, Equatable {
         case .douyin: return .douyin
         case .kuaishou: return .kuaishou
         case .soop: return .soop
+        case .kick: return .kick
         }
     }
 
@@ -80,6 +83,7 @@ enum TVPlatformItem: String, CaseIterable, Identifiable, Equatable {
         case .douyin: return .douyin
         case .kuaishou: return .ks
         case .soop: return .soop
+        case .kick: return .kick
         }
     }
 
@@ -95,6 +99,7 @@ enum TVPlatformItem: String, CaseIterable, Identifiable, Equatable {
         case .douyin: return "douyin.com"
         case .kuaishou: return "kuaishou.com"
         case .soop: return "sooplive.co.kr"
+        case .kick: return "kick.com"
         }
     }
 
@@ -105,6 +110,7 @@ enum TVPlatformItem: String, CaseIterable, Identifiable, Equatable {
         case .douyin: return "需包含 ttwid"
         case .kuaishou: return "需包含 key=value 格式"
         case .soop: return "需包含 AuthTicket"
+        case .kick: return "需包含 kick_session 或 session_token"
         }
     }
 }
@@ -549,7 +555,8 @@ struct PlatformManualInputPageView: View {
             let result = await PlatformSessionManager.shared.loginWithCookie(
                 platformId: platform.sessionID,
                 cookie: cookieInput,
-                source: .manual
+                source: .manual,
+                validateBeforeSave: platform != .kick && platform != .kuaishou
             )
             switch result {
             case .valid:
@@ -665,6 +672,8 @@ struct BilibiliLANSyncPageView: View {
                 return "快手"
             case PlatformSessionID.soop.rawValue:
                 return "SOOP"
+            case PlatformSessionID.kick.rawValue:
+                return "Kick"
             default:
                 return nil
             }

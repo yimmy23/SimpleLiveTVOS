@@ -312,6 +312,8 @@ struct SettingView: View {
             return MacPlatformIconProvider.tabImage(for: .ks)
         case .soop:
             return MacPlatformIconProvider.tabImage(for: .soop)
+        case .kick:
+            return MacPlatformIconProvider.tabImage(for: .kick)
         }
     }
 

@@ -58,6 +58,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
                 _ = await BilibiliCookieSyncService.shared.syncFromICloud()
                 await BilibiliCookieSyncService.shared.syncAllPlatformsFromICloud()
             }
+            await logKuaishouCookieOnLaunch()
         }
 
         // 初始化屏幕方向设置
@@ -84,6 +85,15 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         let storage = LiveParsePlugins.shared.storage
         print("[iOS] 插件根目录: \(storage.pluginsRootDirectory.path)")
         print("[iOS] 插件状态文件: \(storage.stateFileURL.path)")
+    }
+
+    private func logKuaishouCookieOnLaunch() async {
+        let session = await PlatformSessionManager.shared.getSession(platformId: .kuaishou)
+        if let cookie = session?.cookie, !cookie.isEmpty {
+            print("[iOS] 快手 Cookie: \(cookie)")
+        } else {
+            print("[iOS] 快手 Cookie: <empty>")
+        }
     }
 
     // MARK: - Orientation Support

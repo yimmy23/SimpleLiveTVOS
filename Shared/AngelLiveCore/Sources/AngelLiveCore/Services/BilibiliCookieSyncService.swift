@@ -696,7 +696,7 @@ public final class BilibiliCookieSyncService: ObservableObject {
     }
 
     private func clearAllPlatformICloudSessions() {
-        let platformIds: [PlatformSessionID] = [.bilibili, .douyin, .kuaishou, .soop]
+        let platformIds: [PlatformSessionID] = [.bilibili, .douyin, .kuaishou, .soop, .kick]
         Task {
             let container = CKContainer(identifier: CloudCookieFields.containerIdentifier)
             let database = container.privateCloudDatabase
@@ -759,7 +759,7 @@ extension BilibiliCookieSyncService {
         }
 
         // 其他平台从 PlatformSessionManager 获取
-        let otherPlatforms: [PlatformSessionID] = [.douyin, .kuaishou, .soop]
+        let otherPlatforms: [PlatformSessionID] = [.douyin, .kuaishou, .soop, .kick]
         for platformId in otherPlatforms {
             if let session = await PlatformSessionManager.shared.getSession(platformId: platformId),
                session.state == .authenticated,
@@ -836,7 +836,7 @@ extension BilibiliCookieSyncService {
         let container = CKContainer(identifier: CloudCookieFields.containerIdentifier)
         let database = container.privateCloudDatabase
 
-        let platformIds: [PlatformSessionID] = [.bilibili, .douyin, .kuaishou, .soop]
+        let platformIds: [PlatformSessionID] = [.bilibili, .douyin, .kuaishou, .soop, .kick]
         for platformId in platformIds {
             let recordName = CloudCookieFields.sessionRecordName(for: platformId.rawValue)
             let recordID = CKRecord.ID(recordName: recordName)
@@ -876,7 +876,7 @@ extension BilibiliCookieSyncService {
         let container = CKContainer(identifier: CloudCookieFields.containerIdentifier)
         let database = container.privateCloudDatabase
 
-        let platformIds: [PlatformSessionID] = [.douyin, .kuaishou, .soop]
+        let platformIds: [PlatformSessionID] = [.douyin, .kuaishou, .soop, .kick]
         for platformId in platformIds {
             let recordName = CloudCookieFields.sessionRecordName(for: platformId.rawValue)
             let recordID = CKRecord.ID(recordName: recordName)

@@ -30,7 +30,7 @@ struct TVOSSyncView: View {
                                 .font(.headline)
                                 .foregroundStyle(AppConstants.Colors.primaryText)
 
-                            Text("将已登录的平台账号同步到 tvOS（哔哩哔哩 / 抖音 / 快手 / SOOP）")
+                            Text("将已登录的平台账号同步到 tvOS（哔哩哔哩 / 抖音 / 快手 / SOOP / Kick）")
                                 .font(.caption)
                                 .foregroundStyle(AppConstants.Colors.secondaryText)
                         }

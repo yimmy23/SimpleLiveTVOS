@@ -14,8 +14,9 @@ private enum PlatformAccountItem: String, CaseIterable, Identifiable {
     case douyin
     case kuaishou
     case soop
+    case kick
 
-    private static let desktopUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+    private static let desktopUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
 
     var id: String { rawValue }
 
@@ -29,6 +30,8 @@ private enum PlatformAccountItem: String, CaseIterable, Identifiable {
             return "快手"
         case .soop:
             return "SOOP"
+        case .kick:
+            return "Kick"
         }
     }
 
@@ -42,6 +45,8 @@ private enum PlatformAccountItem: String, CaseIterable, Identifiable {
             return "bolt.circle.fill"
         case .soop:
             return "globe.asia.australia.fill"
+        case .kick:
+            return "k.circle.fill"
         }
     }
 
@@ -55,6 +60,8 @@ private enum PlatformAccountItem: String, CaseIterable, Identifiable {
             return .blue
         case .soop:
             return .purple
+        case .kick:
+            return .green
         }
     }
 
@@ -68,6 +75,8 @@ private enum PlatformAccountItem: String, CaseIterable, Identifiable {
             return .kuaishou
         case .soop:
             return .soop
+        case .kick:
+            return .kick
         }
     }
 
@@ -81,6 +90,8 @@ private enum PlatformAccountItem: String, CaseIterable, Identifiable {
             return .ks
         case .soop:
             return .soop
+        case .kick:
+            return .kick
         }
     }
 
@@ -91,17 +102,19 @@ private enum PlatformAccountItem: String, CaseIterable, Identifiable {
         case .douyin:
             return URL(string: "https://sso.douyin.com/login")!
         case .kuaishou:
-            return URL(string: "https://passport.kuaishou.com/pc/account/login")!
+            return URL(string: "https://www.kuaishou.com")!
         case .soop:
             return URL(string: "https://auth.m.sooplive.co.kr/login")!
+        case .kick:
+            return URL(string: "https://kick.com/")!
         }
     }
 
     var preferredUserAgent: String? {
         switch self {
-        case .bilibili:
+        case .bilibili, .kick:
             return nil
-        case .douyin, .kuaishou, .soop:
+        case .douyin, .soop, .kuaishou:
             return Self.desktopUserAgent
         }
     }
@@ -116,6 +129,8 @@ private enum PlatformAccountItem: String, CaseIterable, Identifiable {
             return ["kuaishou.com", "gifshow.com"]
         case .soop:
             return ["sooplive.co.kr"]
+        case .kick:
+            return ["kick.com"]
         }
     }
 
@@ -129,6 +144,8 @@ private enum PlatformAccountItem: String, CaseIterable, Identifiable {
             return ["userId", "user_id", "kuaishou.server.web_st", "kuaishou.server.web_ph"]
         case .soop:
             return ["AuthTicket", "BbsTicket", "UserTicket"]
+        case .kick:
+            return ["kick_session", "session_token", "XSRF-TOKEN"]
         }
     }
 }
@@ -197,7 +214,7 @@ struct PlatformAccountLoginView: View {
             switch platform {
             case .bilibili:
                 BilibiliWebLoginView()
-            case .douyin, .kuaishou, .soop:
+            case .douyin, .kuaishou, .soop, .kick:
                 PlatformCookieWebLoginSheet(platform: platform)
             }
         }
@@ -376,7 +393,7 @@ private struct PlatformCookieWebLoginSheet: View {
             cookie: cookieString,
             uid: uid,
             source: .local,
-            validateBeforeSave: true
+            validateBeforeSave: platform != .kick && platform != .kuaishou
         )
 
         switch result {
@@ -419,6 +436,8 @@ private struct PlatformCookieWebLoginSheet: View {
                 || names.contains("kuaishou.server.web_ph")
         case .soop:
             return names.contains("AuthTicket")
+        case .kick:
+            return names.contains("kick_session") || names.contains("session_token")
         }
     }
 

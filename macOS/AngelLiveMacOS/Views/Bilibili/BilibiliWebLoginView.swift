@@ -272,7 +272,7 @@ struct BilibiliWebLoginView: View {
                 Spacer()
             }
 
-            Text("将哔哩哔哩/抖音/快手/SOOP 登录信息同步到同一局域网内的 Apple TV")
+            Text("将哔哩哔哩/抖音/快手/SOOP/Kick 登录信息同步到同一局域网内的 Apple TV")
                 .font(.caption)
                 .foregroundStyle(AppConstants.Colors.secondaryText)
 
