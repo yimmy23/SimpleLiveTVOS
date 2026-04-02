@@ -9,9 +9,19 @@ import SwiftUI
 import AngelLiveCore
 import AngelLiveDependencies
 
+/// 卡片点击时的直播状态检查策略
+enum LiveCheckMode {
+    /// 直接进入，不判断（房间列表 — 都是在播的）
+    case none
+    /// 用本地 liveState 判断（收藏、搜索）
+    case local
+    /// 异步请求 API 查询（历史记录）
+    case remote
+}
+
 struct LiveRoomCard: View {
     let room: LiveModel
-    let skipLiveCheck: Bool
+    let liveCheckMode: LiveCheckMode
     let showsCoverBadge: Bool
     /// 可选的删除回调（用于历史记录）
     var onDelete: (() -> Void)? = nil
@@ -68,9 +78,9 @@ struct LiveRoomCard: View {
         return url
     }
 
-    init(room: LiveModel, width: CGFloat? = nil, skipLiveCheck: Bool = false, showsCoverBadge: Bool = false) {
+    init(room: LiveModel, width: CGFloat? = nil, liveCheckMode: LiveCheckMode = .local, showsCoverBadge: Bool = false) {
         self.room = room
-        self.skipLiveCheck = skipLiveCheck
+        self.liveCheckMode = liveCheckMode
         self.showsCoverBadge = showsCoverBadge
     }
 
@@ -85,9 +95,12 @@ struct LiveRoomCard: View {
     }
 
     // 判断是否正在直播
+    // liveState 为 nil 或无法解析时视为在播（房间列表本身就是在播列表）
+    // 只有明确为 close("0") 时才判定下播
     private var isLive: Bool {
-        guard let liveState = room.liveState else { return true }
-        return LiveState(rawValue: liveState) == .live
+        guard let liveState = room.liveState,
+              let state = LiveState(rawValue: liveState) else { return true }
+        return state != .close
     }
 
     // TODO: 平台图标和直播状态暂时隐藏，待重新设计后恢复
@@ -114,8 +127,19 @@ struct LiveRoomCard: View {
     var body: some View {
         Group {
             let baseButton = Button {
-                if skipLiveCheck {
-                    // 历史记录等场景：先实时查询直播状态
+                switch liveCheckMode {
+                case .none:
+                    // 房间列表：直接进入，不判断
+                    showPlayerBinding.wrappedValue = true
+                case .local:
+                    // 收藏/搜索：用本地 liveState 判断
+                    if isLive {
+                        showPlayerBinding.wrappedValue = true
+                    } else {
+                        presentToast(ToastValue(icon: Image(systemName: "tv.slash"), message: "主播已下播"))
+                    }
+                case .remote:
+                    // 历史记录：异步请求 API 查询直播状态
                     guard !isCheckingLiveState else { return }
                     Task {
                         isCheckingLiveState = true
@@ -136,10 +160,6 @@ struct LiveRoomCard: View {
                             showPlayerBinding.wrappedValue = true
                         }
                     }
-                } else if isLive {
-                    showPlayerBinding.wrappedValue = true
-                } else {
-                    presentToast(ToastValue(icon: Image(systemName: "tv.slash"), message: "主播已下播"))
                 }
             } label: {
                 cardContent

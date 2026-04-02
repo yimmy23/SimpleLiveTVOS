@@ -32,6 +32,7 @@ struct AngelLiveApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .overlay { DevConsoleOverlay() }
                 .environment(playerManager)
                 .environment(welcomeManager)
                 .installToast(position: .top)

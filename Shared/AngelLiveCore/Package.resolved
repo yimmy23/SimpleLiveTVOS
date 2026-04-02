@@ -1,5 +1,5 @@
 {
-  "originHash" : "5b5ef6a9a946414ee91a4e206887ef410e6d82e1f4424c0ab6b415e9c9f042e7",
+  "originHash" : "327d59f536c7e2514335f89bf32f7d4e5c5adce38216b149d31abfe1f2bf8ed9",
   "pins" : [
     {
       "identity" : "alamofire",
@@ -29,24 +29,6 @@
       }
     },
     {
-      "identity" : "gmobjc",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/pcccccc/GMObjC",
-      "state" : {
-        "revision" : "9a109ba5e1fc1d7c622a289d64eac992951532ab",
-        "version" : "1.1.8"
-      }
-    },
-    {
-      "identity" : "liveparse",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/pcccccc/LiveParse",
-      "state" : {
-        "revision" : "ea92e19ee06f707ab33c373ffcbc4d3ce75de767",
-        "version" : "2.1.4"
-      }
-    },
-    {
       "identity" : "starscream",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/daltoniam/Starscream",
@@ -71,15 +53,6 @@
       "state" : {
         "revision" : "5596511fce902e649c403cd4d6d5da1254f142b7",
         "version" : "1.35.1"
-      }
-    },
-    {
-      "identity" : "swiftyjson",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/SwiftyJSON/SwiftyJSON",
-      "state" : {
-        "revision" : "af76cf3ef710b6ca5f8c05f3a31307d44a3c5828",
-        "version" : "5.0.2"
       }
     }
   ],

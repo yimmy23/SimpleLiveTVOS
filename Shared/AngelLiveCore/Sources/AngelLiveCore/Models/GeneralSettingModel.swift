@@ -33,6 +33,7 @@ public final class GeneralSettingModel {
     public static let globalGeneralDisableMaterialBackground = "SimpleLive.Setting.globalGeneralDisableMaterialBackground"
     public static let globalGeneralSettingFavoriteStyle = "SimpleLive.Setting.favorite.style"
     public static let globalEnablePlayerGesture = "SimpleLive.Setting.enablePlayerGesture"
+    public static let globalDeveloperMode = "SimpleLive.Setting.developerMode"
 
     public init() {}
 
@@ -71,6 +72,19 @@ public final class GeneralSettingModel {
         set {
             withMutation(keyPath: \.enablePlayerGesture) {
                 UserDefaults.shared.set(newValue, forKey: GeneralSettingModel.globalEnablePlayerGesture, synchronize: true)
+            }
+        }
+    }
+
+    @ObservationIgnored
+    public var developerModeEnabled: Bool {
+        get {
+            access(keyPath: \.developerModeEnabled)
+            return UserDefaults.shared.value(forKey: GeneralSettingModel.globalDeveloperMode, synchronize: true) as? Bool ?? false
+        }
+        set {
+            withMutation(keyPath: \.developerModeEnabled) {
+                UserDefaults.shared.set(newValue, forKey: GeneralSettingModel.globalDeveloperMode, synchronize: true)
             }
         }
     }

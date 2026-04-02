@@ -10,6 +10,7 @@ import AngelLiveCore
 
 struct SettingView: View {
     @StateObject private var syncService = BilibiliCookieSyncService.shared
+    @State private var generalSetting = GeneralSettingModel()
     @State private var cloudKitReady = false
     @State private var cloudKitStateString = "检查中..."
     @Environment(PluginAvailabilityService.self) private var pluginAvailability
@@ -25,6 +26,7 @@ struct SettingView: View {
     }
 
     var body: some View {
+        @Bindable var setting = generalSetting
         NavigationStack {
             List {
                 // 账号设置
@@ -205,6 +207,24 @@ struct SettingView: View {
                             .font(.caption)
                             .foregroundStyle(AppConstants.Colors.secondaryText)
                     }
+                }
+
+                // 开发者
+                Section {
+                    HStack {
+                        Image(systemName: "hammer.fill")
+                            .font(.title3)
+                            .foregroundStyle(Color.red.gradient)
+                            .frame(width: 32)
+
+                        Toggle("开发者模式", isOn: $setting.developerModeEnabled)
+                    }
+                } header: {
+                    Text("开发者")
+                } footer: {
+                    Text("开启后显示浮动调试按钮，可查看插件运行日志。")
+                        .font(.caption)
+                        .foregroundStyle(AppConstants.Colors.secondaryText)
                 }
 
                 // 关于

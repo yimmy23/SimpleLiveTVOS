@@ -308,9 +308,9 @@ extension RoomListViewController: UICollectionViewDataSource {
 
         let room = rooms[indexPath.item]
         if let navigationState, let namespace {
-            cell.configure(with: room, navigationState: navigationState, namespace: namespace)
+            cell.configure(with: room, navigationState: navigationState, namespace: namespace, liveCheckMode: .none)
         } else {
-            cell.configure(with: room)
+            cell.configure(with: room, liveCheckMode: .none)
         }
 
         return cell

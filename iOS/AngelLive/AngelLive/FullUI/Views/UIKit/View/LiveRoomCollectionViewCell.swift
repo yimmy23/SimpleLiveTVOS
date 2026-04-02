@@ -29,14 +29,14 @@ class LiveRoomCollectionViewCell: UICollectionViewCell {
         backgroundColor = .clear
     }
 
-    func configure(with room: LiveModel, showsCoverBadge: Bool = false) {
-        let roomCard = LiveRoomCard(room: room, skipLiveCheck: true, showsCoverBadge: showsCoverBadge)
+    func configure(with room: LiveModel, liveCheckMode: LiveCheckMode = .local, showsCoverBadge: Bool = false) {
+        let roomCard = LiveRoomCard(room: room, liveCheckMode: liveCheckMode, showsCoverBadge: showsCoverBadge)
         applyRootView(AnyView(roomCard))
     }
 
     /// 配置 cell（带外部导航状态和命名空间，用于解决 PiP 导航状态丢失问题）
-    func configure(with room: LiveModel, navigationState: LiveRoomNavigationState, namespace: Namespace.ID, onDelete: (() -> Void)? = nil, showsCoverBadge: Bool = false) {
-        var roomCard = LiveRoomCard(room: room, skipLiveCheck: true, showsCoverBadge: showsCoverBadge)
+    func configure(with room: LiveModel, navigationState: LiveRoomNavigationState, namespace: Namespace.ID, liveCheckMode: LiveCheckMode = .local, onDelete: (() -> Void)? = nil, showsCoverBadge: Bool = false) {
+        var roomCard = LiveRoomCard(room: room, liveCheckMode: liveCheckMode, showsCoverBadge: showsCoverBadge)
         roomCard.onDelete = onDelete
         let cardView = roomCard
             .environment(\.liveRoomNavigationState, navigationState)

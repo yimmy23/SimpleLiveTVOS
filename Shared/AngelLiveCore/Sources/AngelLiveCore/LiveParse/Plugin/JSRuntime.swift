@@ -244,15 +244,36 @@ private extension JSRuntime {
 
             request.httpBody = envelope.body
 
+            // 开发者控制台：记录请求开始时间
+            let httpStartTime = CFAbsoluteTimeGetCurrent()
+
             let task = session.dataTask(with: request) { data, response, error in
                 queue.async { [weak context] in
                     guard let context else { return }
+
+                    let httpElapsed = CFAbsoluteTimeGetCurrent() - httpStartTime
+
                     if let error {
+                        // 开发者控制台：记录失败的 HTTP 请求
+                        Self.logHTTPRecord(
+                            pluginId: pluginId, envelope: envelope,
+                            requestHeaders: requestHeaders,
+                            statusCode: nil, responseHeaders: nil,
+                            responseBody: nil, error: error.localizedDescription,
+                            duration: httpElapsed
+                        )
                         reject.call(withArguments: [error.localizedDescription])
                         context.evaluateScript("void(0)")
                         return
                     }
                     guard let http = response as? HTTPURLResponse else {
+                        Self.logHTTPRecord(
+                            pluginId: pluginId, envelope: envelope,
+                            requestHeaders: requestHeaders,
+                            statusCode: nil, responseHeaders: nil,
+                            responseBody: nil, error: "Invalid response",
+                            duration: httpElapsed
+                        )
                         reject.call(withArguments: ["Invalid response"])
                         context.evaluateScript("void(0)")
                         return
@@ -279,6 +300,15 @@ private extension JSRuntime {
                     let responseURL = http.url?.absoluteString ?? envelope.urlString
                     let rawBodyLog = debugHTTPResponseBody(bodyText: bodyText, bodyBase64: bodyBase64)
                     print("[JSRuntime][HTTP] pluginId=\(pluginId) method=\(envelope.method) status=\(http.statusCode) url=\(responseURL) headers=\(headersDict) rawBody=\(rawBodyLog)")
+
+                    // 开发者控制台：记录成功的 HTTP 请求
+                    Self.logHTTPRecord(
+                        pluginId: pluginId, envelope: envelope,
+                        requestHeaders: requestHeaders,
+                        statusCode: http.statusCode, responseHeaders: headersDict,
+                        responseBody: bodyText.map { String($0.prefix(2000)) },
+                        error: nil, duration: httpElapsed
+                    )
 
                     let result: [String: Any] = [
                         "status": http.statusCode,
@@ -419,6 +449,40 @@ private extension JSRuntime {
             }
         }
         return result
+    }
+
+    /// 将 HTTP 请求/响应记录到开发者控制台
+    private static func logHTTPRecord(
+        pluginId: String,
+        envelope: HostHTTPRequestEnvelope,
+        requestHeaders: [String: String],
+        statusCode: Int?,
+        responseHeaders: [String: String]?,
+        responseBody: String?,
+        error: String?,
+        duration: TimeInterval
+    ) {
+        let console = PluginConsoleService.shared
+        guard console.isEnabled,
+              let entryId = console.activeEntryId(for: pluginId) else { return }
+
+        let bodyStr: String? = envelope.body.flatMap { String(data: $0, encoding: .utf8) }
+
+        let record = PluginConsoleHTTPRecord(
+            url: envelope.urlString,
+            method: envelope.method,
+            headers: requestHeaders,
+            body: bodyStr,
+            statusCode: statusCode,
+            responseHeaders: responseHeaders,
+            responseBody: responseBody,
+            error: error,
+            duration: duration
+        )
+
+        Task { @MainActor in
+            console.appendHTTPRecord(entryId: entryId, record: record)
+        }
     }
 
     private static func removeProtectedHeaders(_ headers: [String: String]) -> [String: String] {
