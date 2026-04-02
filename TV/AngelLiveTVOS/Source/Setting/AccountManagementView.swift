@@ -449,6 +449,7 @@ struct PlatformManualInputPageView: View {
     let platform: TVPlatformItem
     let onBack: () -> Void
 
+    @Environment(AppState.self) private var appViewModel
     @StateObject private var syncService = BilibiliCookieSyncService.shared
     @State private var cookieInput = ""
     @State private var isValidating = false
@@ -456,80 +457,144 @@ struct PlatformManualInputPageView: View {
     @State private var isSuccess = false
 
     var body: some View {
-        VStack(spacing: 15) {
-            Spacer()
+        HStack(alignment: .center, spacing: 80) {
+            // 左侧：输入区域
+            VStack(alignment: .leading, spacing: 15) {
+                Spacer()
 
-            if isSuccess {
-                VStack(spacing: 20) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 80))
-                        .foregroundColor(.green)
-                    Text("设置成功")
-                        .font(.title2.bold())
+                if isSuccess {
+                    VStack(spacing: 20) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 80))
+                            .foregroundColor(.green)
+                        Text("设置成功")
+                            .font(.title2.bold())
+                        Button {
+                            onBack()
+                        } label: {
+                            Text("完成")
+                                .foregroundColor(.primary)
+                        }
+                        .padding(.top, 20)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 40)
+                } else {
+                    Text("手动输入 \(platform.title) Cookie")
+                        .font(.system(size: 38, weight: .bold))
+
+                    TextField("请输入 \(platform.title) Cookie 字符串", text: $cookieInput)
+                        .frame(maxWidth: 700, alignment: .leading)
+
+                    if let message = validationMessage {
+                        Text(message)
+                            .font(.subheadline)
+                            .foregroundColor(.orange)
+                    }
+
                     Button {
-                        onBack()
+                        Task { await validateAndSave() }
                     } label: {
-                        Text("完成")
-                            .foregroundColor(.primary)
+                        HStack {
+                            Text("验证并保存")
+                                .foregroundColor(.primary)
+                            Spacer()
+                            if isValidating {
+                                ProgressView()
+                            }
+                        }
+                    }
+                    .frame(maxWidth: 700, alignment: .leading)
+                    .disabled(cookieInput.isEmpty || isValidating)
+
+                    // 帮助信息
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("如何获取 Cookie")
+                            .font(.headline)
+
+                        Text("1. 在电脑浏览器中登录 \(platform.websiteHost)")
+                            .font(.callout)
+                            .foregroundColor(.secondary)
+                        Text("2. 按 F12 打开开发者工具")
+                            .font(.callout)
+                            .foregroundColor(.secondary)
+                        Text("3. 切换到 Network (网络) 标签")
+                            .font(.callout)
+                            .foregroundColor(.secondary)
+                        Text("4. 刷新页面，点击任意请求")
+                            .font(.callout)
+                            .foregroundColor(.secondary)
+                        Text("5. 在 Headers 中找到 Cookie 字段并复制")
+                            .font(.callout)
+                            .foregroundColor(.secondary)
+                        Text("提示：\(platform.requiredCookieHint)")
+                            .font(.callout)
+                            .foregroundColor(.secondary)
                     }
                     .padding(.top, 20)
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 40)
-            } else {
-                TextField("请输入 \(platform.title) Cookie 字符串", text: $cookieInput)
 
-                if let message = validationMessage {
-                    Text(message)
-                        .font(.subheadline)
-                        .foregroundColor(.orange)
-                }
-
-                Button {
-                    Task { await validateAndSave() }
-                } label: {
-                    HStack {
-                        Text("验证并保存")
-                            .foregroundColor(.primary)
-                        Spacer()
-                        if isValidating {
-                            ProgressView()
-                        }
-                    }
-                }
-                .disabled(cookieInput.isEmpty || isValidating)
-
-                // 帮助信息
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("如何获取 Cookie")
-                        .font(.headline)
-
-                    Text("1. 在电脑浏览器中登录 \(platform.websiteHost)")
-                        .font(.callout)
-                        .foregroundColor(.secondary)
-                    Text("2. 按 F12 打开开发者工具")
-                        .font(.callout)
-                        .foregroundColor(.secondary)
-                    Text("3. 切换到 Network (网络) 标签")
-                        .font(.callout)
-                        .foregroundColor(.secondary)
-                    Text("4. 刷新页面，点击任意请求")
-                        .font(.callout)
-                        .foregroundColor(.secondary)
-                    Text("5. 在 Headers 中找到 Cookie 字段并复制")
-                        .font(.callout)
-                        .foregroundColor(.secondary)
-                    Text("提示：\(platform.requiredCookieHint)")
-                        .font(.callout)
-                        .foregroundColor(.secondary)
-                }
-                .padding(.top, 20)
+                Spacer(minLength: 100)
             }
+            .frame(maxWidth: 900, alignment: .leading)
 
-            Spacer(minLength: 200)
+            // 右侧：远程输入二维码
+            cookieRemoteInputQRPanel
         }
+        .padding(80)
+        .safeAreaPadding()
         .onExitCommand {
             onBack()
+        }
+        .onChange(of: appViewModel.remoteInputService.lastEvent?.value) {
+            guard let event = appViewModel.remoteInputService.lastEvent,
+                  event.field == .cookie else { return }
+            cookieInput = event.value
+            Task { await validateAndSave() }
+        }
+    }
+
+    // MARK: - 远程输入二维码面板
+
+    private var cookieRemoteInputQRPanel: some View {
+        let service = appViewModel.remoteInputService
+        let platformEncoded = platform.title.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? platform.title
+        let hintEncoded = platform.requiredCookieHint.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        let url = "http://\(service.localIPAddress):\(service.port)/cookie?platform=\(platformEncoded)&hint=\(hintEncoded)"
+        return VStack(spacing: 16) {
+            Spacer()
+            if service.isRunning && !service.localIPAddress.isEmpty {
+                Image(uiImage: Common.generateQRCode(from: url))
+                    .interpolation(.none)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 280, height: 280)
+                    .padding(28)
+                    .background(
+                        RoundedRectangle(cornerRadius: 24, style: .continuous)
+                            .fill(.ultraThinMaterial)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                                    .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                            )
+                    )
+                    .shadow(color: Color.black.opacity(0.35), radius: 24, x: 0, y: 18)
+
+                Text("扫码用手机输入")
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                Text("在手机上粘贴 Cookie 更方便")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 360)
+            } else {
+                ProgressView()
+                Text("正在启动远程输入...")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
         }
     }
 

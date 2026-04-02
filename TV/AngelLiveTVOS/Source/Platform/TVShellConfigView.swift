@@ -88,6 +88,7 @@ struct TVShellConfigView: View {
             case .title: inputTitle = event.value
             case .url:   inputURL = event.value
             case .search: break
+            case .cookie: break
             }
         }
         .fullScreenCover(isPresented: $showPluginManagement) {

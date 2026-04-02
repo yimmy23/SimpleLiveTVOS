@@ -15,6 +15,7 @@ struct RemoteInputEvent {
         case title
         case url
         case search
+        case cookie
     }
     let field: Field
     let value: String
@@ -108,6 +109,14 @@ final class RemoteInputService {
         // GET /search — 搜索输入页
         if firstLine.hasPrefix("GET /search") {
             return htmlResponse(searchPage())
+        }
+
+        // GET /cookie — Cookie 输入页
+        if firstLine.hasPrefix("GET /cookie") {
+            let queryParams = parseQueryParams(from: firstLine)
+            let platformTitle = queryParams["platform"] ?? ""
+            let hint = queryParams["hint"] ?? ""
+            return htmlResponse(cookiePage(platformTitle: platformTitle, hint: hint))
         }
 
         // GET /config 或 / — 配置页（URL + 标题）
@@ -262,6 +271,42 @@ final class RemoteInputService {
         </div>
         <p class="hint">提交后内容会自动填入 tvOS 搜索框</p>
         """)
+    }
+
+    // MARK: - Cookie 输入页
+
+    private func cookiePage(platformTitle: String, hint: String) -> String {
+        let title = platformTitle.isEmpty ? "Cookie" : "\(platformTitle) Cookie"
+        let hintText = hint.isEmpty ? "" : "<p class=\"hint\" style=\"margin-top:8px;color:#8e8e93;\">提示：\(hint)</p>"
+        return pageHTML(title: "Angel Live 输入 \(title)", body: """
+        <div class="card">
+          <form onsubmit="return submitForm(this,'r1')">
+            <input type="hidden" name="field" value="cookie">
+            <label>Cookie 字符串</label>
+            <textarea name="value" rows="6" placeholder="粘贴完整的 Cookie 字符串" autocomplete="off"
+              style="width:100%;background:#3a3a3c;border:none;border-radius:8px;color:#f2f2f7;font-size:14px;padding:12px 14px;outline:none;margin-bottom:14px;resize:vertical;font-family:monospace;"></textarea>
+            \(hintText)
+            <button type="submit">发送到 Apple TV</button>
+            <p class="result" id="r1"></p>
+          </form>
+        </div>
+        <p class="hint">提交后 Cookie 会自动填入 tvOS 并验证</p>
+        """)
+    }
+
+    // MARK: - URL Query 解析
+
+    private func parseQueryParams(from requestLine: String) -> [String: String] {
+        // requestLine: "GET /cookie?platform=xx&hint=yy HTTP/1.1"
+        let parts = requestLine.components(separatedBy: " ")
+        guard parts.count >= 2, let urlComponents = URLComponents(string: parts[1]) else {
+            return [:]
+        }
+        var result: [String: String] = [:]
+        for item in urlComponents.queryItems ?? [] {
+            result[item.name] = item.value ?? ""
+        }
+        return result
     }
 
     // MARK: - 获取本机局域网 IP（使用 Common.getWiFiIPAddress）
