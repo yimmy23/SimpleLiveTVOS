@@ -19,8 +19,7 @@ public final class DouyuSocketDataParser: WebSocketDataParser {
         }
 
         connection.heartbeatTimer = Timer(timeInterval: TimeInterval(45), repeats: true) { _ in
-            let timestamp = Int(Date().timeIntervalSince1970)
-            if let heartbeat = Self.codec.makeHeartbeatPacket(timestamp: timestamp) {
+            if let heartbeat = Self.codec.makeHeartbeatPacket() {
                 connection.socket?.write(data: heartbeat)
             }
         }
@@ -72,10 +71,10 @@ private final class DouyuDanmuJSCodec {
         }
     }
 
-    func makeHeartbeatPacket(timestamp: Int) -> Data? {
+    func makeHeartbeatPacket() -> Data? {
         queue.sync {
             guard let codec = context.objectForKeyedSubscript("DouyuDanmuCodec"),
-                  let result = codec.invokeMethod("heartbeatPacket", withArguments: [timestamp]),
+                  let result = codec.invokeMethod("heartbeatPacket", withArguments: []),
                   let bytes = result.toArray() as? [NSNumber] else {
                 return nil
             }
@@ -253,9 +252,8 @@ private extension DouyuDanmuJSCodec {
         encodePacket("type@=joingroup/rid@=" + rid + "/gid@=-9999/")
       ];
     },
-    heartbeatPacket: function (timestamp) {
-      var tick = Number(timestamp || 0);
-      return encodePacket("type@=keeplive/tick@=" + tick + "/");
+    heartbeatPacket: function () {
+      return encodePacket("type@=mrkl/");
     },
     parseMessages: function (bytes) {
       return parseMessages(bytes || []);

@@ -140,6 +140,8 @@ struct StreamerInfoView: View {
         .padding(.vertical, 16)
         .sheet(isPresented: $showStreamerInfo) {
             StreamerInfoSheet(room: viewModel.currentRoom)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
         }
     }
 

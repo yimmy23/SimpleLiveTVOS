@@ -65,9 +65,11 @@ struct PlayerGestureView: View {
         GeometryReader { geometry in
             // 底部安全区域：使用实际安全区 + 额外边距，避免与系统底部手势（Home Indicator）冲突
             let bottomSafeArea: CGFloat = max(safeAreaInsets.bottom + 20, 50)
+            // 顶部安全区域：横屏时避免与系统控制中心/通知中心下滑手势冲突
+            let topSafeArea: CGFloat = isLandscape ? max(safeAreaInsets.top + 20, 50) : 0
 
             ZStack {
-                // 透明手势接收层（底部留出安全区域）
+                // 透明手势接收层（顶部和底部留出安全区域）
                 Color.clear
                     // 从后台返回时重置手势状态（修复 PIP 返回后 HUD 显示问题）
                     .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
@@ -75,13 +77,15 @@ struct PlayerGestureView: View {
                     }
                     .contentShape(Rectangle())
                     .padding(.bottom, bottomSafeArea)
+                    .padding(.top, topSafeArea)
                     .gesture(
                         DragGesture(minimumDistance: 20)
                             .onChanged { value in
                                 // 锁定时或禁用滑动手势时不响应
                                 guard !isLocked && GeneralSettingModel().enablePlayerGesture else { return }
-                                // 检查起始位置是否在底部安全区域内
-                                guard value.startLocation.y < geometry.size.height - bottomSafeArea else { return }
+                                // 检查起始位置是否在顶部或底部安全区域内
+                                guard value.startLocation.y > topSafeArea,
+                                      value.startLocation.y < geometry.size.height - bottomSafeArea else { return }
                                 handleDragChanged(value: value, in: geometry.size)
                             }
                             .onEnded { _ in

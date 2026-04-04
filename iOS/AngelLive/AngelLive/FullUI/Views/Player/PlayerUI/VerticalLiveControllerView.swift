@@ -75,6 +75,9 @@ struct VerticalLiveControllerView: View {
 
             // 清晰度选择面板（右侧滑入）
             if showQualityPanel {
+                Color.black.opacity(0.001)
+                    .ignoresSafeArea()
+                    .onTapGesture { showQualityPanel = false }
                 QualitySelectionPanel(isShowing: $showQualityPanel)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
                     .transition(.move(edge: .trailing).combined(with: .opacity))
@@ -163,6 +166,8 @@ struct VerticalLiveControllerView: View {
                 .clipShape(Capsule())
                 .sheet(isPresented: $showStreamerInfo) {
                     StreamerInfoSheet(room: viewModel.currentRoom)
+                        .presentationDetents([.medium, .large])
+                        .presentationDragIndicator(.visible)
                 }
 
                 Spacer()
