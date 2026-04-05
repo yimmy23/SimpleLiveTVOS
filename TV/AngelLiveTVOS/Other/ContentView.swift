@@ -93,6 +93,21 @@ struct ContentView: View {
                 // 启动时拉取 key 映射（后台静默，不阻塞 UI）
                 Task { await PluginSourceKeyService.shared.fetchKeys() }
                 await appViewModel.pluginAvailability.checkAvailability()
+
+                // 自动检查插件更新（静默更新）
+                if appViewModel.pluginAvailability.hasAvailablePlugins && !appViewModel.pluginSourceManager.sourceURLs.isEmpty {
+                    await appViewModel.pluginSourceManager.refreshAvailableUpdates()
+                    let updatableIds = appViewModel.pluginAvailability.installedPluginIds.filter {
+                        appViewModel.pluginSourceManager.hasUpdate(for: $0)
+                    }
+                    if !updatableIds.isEmpty {
+                        for id in updatableIds {
+                            await appViewModel.pluginSourceManager.updatePlugin(pluginId: id)
+                        }
+                        await appViewModel.pluginAvailability.refresh()
+                    }
+                }
+
                 // 无本地插件时，检查 CloudKit 是否有已保存的插件源
                 if !appViewModel.pluginAvailability.hasAvailablePlugins {
                     await appViewModel.pluginSourceSyncService.checkCloudForSources()

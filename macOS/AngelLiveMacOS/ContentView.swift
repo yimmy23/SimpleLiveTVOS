@@ -133,6 +133,36 @@ struct ContentView: View {
             Task { await PluginSourceKeyService.shared.fetchKeys() }
             await pluginAvailability.checkAvailability()
             platformViewModel.refreshPlatforms(installedPluginIds: pluginAvailability.installedPluginIds)
+
+            // 自动检查插件更新（非阻塞，在 UI 就绪后后台运行）
+            if pluginAvailability.hasAvailablePlugins && !pluginSourceManager.sourceURLs.isEmpty {
+                await pluginSourceManager.refreshAvailableUpdates()
+                let updatableIds = pluginAvailability.installedPluginIds.filter {
+                    pluginSourceManager.hasUpdate(for: $0)
+                }
+                if !updatableIds.isEmpty {
+                    toastManager.show(
+                        icon: "arrow.triangle.2.circlepath",
+                        message: "有 \(updatableIds.count) 个插件需要更新，正在更新..."
+                    )
+                    var successCount = 0
+                    for id in updatableIds {
+                        if await pluginSourceManager.updatePlugin(pluginId: id) {
+                            successCount += 1
+                        }
+                    }
+                    await pluginAvailability.refresh()
+                    platformViewModel.refreshPlatforms(installedPluginIds: pluginAvailability.installedPluginIds)
+                    if successCount > 0 {
+                        toastManager.show(
+                            icon: "checkmark.circle.fill",
+                            message: "\(successCount) 个插件已更新完成",
+                            type: .success
+                        )
+                    }
+                }
+            }
+
             // 无本地插件时，检查 CloudKit 是否有已保存的插件源
             if !pluginAvailability.hasAvailablePlugins {
                 await pluginSourceSyncService.checkCloudForSources()

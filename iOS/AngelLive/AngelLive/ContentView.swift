@@ -21,6 +21,7 @@ enum TabSelection: Hashable {
 struct ContentView: View {
     @State private var selectedTab: TabSelection = .favorite
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.presentToast) private var presentToast
 
     // 首次启动管理器
     @Environment(WelcomeManager.self) private var welcomeManager
@@ -100,6 +101,34 @@ struct ContentView: View {
             // 启动时拉取 key 映射（后台静默，不阻塞 UI）
             Task { await PluginSourceKeyService.shared.fetchKeys() }
             await pluginAvailability.checkAvailability()
+
+            // 自动检查插件更新（非阻塞，在 UI 就绪后后台运行）
+            if pluginAvailability.hasAvailablePlugins && !pluginSourceManager.sourceURLs.isEmpty {
+                await pluginSourceManager.refreshAvailableUpdates()
+                let updatableIds = pluginAvailability.installedPluginIds.filter {
+                    pluginSourceManager.hasUpdate(for: $0)
+                }
+                if !updatableIds.isEmpty {
+                    presentToast(ToastValue(
+                        icon: Image(systemName: "arrow.triangle.2.circlepath"),
+                        message: "有 \(updatableIds.count) 个插件需要更新，正在更新..."
+                    ))
+                    var successCount = 0
+                    for id in updatableIds {
+                        if await pluginSourceManager.updatePlugin(pluginId: id) {
+                            successCount += 1
+                        }
+                    }
+                    await pluginAvailability.refresh()
+                    if successCount > 0 {
+                        presentToast(ToastValue(
+                            icon: Image(systemName: "checkmark.circle.fill"),
+                            message: "\(successCount) 个插件已更新完成"
+                        ))
+                    }
+                }
+            }
+
             // 无本地插件时，检查 CloudKit 是否有已保存的插件源
             if !pluginAvailability.hasAvailablePlugins {
                 await pluginSourceSyncService.checkCloudForSources()
