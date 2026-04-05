@@ -382,7 +382,9 @@ class FavoriteListViewController: UIViewController {
 
 extension FavoriteListViewController: UICollectionViewDataSource {
     func numberOfSections(in collectionView: UICollectionView) -> Int {
-        return filteredSections.count
+        // 使用局部快照避免数据竞争导致的崩溃
+        let sections = filteredSections
+        return sections.count
     }
 
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {

@@ -298,7 +298,8 @@ class RoomListViewController: UIViewController {
 
 extension RoomListViewController: UICollectionViewDataSource {
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        return rooms.count
+        let currentRooms = rooms
+        return currentRooms.count
     }
 
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
@@ -306,7 +307,12 @@ extension RoomListViewController: UICollectionViewDataSource {
             return UICollectionViewCell()
         }
 
-        let room = rooms[indexPath.item]
+        // 使用局部快照避免数据竞争导致的崩溃
+        let currentRooms = rooms
+        guard indexPath.item < currentRooms.count else {
+            return cell
+        }
+        let room = currentRooms[indexPath.item]
         if let navigationState, let namespace {
             cell.configure(with: room, navigationState: navigationState, namespace: namespace, liveCheckMode: .none)
         } else {
@@ -322,7 +328,8 @@ extension RoomListViewController: UICollectionViewDataSource {
 extension RoomListViewController: UICollectionViewDelegate {
     func collectionView(_ collectionView: UICollectionView, willDisplay cell: UICollectionViewCell, forItemAt indexPath: IndexPath) {
         // 加载更多逻辑
-        if indexPath.item == rooms.count - 1 {
+        let count = rooms.count
+        if count > 0, indexPath.item == count - 1 {
             loadMore()
         }
     }

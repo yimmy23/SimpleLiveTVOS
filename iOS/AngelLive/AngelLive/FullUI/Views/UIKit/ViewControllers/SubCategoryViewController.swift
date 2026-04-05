@@ -272,8 +272,11 @@ extension SubCategoryViewController: JXSegmentedListContainerViewDataSource {
     }
 
     func listContainerView(_ listContainerView: JXSegmentedListContainerView, initListAt index: Int) -> JXSegmentedListContainerViewListDelegate {
+        guard let viewModel else {
+            return RoomListPlaceholderViewController()
+        }
         let vc = RoomListViewController(
-            viewModel: viewModel!,
+            viewModel: viewModel,
             mainCategoryIndex: mainCategoryIndex,
             subCategoryIndex: index,
             navigationState: navigationState,
@@ -286,6 +289,14 @@ extension SubCategoryViewController: JXSegmentedListContainerViewDataSource {
 // MARK: - JXSegmentedListContainerViewListDelegate
 
 extension SubCategoryViewController: JXSegmentedListContainerViewListDelegate {
+    func listView() -> UIView {
+        return view
+    }
+}
+
+// MARK: - Placeholder for nil viewModel
+
+private class RoomListPlaceholderViewController: UIViewController, JXSegmentedListContainerViewListDelegate {
     func listView() -> UIView {
         return view
     }
