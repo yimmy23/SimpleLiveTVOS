@@ -130,7 +130,11 @@ public struct KSVideoPlayerView: View {
 
                 // 手势层（亮度、音量、双击全屏）
                 PlayerGestureView(onSingleTap: {
-                    model.config.isMaskShow.toggle()
+                    if model.showVideoSetting {
+                        model.showVideoSetting = false
+                    } else {
+                        model.config.isMaskShow.toggle()
+                    }
                 }, isLocked: $model.isLocked)
 
                 if showsControlLayer {

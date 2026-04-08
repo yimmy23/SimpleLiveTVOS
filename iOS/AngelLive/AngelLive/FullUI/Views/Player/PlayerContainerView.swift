@@ -267,10 +267,18 @@ struct PlayerContentView: View {
                         VideoSettingHUDView(model: playerModel, isShowing: $showVideoSetting)
                             .padding(.trailing, 0)
                             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+                            .background(
+                                Color.black.opacity(0.001)
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        showVideoSetting = false
+                                    }
+                            )
                             .transition(.move(edge: .trailing).combined(with: .opacity))
                     }
                     #endif
                 }
+                .animation(.easeInOut(duration: 0.3), value: showVideoSetting)
                 .task(id: "\(playURL.absoluteString)_\(viewModel.selectedPlayerKernel.rawValue)") {
                     Logger.debug(
                         "[PlayerFlow] player task start, kernel=\(viewModel.selectedPlayerKernel.rawValue), url=\(compactURL(playURL))",

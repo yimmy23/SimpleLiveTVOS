@@ -470,6 +470,13 @@ struct VideoControllerView: View {
                         .padding(.bottom, 0)
                         .padding(.trailing, 0)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+                        .background(
+                            Color.black.opacity(0.001)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    model.showVideoSetting = false
+                                }
+                        )
                         .transition(.move(edge: .trailing).combined(with: .opacity))
                         .ignoresSafeArea(shouldIgnoreSafeArea ? .all : [])
                 }
