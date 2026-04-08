@@ -97,7 +97,7 @@ private enum PlatformAccountItem: String, CaseIterable, Identifiable {
         case .kick: return URL(string: "https://kick.com/")!
         case .twitch: return URL(string: "https://www.twitch.tv/login")!
         case .xiaohongshu: return URL(string: "https://www.xiaohongshu.com")!
-        case .panda: return URL(string: "https://www.pandalive.co.kr")!
+        case .panda: return URL(string: "https://m.pandalive.co.kr/my")!
         }
     }
 
