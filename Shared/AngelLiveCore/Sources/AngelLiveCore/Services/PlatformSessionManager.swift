@@ -14,6 +14,9 @@ public enum PlatformSessionID: String, Codable, Sendable, CaseIterable {
     case kuaishou
     case soop
     case kick
+    case twitch
+    case xiaohongshu
+    case panda
 
     /// LiveParse 插件 ID，可能与会话 ID 不同（例如 kuaishou -> ks）。
     public var pluginId: String {
@@ -208,6 +211,12 @@ public actor PlatformSessionManager {
             return validateSoopSession(cookie: cookie)
         case .kick:
             return validateKickSession(cookie: cookie)
+        case .twitch:
+            return validateTwitchSession(cookie: cookie)
+        case .xiaohongshu:
+            return validateXiaohongshuSession(cookie: cookie)
+        case .panda:
+            return validatePandaSession(cookie: cookie)
         }
     }
 
@@ -261,6 +270,27 @@ public actor PlatformSessionManager {
         let normalizedCookie = cookie.lowercased()
         guard normalizedCookie.contains("kick_session=") || normalizedCookie.contains("session_token=") else {
             return .invalid(reason: "Kick Cookie 缺少 kick_session 或 session_token")
+        }
+        return .valid
+    }
+
+    private func validateTwitchSession(cookie: String) -> PlatformSessionValidationResult {
+        guard cookie.contains("auth-token=") else {
+            return .invalid(reason: "Twitch Cookie 缺少 auth-token")
+        }
+        return .valid
+    }
+
+    private func validateXiaohongshuSession(cookie: String) -> PlatformSessionValidationResult {
+        guard cookie.contains("web_session=") || cookie.contains("a1=") else {
+            return .invalid(reason: "小红书 Cookie 缺少 web_session")
+        }
+        return .valid
+    }
+
+    private func validatePandaSession(cookie: String) -> PlatformSessionValidationResult {
+        guard cookie.contains("sessKey=") || cookie.contains("userLoginYN=") else {
+            return .invalid(reason: "PandaTV Cookie 缺少 sessKey")
         }
         return .valid
     }

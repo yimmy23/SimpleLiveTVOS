@@ -23,6 +23,14 @@ struct SettingView: View {
     @State private var selectedCookiePlatform: MacOSPlatformAccountItem?
     @State private var platformLoginStatus: [PlatformSessionID: Bool] = [:]
 
+    private var availableMacPlatforms: [MacOSPlatformAccountItem] {
+        MacOSPlatformAccountItem.allCases.filter { pluginAvailability.isPluginInstalled(for: $0.sessionID) }
+    }
+
+    private var isBilibiliAvailable: Bool {
+        pluginAvailability.isPluginInstalled(for: .bilibili)
+    }
+
     private var bilibiliAccountIcon: NSImage? {
         MacPlatformIconProvider.tabImage(for: .bilibili)
     }
@@ -31,9 +39,11 @@ struct SettingView: View {
         Form {
             if pluginAvailability.hasAvailablePlugins {
                 Section("账号管理") {
-                    bilibiliAccountRow
+                    if isBilibiliAvailable {
+                        bilibiliAccountRow
+                    }
 
-                    ForEach(MacOSPlatformAccountItem.allCases) { platform in
+                    ForEach(availableMacPlatforms) { platform in
                         platformAccountRow(platform)
                     }
                 }
@@ -314,11 +324,17 @@ struct SettingView: View {
             return MacPlatformIconProvider.tabImage(for: .soop)
         case .kick:
             return MacPlatformIconProvider.tabImage(for: .kick)
+        case .twitch:
+            return MacPlatformIconProvider.tabImage(for: .twitch)
+        case .xiaohongshu:
+            return MacPlatformIconProvider.tabImage(for: .xiaohongshu)
+        case .panda:
+            return MacPlatformIconProvider.tabImage(for: .panda)
         }
     }
 
     private func refreshLoginStatus() async {
-        for platform in MacOSPlatformAccountItem.allCases {
+        for platform in availableMacPlatforms {
             let session = await PlatformSessionManager.shared.getSession(platformId: platform.sessionID)
             let loggedIn = session?.state == .authenticated
                 && session?.cookie?.isEmpty == false

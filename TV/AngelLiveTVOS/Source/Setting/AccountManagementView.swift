@@ -54,6 +54,9 @@ enum TVPlatformItem: String, CaseIterable, Identifiable, Equatable {
     case kuaishou
     case soop
     case kick
+    case twitch
+    case xiaohongshu
+    case panda
 
     var id: String { rawValue }
 
@@ -64,6 +67,9 @@ enum TVPlatformItem: String, CaseIterable, Identifiable, Equatable {
         case .kuaishou: return "快手"
         case .soop: return "SOOP"
         case .kick: return "Kick"
+        case .twitch: return "Twitch"
+        case .xiaohongshu: return "小红书"
+        case .panda: return "PandaTV"
         }
     }
 
@@ -74,6 +80,9 @@ enum TVPlatformItem: String, CaseIterable, Identifiable, Equatable {
         case .kuaishou: return .kuaishou
         case .soop: return .soop
         case .kick: return .kick
+        case .twitch: return .twitch
+        case .xiaohongshu: return .xiaohongshu
+        case .panda: return .panda
         }
     }
 
@@ -84,6 +93,9 @@ enum TVPlatformItem: String, CaseIterable, Identifiable, Equatable {
         case .kuaishou: return .ks
         case .soop: return .soop
         case .kick: return .kick
+        case .twitch: return .twitch
+        case .xiaohongshu: return .xiaohongshu
+        case .panda: return .panda
         }
     }
 
@@ -100,6 +112,9 @@ enum TVPlatformItem: String, CaseIterable, Identifiable, Equatable {
         case .kuaishou: return "kuaishou.com"
         case .soop: return "sooplive.co.kr"
         case .kick: return "kick.com"
+        case .twitch: return "twitch.tv"
+        case .xiaohongshu: return "xiaohongshu.com"
+        case .panda: return "pandalive.co.kr"
         }
     }
 
@@ -111,6 +126,9 @@ enum TVPlatformItem: String, CaseIterable, Identifiable, Equatable {
         case .kuaishou: return "需包含 key=value 格式"
         case .soop: return "需包含 AuthTicket"
         case .kick: return "需包含 kick_session 或 session_token"
+        case .twitch: return "需包含 auth-token"
+        case .xiaohongshu: return "需包含 web_session"
+        case .panda: return "需包含 sessKey"
         }
     }
 }
@@ -119,9 +137,14 @@ enum TVPlatformItem: String, CaseIterable, Identifiable, Equatable {
 
 struct AccountManagementView: View {
     @StateObject private var syncService = BilibiliCookieSyncService.shared
+    @Environment(PluginAvailabilityService.self) private var pluginAvailability
 
     @State private var currentPage: AccountPage = .main
     @State private var platformLoginStatus: [PlatformSessionID: Bool] = [:]
+
+    private var availablePlatforms: [TVPlatformItem] {
+        TVPlatformItem.allCases.filter { pluginAvailability.isPluginInstalled(for: $0.sessionID) }
+    }
 
     enum AccountPage: Equatable {
         case main
@@ -205,7 +228,7 @@ struct AccountManagementView: View {
 
 
             // 平台列表
-            ForEach(TVPlatformItem.allCases) { platform in
+            ForEach(availablePlatforms) { platform in
                 Button {
                     currentPage = .platformDetail(platform)
                 } label: {
@@ -246,7 +269,7 @@ struct AccountManagementView: View {
     }
 
     private func refreshAllLoginStatuses() async {
-        for platform in TVPlatformItem.allCases where platform != .bilibili {
+        for platform in availablePlatforms where platform != .bilibili {
             let session = await PlatformSessionManager.shared.getSession(platformId: platform.sessionID)
             platformLoginStatus[platform.sessionID] = session?.state == .authenticated
         }
@@ -621,7 +644,7 @@ struct PlatformManualInputPageView: View {
                 platformId: platform.sessionID,
                 cookie: cookieInput,
                 source: .manual,
-                validateBeforeSave: platform != .kick && platform != .kuaishou
+                validateBeforeSave: platform != .kick && platform != .kuaishou && platform != .panda
             )
             switch result {
             case .valid:
@@ -739,6 +762,12 @@ struct BilibiliLANSyncPageView: View {
                 return "SOOP"
             case PlatformSessionID.kick.rawValue:
                 return "Kick"
+            case PlatformSessionID.twitch.rawValue:
+                return "Twitch"
+            case PlatformSessionID.xiaohongshu.rawValue:
+                return "小红书"
+            case PlatformSessionID.panda.rawValue:
+                return "PandaTV"
             default:
                 return nil
             }

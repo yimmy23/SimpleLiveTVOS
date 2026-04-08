@@ -16,6 +16,9 @@ enum MacOSPlatformAccountItem: String, CaseIterable, Identifiable {
     case kuaishou
     case soop
     case kick
+    case twitch
+    case xiaohongshu
+    case panda
 
     private static let desktopUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
 
@@ -27,6 +30,9 @@ enum MacOSPlatformAccountItem: String, CaseIterable, Identifiable {
         case .kuaishou: return "快手"
         case .soop: return "SOOP"
         case .kick: return "Kick"
+        case .twitch: return "Twitch"
+        case .xiaohongshu: return "小红书"
+        case .panda: return "PandaTV"
         }
     }
 
@@ -36,6 +42,9 @@ enum MacOSPlatformAccountItem: String, CaseIterable, Identifiable {
         case .kuaishou: return "bolt.circle.fill"
         case .soop: return "globe.asia.australia.fill"
         case .kick: return "k.circle.fill"
+        case .twitch: return "gamecontroller.fill"
+        case .xiaohongshu: return "leaf.fill"
+        case .panda: return "pawprint.fill"
         }
     }
 
@@ -45,6 +54,9 @@ enum MacOSPlatformAccountItem: String, CaseIterable, Identifiable {
         case .kuaishou: return .blue
         case .soop: return .purple
         case .kick: return .green
+        case .twitch: return .purple
+        case .xiaohongshu: return .red
+        case .panda: return .blue
         }
     }
 
@@ -54,6 +66,9 @@ enum MacOSPlatformAccountItem: String, CaseIterable, Identifiable {
         case .kuaishou: return .kuaishou
         case .soop: return .soop
         case .kick: return .kick
+        case .twitch: return .twitch
+        case .xiaohongshu: return .xiaohongshu
+        case .panda: return .panda
         }
     }
 
@@ -63,14 +78,17 @@ enum MacOSPlatformAccountItem: String, CaseIterable, Identifiable {
         case .kuaishou: return URL(string: "https://www.kuaishou.com/")!
         case .soop: return URL(string: "https://auth.m.sooplive.co.kr/login")!
         case .kick: return URL(string: "https://kick.com/")!
+        case .twitch: return URL(string: "https://www.twitch.tv/login")!
+        case .xiaohongshu: return URL(string: "https://www.xiaohongshu.com")!
+        case .panda: return URL(string: "https://www.pandalive.co.kr")!
         }
     }
 
     var preferredUserAgent: String? {
         switch self {
-        case .kuaishou, .kick:
+        case .kuaishou, .kick, .twitch:
             return nil
-        case .douyin, .soop:
+        case .douyin, .soop, .xiaohongshu, .panda:
             return Self.desktopUserAgent
         }
     }
@@ -81,6 +99,9 @@ enum MacOSPlatformAccountItem: String, CaseIterable, Identifiable {
         case .kuaishou: return ["kuaishou.com", "gifshow.com"]
         case .soop: return ["sooplive.co.kr"]
         case .kick: return ["kick.com"]
+        case .twitch: return ["twitch.tv"]
+        case .xiaohongshu: return ["xiaohongshu.com"]
+        case .panda: return ["pandalive.co.kr"]
         }
     }
 
@@ -90,6 +111,9 @@ enum MacOSPlatformAccountItem: String, CaseIterable, Identifiable {
         case .kuaishou: return ["userId", "user_id", "kuaishou.server.web_st", "kuaishou.server.web_ph"]
         case .soop: return ["AuthTicket", "BbsTicket", "UserTicket"]
         case .kick: return ["kick_session", "session_token", "XSRF-TOKEN"]
+        case .twitch: return ["auth-token", "login", "twilight-user"]
+        case .xiaohongshu: return ["web_session", "a1", "webId"]
+        case .panda: return ["sessKey", "userLoginIdx", "userLoginSaveYN", "userLoginYN"]
         }
     }
 
@@ -106,6 +130,12 @@ enum MacOSPlatformAccountItem: String, CaseIterable, Identifiable {
             return names.contains("AuthTicket")
         case .kick:
             return names.contains("kick_session") || names.contains("session_token")
+        case .twitch:
+            return names.contains("auth-token") || names.contains("login")
+        case .xiaohongshu:
+            return names.contains("web_session") || names.contains("a1")
+        case .panda:
+            return names.contains("sessKey") || names.contains("userLoginYN")
         }
     }
 }
@@ -258,7 +288,7 @@ struct MacOSPlatformCookieWebLoginView: View {
             cookie: cookieString,
             uid: uid,
             source: .local,
-            validateBeforeSave: platform != .kick && platform != .kuaishou
+            validateBeforeSave: platform != .kick && platform != .kuaishou && platform != .panda
         )
 
         switch result {

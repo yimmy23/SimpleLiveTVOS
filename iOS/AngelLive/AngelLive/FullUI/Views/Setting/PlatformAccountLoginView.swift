@@ -15,6 +15,9 @@ private enum PlatformAccountItem: String, CaseIterable, Identifiable {
     case kuaishou
     case soop
     case kick
+    case twitch
+    case xiaohongshu
+    case panda
 
     private static let desktopUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
 
@@ -22,143 +25,132 @@ private enum PlatformAccountItem: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .bilibili:
-            return "哔哩哔哩"
-        case .douyin:
-            return "抖音"
-        case .kuaishou:
-            return "快手"
-        case .soop:
-            return "SOOP"
-        case .kick:
-            return "Kick"
+        case .bilibili: return "哔哩哔哩"
+        case .douyin: return "抖音"
+        case .kuaishou: return "快手"
+        case .soop: return "SOOP"
+        case .kick: return "Kick"
+        case .twitch: return "Twitch"
+        case .xiaohongshu: return "小红书"
+        case .panda: return "PandaTV"
         }
     }
 
     var iconSystemName: String {
         switch self {
-        case .bilibili:
-            return "play.tv.fill"
-        case .douyin:
-            return "music.note.tv"
-        case .kuaishou:
-            return "bolt.circle.fill"
-        case .soop:
-            return "globe.asia.australia.fill"
-        case .kick:
-            return "k.circle.fill"
+        case .bilibili: return "play.tv.fill"
+        case .douyin: return "music.note.tv"
+        case .kuaishou: return "bolt.circle.fill"
+        case .soop: return "globe.asia.australia.fill"
+        case .kick: return "k.circle.fill"
+        case .twitch: return "gamecontroller.fill"
+        case .xiaohongshu: return "leaf.fill"
+        case .panda: return "pawprint.fill"
         }
     }
 
     var iconTint: Color {
         switch self {
-        case .bilibili:
-            return .pink
-        case .douyin:
-            return .orange
-        case .kuaishou:
-            return .blue
-        case .soop:
-            return .purple
-        case .kick:
-            return .green
+        case .bilibili: return .pink
+        case .douyin: return .orange
+        case .kuaishou: return .blue
+        case .soop: return .purple
+        case .kick: return .green
+        case .twitch: return .purple
+        case .xiaohongshu: return .red
+        case .panda: return .blue
         }
     }
 
     var sessionID: PlatformSessionID {
         switch self {
-        case .bilibili:
-            return .bilibili
-        case .douyin:
-            return .douyin
-        case .kuaishou:
-            return .kuaishou
-        case .soop:
-            return .soop
-        case .kick:
-            return .kick
+        case .bilibili: return .bilibili
+        case .douyin: return .douyin
+        case .kuaishou: return .kuaishou
+        case .soop: return .soop
+        case .kick: return .kick
+        case .twitch: return .twitch
+        case .xiaohongshu: return .xiaohongshu
+        case .panda: return .panda
         }
     }
 
     var liveType: LiveType {
         switch self {
-        case .bilibili:
-            return .bilibili
-        case .douyin:
-            return .douyin
-        case .kuaishou:
-            return .ks
-        case .soop:
-            return .soop
-        case .kick:
-            return .kick
+        case .bilibili: return .bilibili
+        case .douyin: return .douyin
+        case .kuaishou: return .ks
+        case .soop: return .soop
+        case .kick: return .kick
+        case .twitch: return .twitch
+        case .xiaohongshu: return .xiaohongshu
+        case .panda: return .panda
         }
     }
 
     var loginURL: URL {
         switch self {
-        case .bilibili:
-            return URL(string: "https://passport.bilibili.com/h5-app/passport/login")!
-        case .douyin:
-            return URL(string: "https://sso.douyin.com/login")!
-        case .kuaishou:
-            return URL(string: "https://www.kuaishou.com")!
-        case .soop:
-            return URL(string: "https://auth.m.sooplive.co.kr/login")!
-        case .kick:
-            return URL(string: "https://kick.com/")!
+        case .bilibili: return URL(string: "https://passport.bilibili.com/h5-app/passport/login")!
+        case .douyin: return URL(string: "https://sso.douyin.com/login")!
+        case .kuaishou: return URL(string: "https://www.kuaishou.com")!
+        case .soop: return URL(string: "https://auth.m.sooplive.co.kr/login")!
+        case .kick: return URL(string: "https://kick.com/")!
+        case .twitch: return URL(string: "https://www.twitch.tv/login")!
+        case .xiaohongshu: return URL(string: "https://www.xiaohongshu.com")!
+        case .panda: return URL(string: "https://www.pandalive.co.kr")!
         }
     }
 
     var preferredUserAgent: String? {
         switch self {
-        case .bilibili, .kick:
+        case .bilibili, .kick, .twitch:
             return nil
-        case .douyin, .soop, .kuaishou:
+        case .douyin, .soop, .kuaishou, .xiaohongshu, .panda:
             return Self.desktopUserAgent
         }
     }
 
     var cookieDomainHints: [String] {
         switch self {
-        case .bilibili:
-            return ["bilibili.com"]
-        case .douyin:
-            return ["douyin.com", "iesdouyin.com"]
-        case .kuaishou:
-            return ["kuaishou.com", "gifshow.com"]
-        case .soop:
-            return ["sooplive.co.kr"]
-        case .kick:
-            return ["kick.com"]
+        case .bilibili: return ["bilibili.com"]
+        case .douyin: return ["douyin.com", "iesdouyin.com"]
+        case .kuaishou: return ["kuaishou.com", "gifshow.com"]
+        case .soop: return ["sooplive.co.kr"]
+        case .kick: return ["kick.com"]
+        case .twitch: return ["twitch.tv"]
+        case .xiaohongshu: return ["xiaohongshu.com"]
+        case .panda: return ["pandalive.co.kr"]
         }
     }
 
     var extraCookieNames: Set<String> {
         switch self {
-        case .bilibili:
-            return ["SESSDATA", "DedeUserID"]
-        case .douyin:
-            return ["ttwid", "__ac_nonce", "msToken", "sessionid", "sessionid_ss", "uid_tt"]
-        case .kuaishou:
-            return ["userId", "user_id", "kuaishou.server.web_st", "kuaishou.server.web_ph"]
-        case .soop:
-            return ["AuthTicket", "BbsTicket", "UserTicket"]
-        case .kick:
-            return ["kick_session", "session_token", "XSRF-TOKEN"]
+        case .bilibili: return ["SESSDATA", "DedeUserID"]
+        case .douyin: return ["ttwid", "__ac_nonce", "msToken", "sessionid", "sessionid_ss", "uid_tt"]
+        case .kuaishou: return ["userId", "user_id", "kuaishou.server.web_st", "kuaishou.server.web_ph"]
+        case .soop: return ["AuthTicket", "BbsTicket", "UserTicket"]
+        case .kick: return ["kick_session", "session_token", "XSRF-TOKEN"]
+        case .twitch: return ["auth-token", "login", "twilight-user"]
+        case .xiaohongshu: return ["web_session", "a1", "webId"]
+        case .panda: return ["sessKey", "userLoginIdx", "userLoginSaveYN", "userLoginYN"]
         }
     }
 }
 
 struct PlatformAccountLoginView: View {
     @StateObject private var syncService = BilibiliCookieSyncService.shared
+    @Environment(PluginAvailabilityService.self) private var pluginAvailability
     @State private var platformLoginStatus: [PlatformSessionID: Bool] = [:]
     @State private var selectedPlatform: PlatformAccountItem?
+
+    private var availablePlatforms: [PlatformAccountItem] {
+        PlatformAccountItem.allCases.filter { pluginAvailability.isPluginInstalled(for: $0.sessionID) }
+    }
 
     var body: some View {
         List {
             Section {
-                ForEach(PlatformAccountItem.allCases) { platform in
+                ForEach(availablePlatforms) { platform in
                     Button {
                         selectedPlatform = platform
                     } label: {
@@ -214,14 +206,14 @@ struct PlatformAccountLoginView: View {
             switch platform {
             case .bilibili:
                 BilibiliWebLoginView()
-            case .douyin, .kuaishou, .soop, .kick:
+            default:
                 PlatformCookieWebLoginSheet(platform: platform)
             }
         }
     }
 
     private func refreshLoginStatus() async {
-        for platform in PlatformAccountItem.allCases where platform != .bilibili {
+        for platform in availablePlatforms where platform != .bilibili {
             let session = await PlatformSessionManager.shared.getSession(platformId: platform.sessionID)
             let loggedIn = isAuthenticated(session: session)
             platformLoginStatus[platform.sessionID] = loggedIn
@@ -393,7 +385,7 @@ private struct PlatformCookieWebLoginSheet: View {
             cookie: cookieString,
             uid: uid,
             source: .local,
-            validateBeforeSave: platform != .kick && platform != .kuaishou
+            validateBeforeSave: platform != .kick && platform != .kuaishou && platform != .panda
         )
 
         switch result {
@@ -438,6 +430,12 @@ private struct PlatformCookieWebLoginSheet: View {
             return names.contains("AuthTicket")
         case .kick:
             return names.contains("kick_session") || names.contains("session_token")
+        case .twitch:
+            return names.contains("auth-token") || names.contains("login")
+        case .xiaohongshu:
+            return names.contains("web_session") || names.contains("a1")
+        case .panda:
+            return names.contains("sessKey") || names.contains("userLoginYN")
         }
     }
 
