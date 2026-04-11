@@ -272,6 +272,13 @@ struct PlatformDetailView: View {
                     }
                     .frame(width: cardWidth, height: cardHeight)
                     .gridCellColumns(columns)
+                } else if !viewModel.hasMoreRooms && !rooms.isEmpty {
+                    Text("已经到底了")
+                        .font(.caption)
+                        .foregroundStyle(AppConstants.Colors.secondaryText)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, AppConstants.Spacing.md)
+                        .gridCellColumns(columns)
                 }
             }
             .padding(.horizontal, horizontalPadding)

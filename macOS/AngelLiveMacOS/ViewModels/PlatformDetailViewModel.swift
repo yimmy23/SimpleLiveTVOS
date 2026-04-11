@@ -72,6 +72,7 @@ class PlatformDetailViewModel {
     // 分页
     var currentPage = 1
     private let pageSize = 20
+    var hasMoreRooms = true
 
     init(platform: Platformdescription) {
         self.platform = platform
@@ -111,6 +112,7 @@ class PlatformDetailViewModel {
 
         if refresh {
             currentPage = 1
+            hasMoreRooms = true
             roomList.removeAll()
             roomError = nil
         }
@@ -128,6 +130,10 @@ class PlatformDetailViewModel {
                 parentBiz: parentBiz,
                 page: currentPage
             )
+
+            if fetchedRooms.isEmpty {
+                hasMoreRooms = false
+            }
 
             if refresh {
                 roomList = fetchedRooms.removingDuplicates()
@@ -154,7 +160,7 @@ class PlatformDetailViewModel {
 
     @MainActor
     func loadMore() async {
-        guard !isLoadingRooms else { return }
+        guard !isLoadingRooms, hasMoreRooms else { return }
         currentPage += 1
         await loadRoomList(refresh: false)
     }

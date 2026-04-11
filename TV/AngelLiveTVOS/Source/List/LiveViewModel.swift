@@ -61,9 +61,10 @@ class LiveViewModel {
     //直播列表分页
     var subPageNumber = 0
     var subPageSize = 20
+    var hasMoreRooms = true
     var roomPage: Int = 1 {
         didSet {
-            if roomListType == .favorite {
+            if roomListType == .favorite || !hasMoreRooms {
                 return
             }
             getRoomList(index: selectedSubListIndex)
@@ -211,6 +212,12 @@ class LiveViewModel {
                 }
 
                 await MainActor.run {
+                    if self.roomPage == 1 {
+                        self.hasMoreRooms = true
+                    }
+                    if newRooms.isEmpty {
+                        self.hasMoreRooms = false
+                    }
                     let mergedRooms: [LiveModel]
                     if self.roomPage == 1 {
                         mergedRooms = newRooms.removingDuplicates()

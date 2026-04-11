@@ -137,7 +137,7 @@ struct ListMainView: View {
     }
 
     private var shouldShowLoadingPlaceholder: Bool {
-        liveViewModel.isLoading || (liveViewModel.roomList.isEmpty && !showEmptyState)
+        (liveViewModel.isLoading || (liveViewModel.roomList.isEmpty && !showEmptyState)) && liveViewModel.hasMoreRooms
     }
 
     private func updateEmptyState() {
@@ -196,6 +196,14 @@ struct ListMainView: View {
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .center)
+
+                    if !liveViewModel.hasMoreRooms && !liveViewModel.roomList.isEmpty {
+                        Text("已经到底了")
+                            .font(.callout)
+                            .foregroundColor(.secondary)
+                            .padding(.top, 20)
+                            .padding(.bottom, 40)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .center)
             }

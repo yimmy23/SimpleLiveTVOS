@@ -338,6 +338,12 @@ struct PlatformDetailView: View {
                         }
                         .frame(maxWidth: .infinity)
                         .padding()
+                    } else if !viewModel.hasMoreRooms && !rooms.isEmpty {
+                        Text("已经到底了")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity)
+                            .padding()
                     }
                 }
                 .padding(16)
