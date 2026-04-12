@@ -12,7 +12,7 @@ internal import AVFoundation
 
 @inline(__always)
 func print(_ items: Any..., separator: String = " ", terminator: String = "\n") {
-#if DEBUG
+#if IOS_DEVELOPER_MODE
     let message = items.map { String(describing: $0) }.joined(separator: separator)
     Swift.print(message, terminator: terminator)
 #endif
@@ -32,7 +32,7 @@ struct AngelLiveApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .overlay { DevConsoleOverlay() }
+                .developerModeConsoleOverlay()
                 .environment(playerManager)
                 .environment(welcomeManager)
                 .installToast(position: .top)
@@ -44,6 +44,17 @@ struct AngelLiveApp: App {
     }
 }
 
+private extension View {
+    @ViewBuilder
+    func developerModeConsoleOverlay() -> some View {
+        #if IOS_DEVELOPER_MODE
+        self.overlay { DevConsoleOverlay() }
+        #else
+        self
+        #endif
+    }
+}
+
 // MARK: - App Delegate
 
 class AppDelegate: NSObject, UIApplicationDelegate {
@@ -51,7 +62,9 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         // 仅预配置播放类别，避免应用启动时立刻打断其他 App 的音频。
         configureAudioSessionForPlayback()
+        #if IOS_DEVELOPER_MODE
         logPluginInstallLocation()
+        #endif
 
         Task {
             await PlatformSessionLiveParseBridge.syncFromPersistedSessionsOnLaunch()
@@ -59,7 +72,10 @@ class AppDelegate: NSObject, UIApplicationDelegate {
                 _ = await BilibiliCookieSyncService.shared.syncFromICloud()
                 await BilibiliCookieSyncService.shared.syncAllPlatformsFromICloud()
             }
+            #if IOS_DEVELOPER_MODE
             await logKuaishouCookieOnLaunch()
+            await logXiaohongshuCookieOnLaunch()
+            #endif
         }
 
         // 初始化屏幕方向设置
@@ -94,6 +110,15 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             print("[iOS] 快手 Cookie: \(cookie)")
         } else {
             print("[iOS] 快手 Cookie: <empty>")
+        }
+    }
+
+    private func logXiaohongshuCookieOnLaunch() async {
+        let session = await PlatformSessionManager.shared.getSession(platformId: .xiaohongshu)
+        if let cookie = session?.cookie, !cookie.isEmpty {
+            print("[iOS] 小红书 Cookie: \(cookie)")
+        } else {
+            print("[iOS] 小红书 Cookie: <empty>")
         }
     }
 

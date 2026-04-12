@@ -8,6 +8,8 @@
 import SwiftUI
 import AngelLiveCore
 
+#if IOS_DEVELOPER_MODE
+
 // MARK: - 管理器：直接添加到 keyWindow 上
 
 @MainActor
@@ -860,3 +862,5 @@ struct DevConsoleOverlay: View {
             .onAppear { DevConsoleWindowManager.shared.setup() }
     }
 }
+
+#endif
