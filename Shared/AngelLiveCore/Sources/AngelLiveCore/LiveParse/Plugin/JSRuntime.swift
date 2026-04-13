@@ -10,6 +10,7 @@ public final class JSRuntime: @unchecked Sendable {
     private let context: JSContext
     private let pluginId: String
     private let session: URLSession
+    private static var sharedXHSSigner: XHSSigningService?
 
     public init(pluginId: String, session: URLSession = .shared, logHandler: LogHandler? = nil) {
         self.queue = DispatchQueue(label: "liveparse.jsruntime.\(UUID().uuidString)")
@@ -21,6 +22,14 @@ public final class JSRuntime: @unchecked Sendable {
             createdContext = JSContext()
         }
         self.context = createdContext!
+
+        if Self.sharedXHSSigner == nil {
+            do {
+                Self.sharedXHSSigner = try XHSSigningService()
+            } catch {
+                print("[JSRuntime] XHS signer init failed: \(error)")
+            }
+        }
 
         queue.sync {
             Self.configureConsole(in: context, logHandler: logHandler)
@@ -235,6 +244,89 @@ private extension JSRuntime {
                 requestHeaders = removeProtectedHeaders(requestHeaders)
                 if let cookieHeader = LiveParsePlatformSessionVault.mergedCookieHeader(for: envelope.platformId) {
                     requestHeaders["Cookie"] = cookieHeader
+
+                    if envelope.signing?.profile == "xhs_live_web" {
+                        var lowerHeaders: [String: String] = [:]
+                        for (key, value) in requestHeaders {
+                            lowerHeaders[key.lowercased()] = value
+                        }
+                        requestHeaders.removeValue(forKey: "Cookie")
+                        requestHeaders.removeValue(forKey: "X-s")
+                        requestHeaders.removeValue(forKey: "X-t")
+                        requestHeaders.removeValue(forKey: "X-s-common")
+                        lowerHeaders.removeValue(forKey: "x-s")
+                        lowerHeaders.removeValue(forKey: "x-t")
+                        lowerHeaders.removeValue(forKey: "x-s-common")
+
+                        var finalURL = envelope.urlString
+                        if envelope.signing?.injectRequestUserId == true {
+                            if let userId = Self.sharedXHSSigner?.requestUserId(from: cookieHeader), !userId.isEmpty {
+                                var components = URLComponents(string: finalURL)
+                                var queryItems = components?.queryItems ?? []
+                                queryItems.removeAll { $0.name == "request_user_id" }
+                                queryItems.append(URLQueryItem(name: "request_user_id", value: userId))
+                                components?.queryItems = queryItems
+                                finalURL = components?.string ?? finalURL
+                            }
+                        }
+
+                        if let signer = Self.sharedXHSSigner {
+                            do {
+                                let signedHeaders = try signer.sign(url: finalURL, cookies: cookieHeader)
+                                for (key, value) in signedHeaders {
+                                    requestHeaders[key] = value
+                                }
+                                requestHeaders["Cookie"] = cookieHeader
+                            } catch {
+                                print("[JSRuntime] XHS signing failed: \(error)")
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 通用 cookieInject：从 cookie 取值注入到 header、query 或 body
+            if !envelope.cookieInject.isEmpty {
+                var mutableURL = envelope.urlString
+                var bodyJSON: [String: Any]?
+
+                for rule in envelope.cookieInject {
+                    guard let value = LiveParsePlatformSessionVault.cookieValue(named: rule.cookieName, for: envelope.platformId),
+                          !value.isEmpty else { continue }
+                    let injectedValue = (rule.prefix ?? "") + value
+
+                    switch rule.target {
+                    case .header:
+                        guard let headerName = rule.headerName else { continue }
+                        requestHeaders[headerName] = injectedValue
+                    case .query:
+                        guard let queryName = rule.queryName else { continue }
+                        var components = URLComponents(string: mutableURL)
+                        var queryItems = components?.queryItems ?? []
+                        queryItems.removeAll { $0.name == queryName }
+                        queryItems.append(URLQueryItem(name: queryName, value: injectedValue))
+                        components?.queryItems = queryItems
+                        mutableURL = components?.string ?? mutableURL
+                    case .body:
+                        guard let bodyPath = rule.bodyPath else { continue }
+                        if bodyJSON == nil {
+                            if let existing = request.httpBody,
+                               let parsed = try? JSONSerialization.jsonObject(with: existing) as? [String: Any] {
+                                bodyJSON = parsed
+                            } else {
+                                bodyJSON = [:]
+                            }
+                        }
+                        let keyPath = bodyPath.split(separator: ".").map(String.init)
+                        bodyJSON = Self.setNestedValue(in: bodyJSON ?? [:], keyPath: keyPath, value: injectedValue)
+                    }
+                }
+
+                if mutableURL != envelope.urlString, let newURL = URL(string: mutableURL) {
+                    request.url = newURL
+                }
+                if let bodyJSON {
+                    request.httpBody = try? JSONSerialization.data(withJSONObject: bodyJSON)
                 }
             }
 
@@ -335,6 +427,26 @@ private extension JSRuntime {
         case platformCookie = "platform_cookie"
     }
 
+    private struct HostHTTPRequestSigning {
+        let profile: String
+        let injectRequestUserId: Bool
+    }
+
+    /// 通用 cookie 值注入规则：从 cookie 取值注入到 header、query 或 JSON body
+    private struct CookieInjectRule {
+        enum Target: String { case header, query, body }
+        let cookieName: String
+        let target: Target
+        /// header name（target=header）
+        let headerName: String?
+        /// query parameter name（target=query）
+        let queryName: String?
+        /// JSON body key path，如 "data.token" → {"data":{"token":"xxx"}}（target=body）
+        let bodyPath: String?
+        /// 值前缀，如 "OAuth "
+        let prefix: String?
+    }
+
     private struct HostHTTPRequestEnvelope {
         let url: URL
         let urlString: String
@@ -344,6 +456,8 @@ private extension JSRuntime {
         let timeout: TimeInterval
         let authMode: HostHTTPAuthMode
         let platformId: String
+        let signing: HostHTTPRequestSigning?
+        let cookieInject: [CookieInjectRule]
     }
 
     private static func makeHostHTTPRequestEnvelope(options: [String: Any], pluginId: String) -> HostHTTPRequestEnvelope? {
@@ -378,8 +492,74 @@ private extension JSRuntime {
             body: body,
             timeout: timeout,
             authMode: authMode,
-            platformId: platformId
+            platformId: platformId,
+            signing: resolveSigning(options: options),
+            cookieInject: resolveCookieInject(options: options)
         )
+    }
+
+    private static func resolveCookieInject(options: [String: Any]) -> [CookieInjectRule] {
+        guard let rawArray = options["cookieInject"] as? [[String: Any]] else { return [] }
+        var rules: [CookieInjectRule] = []
+        for item in rawArray {
+            guard let cookieName = (item["cookieName"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !cookieName.isEmpty else { continue }
+            let targetRaw = (item["target"] as? String)?.lowercased() ?? "header"
+            let target = CookieInjectRule.Target(rawValue: targetRaw) ?? .header
+            let headerName = (item["headerName"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let queryName = (item["queryName"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let bodyPath = (item["bodyPath"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let prefix = item["prefix"] as? String
+
+            // 校验对应 target 的必填字段
+            switch target {
+            case .header: guard headerName != nil && !headerName!.isEmpty else { continue }
+            case .query:  guard queryName != nil && !queryName!.isEmpty else { continue }
+            case .body:   guard bodyPath != nil && !bodyPath!.isEmpty else { continue }
+            }
+
+            rules.append(CookieInjectRule(
+                cookieName: cookieName,
+                target: target,
+                headerName: headerName,
+                queryName: queryName,
+                bodyPath: bodyPath,
+                prefix: prefix
+            ))
+        }
+        return rules
+    }
+
+    private static func resolveSigning(options: [String: Any]) -> HostHTTPRequestSigning? {
+        guard let signing = options["signing"] as? [String: Any],
+              let rawProfile = signing["profile"] as? String else {
+            return nil
+        }
+
+        let profile = rawProfile.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !profile.isEmpty else { return nil }
+
+        let injectRequestUserId = resolvedBool(signing["injectRequestUserId"]) ?? false
+        return HostHTTPRequestSigning(
+            profile: profile,
+            injectRequestUserId: injectRequestUserId
+        )
+    }
+
+    private static func resolvedBool(_ any: Any?) -> Bool? {
+        if let value = any as? Bool { return value }
+        if let value = any as? NSNumber { return value.boolValue }
+        if let value = any as? String {
+            switch value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+            case "true", "1":
+                return true
+            case "false", "0":
+                return false
+            default:
+                return nil
+            }
+        }
+        return nil
     }
 
     private static func resolveTimeout(request: [String: Any], options: [String: Any]) -> TimeInterval {
@@ -483,6 +663,19 @@ private extension JSRuntime {
         Task { @MainActor in
             console.appendHTTPRecord(entryId: entryId, record: record)
         }
+    }
+
+    /// 按 key path 设置嵌套字典值，如 ["data","token"] → {"data":{"token":"xxx"}}
+    private static func setNestedValue(in dict: [String: Any], keyPath: [String], value: Any) -> [String: Any] {
+        guard let first = keyPath.first else { return dict }
+        var result = dict
+        if keyPath.count == 1 {
+            result[first] = value
+        } else {
+            let nested = (result[first] as? [String: Any]) ?? [:]
+            result[first] = setNestedValue(in: nested, keyPath: Array(keyPath.dropFirst()), value: value)
+        }
+        return result
     }
 
     private static func removeProtectedHeaders(_ headers: [String: String]) -> [String: String] {

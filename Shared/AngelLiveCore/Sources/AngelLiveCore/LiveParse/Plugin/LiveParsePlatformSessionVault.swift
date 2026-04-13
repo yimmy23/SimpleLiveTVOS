@@ -36,39 +36,27 @@ enum LiveParsePlatformSessionVault {
         lock.unlock()
     }
 
-    static func mergedCookieHeader(for platformId: String) -> String? {
+    static func session(for platformId: String) -> LiveParsePlatformSession? {
         let normalizedId = canonicalPlatformId(platformId)
         guard !normalizedId.isEmpty else { return nil }
-
-        var cookieMap: [(String, String)] = []
-
-        // 先解析 defaultCookie（低优先级）
-        if let defaultCookie = defaultCookie(for: normalizedId) {
-            cookieMap.append(contentsOf: parseCookiePairs(defaultCookie))
-        }
-
         lock.lock()
-        let sessionCookie = sessions[normalizedId]?.cookie
+        let session = sessions[normalizedId]
         lock.unlock()
+        return session
+    }
 
-        // 再解析 sessionCookie（高优先级，同 key 覆盖）
-        if let sessionCookie, !sessionCookie.isEmpty {
-            cookieMap.append(contentsOf: parseCookiePairs(sessionCookie))
-        }
+    static func cookieValue(named name: String, for platformId: String) -> String? {
+        let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedName.isEmpty else { return nil }
+        return mergedCookiePairs(for: platformId)
+            .last { $0.0 == normalizedName }?
+            .1
+    }
 
-        // 去重：同 key 保留最后一个（session 优先于 default）
-        var seen: [String: Int] = [:]
-        var deduped: [(String, String)] = []
-        for (key, value) in cookieMap {
-            if let idx = seen[key] {
-                deduped[idx] = (key, value)
-            } else {
-                seen[key] = deduped.count
-                deduped.append((key, value))
-            }
-        }
-
-        let merged = deduped.map { "\($0.0)=\($0.1)" }.joined(separator: "; ")
+    static func mergedCookieHeader(for platformId: String) -> String? {
+        let merged = mergedCookiePairs(for: platformId)
+            .map { "\($0.0)=\($0.1)" }
+            .joined(separator: "; ")
         return merged.isEmpty ? nil : merged
     }
 
@@ -80,6 +68,34 @@ enum LiveParsePlatformSessionVault {
             let value = String(trimmed[trimmed.index(after: eqIdx)...]).trimmingCharacters(in: .whitespaces)
             return key.isEmpty ? nil : (key, value)
         }
+    }
+
+    private static func mergedCookiePairs(for platformId: String) -> [(String, String)] {
+        let normalizedId = canonicalPlatformId(platformId)
+        guard !normalizedId.isEmpty else { return [] }
+
+        var cookiePairs: [(String, String)] = []
+
+        if let defaultCookie = defaultCookie(for: normalizedId) {
+            cookiePairs.append(contentsOf: parseCookiePairs(defaultCookie))
+        }
+
+        if let sessionCookie = session(for: normalizedId)?.cookie,
+           !sessionCookie.isEmpty {
+            cookiePairs.append(contentsOf: parseCookiePairs(sessionCookie))
+        }
+
+        var seen: [String: Int] = [:]
+        var deduped: [(String, String)] = []
+        for (key, value) in cookiePairs {
+            if let index = seen[key] {
+                deduped[index] = (key, value)
+            } else {
+                seen[key] = deduped.count
+                deduped.append((key, value))
+            }
+        }
+        return deduped
     }
 
     static func canonicalPlatformId(_ platformId: String) -> String {

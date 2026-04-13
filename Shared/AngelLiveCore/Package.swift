@@ -36,6 +36,9 @@ let package = Package(
                 .product(name: "SharedAssets", package: "SharedAssets", condition: .when(platforms: [.iOS, .tvOS]))
             ],
             path: "Sources",
+            resources: [
+                .copy("AngelLiveCore/LiveParse/XHS")
+            ],
             swiftSettings: [
                 .swiftLanguageMode(.v5)
             ],
