@@ -197,6 +197,16 @@ struct DetailPlayerView: View {
                             DragGesture(minimumDistance: 1)
                                 .onChanged { _ in }
                         )
+                        // 左边缘 20pt: UIScreenEdgePanGestureRecognizer 触发返回
+                        .overlay {
+                            EdgeSwipeDismissView(edgeWidth: 20) {
+                                if AppConstants.Device.isIPad && isIPadFullscreen {
+                                    isIPadFullscreen = false
+                                } else {
+                                    dismiss()
+                                }
+                            }
+                        }
                         .onPreferenceChange(PlayerHeightPreferenceKey.self) { height in
                             if !AppConstants.Device.isIPad {
                                 iPhonePlayerHeight = height

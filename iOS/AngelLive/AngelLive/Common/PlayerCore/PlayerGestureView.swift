@@ -1,3 +1,63 @@
+import SwiftUI
+import UIKit
+
+// MARK: - 左边缘滑动返回
+
+/// 只有左边缘 edgeWidth 内接收触摸，其余 hitTest 返回 nil 完全穿透。
+/// 内部用 UIScreenEdgePanGestureRecognizer，滑动距离/速度达标后回调 onDismiss。
+struct EdgeSwipeDismissView: UIViewRepresentable {
+    let edgeWidth: CGFloat
+    let onDismiss: () -> Void
+
+    func makeUIView(context: Context) -> EdgeHitPassthroughView {
+        let view = EdgeHitPassthroughView()
+        view.edgeWidth = edgeWidth
+        view.backgroundColor = .clear
+        let edge = UIScreenEdgePanGestureRecognizer(
+            target: context.coordinator,
+            action: #selector(Coordinator.handleEdge)
+        )
+        edge.edges = .left
+        edge.delegate = context.coordinator
+        view.addGestureRecognizer(edge)
+        return view
+    }
+
+    func updateUIView(_ uiView: EdgeHitPassthroughView, context: Context) {
+        uiView.edgeWidth = edgeWidth
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(onDismiss: onDismiss) }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        let onDismiss: () -> Void
+        init(onDismiss: @escaping () -> Void) { self.onDismiss = onDismiss }
+
+        @objc func handleEdge(_ g: UIScreenEdgePanGestureRecognizer) {
+            guard g.state == .ended else { return }
+            let tx = g.translation(in: g.view).x
+            let vx = g.velocity(in: g.view).x
+            if tx > 60 || vx > 300 {
+                onDismiss()
+            }
+        }
+
+        func gestureRecognizer(
+            _ gestureRecognizer: UIGestureRecognizer,
+            shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer
+        ) -> Bool { true }
+    }
+}
+
+/// hitTest 只在左边缘 edgeWidth 内返回 self，其余返回 nil 穿透
+final class EdgeHitPassthroughView: UIView {
+    var edgeWidth: CGFloat = 20
+
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        point.x < edgeWidth ? super.hitTest(point, with: event) : nil
+    }
+}
+
 #if canImport(KSPlayer)
 
 //
@@ -11,7 +71,6 @@
 //  - 右半边上下滑动调节音量
 //
 
-import SwiftUI
 import MediaPlayer
 import KSPlayer
 import AngelLiveCore
@@ -47,6 +106,9 @@ struct PlayerGestureView: View {
     /// 是否正在滑动
     @State private var isDragging: Bool = false
 
+    /// 左边缘让出区域宽度，此区域内触摸穿透给系统手势（zoom transition dismiss）
+    private static let edgePassthroughWidth: CGFloat = 20
+
     /// 音量滑块（系统音量控制）
     private let volumeView: MPVolumeView = {
         let view = MPVolumeView(frame: CGRect(x: -1000, y: -1000, width: 1, height: 1))
@@ -69,49 +131,56 @@ struct PlayerGestureView: View {
             let topSafeArea: CGFloat = isLandscape ? max(safeAreaInsets.top + 20, 50) : 0
 
             ZStack {
-                // 透明手势接收层（顶部和底部留出安全区域）
-                Color.clear
-                    // 从后台返回时重置手势状态（修复 PIP 返回后 HUD 显示问题）
-                    .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
-                        resetGestureState()
-                    }
-                    .contentShape(Rectangle())
-                    .padding(.bottom, bottomSafeArea)
-                    .padding(.top, topSafeArea)
-                    .gesture(
-                        DragGesture(minimumDistance: 20)
-                            .onChanged { value in
-                                // 锁定时或禁用滑动手势时不响应
-                                guard !isLocked && GeneralSettingModel().enablePlayerGesture else { return }
-                                // 检查起始位置是否在顶部或底部安全区域内
-                                guard value.startLocation.y > topSafeArea,
-                                      value.startLocation.y < geometry.size.height - bottomSafeArea else { return }
-                                handleDragChanged(value: value, in: geometry.size)
-                            }
-                            .onEnded { _ in
-                                handleDragEnded()
-                            }
-                    )
-                    .simultaneousGesture(
-                        TapGesture(count: 2)
-                            .onEnded {
-                                // 锁定时禁用双击手势
-                                guard !isLocked else { return }
-                                handleDoubleTap()
-                            }
-                    )
-                    .simultaneousGesture(
-                        TapGesture(count: 1)
-                            .onEnded {
-                                // 只有在没有拖动的情况下才响应单击
-                                if !isDragging {
-                                    // 延迟执行单击，给双击判断留时间
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                                        onSingleTap?()
+                // 手势接收层：HStack 物理分离左边缘穿透区和主手势区
+                HStack(spacing: 0) {
+                    // 左边缘：不加 contentShape，触摸穿透给系统返回手势
+                    Color.clear
+                        .frame(width: Self.edgePassthroughWidth)
+
+                    // 主手势区域（顶部和底部留出安全区域）
+                    Color.clear
+                        // 从后台返回时重置手势状态（修复 PIP 返回后 HUD 显示问题）
+                        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+                            resetGestureState()
+                        }
+                        .contentShape(Rectangle())
+                        .padding(.bottom, bottomSafeArea)
+                        .padding(.top, topSafeArea)
+                        .gesture(
+                            DragGesture(minimumDistance: 20)
+                                .onChanged { value in
+                                    // 锁定时或禁用滑动手势时不响应
+                                    guard !isLocked && GeneralSettingModel().enablePlayerGesture else { return }
+                                    // 检查起始位置是否在顶部或底部安全区域内
+                                    guard value.startLocation.y > topSafeArea,
+                                          value.startLocation.y < geometry.size.height - bottomSafeArea else { return }
+                                    handleDragChanged(value: value, in: geometry.size)
+                                }
+                                .onEnded { _ in
+                                    handleDragEnded()
+                                }
+                        )
+                        .simultaneousGesture(
+                            TapGesture(count: 2)
+                                .onEnded {
+                                    // 锁定时禁用双击手势
+                                    guard !isLocked else { return }
+                                    handleDoubleTap()
+                                }
+                        )
+                        .simultaneousGesture(
+                            TapGesture(count: 1)
+                                .onEnded {
+                                    // 只有在没有拖动的情况下才响应单击
+                                    if !isDragging {
+                                        // 延迟执行单击，给双击判断留时间
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                                            onSingleTap?()
+                                        }
                                     }
                                 }
-                            }
-                    )
+                        )
+                }
 
                 // 调节指示器
                 if showIndicator {
