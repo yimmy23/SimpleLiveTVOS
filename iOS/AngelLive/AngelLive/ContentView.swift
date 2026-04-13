@@ -241,10 +241,12 @@ struct ContentView: View {
                             if let image = PlatformIconProvider.tabImage(for: platform.liveType) {
                                 Image(uiImage: image)
                                     .resizable()
+                                    .scaledToFit()
                                     .frame(width: 25, height: 25)
                             } else {
                                 Image(systemName: "play.tv")
                                     .resizable()
+                                    .scaledToFit()
                                     .frame(width: 25, height: 25)
                             }
 

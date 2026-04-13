@@ -10,16 +10,19 @@ import AngelLiveCore
 
 enum PlatformIconProvider {
     private static let installedCardIconPrefix = "assets/tv_"
-    private static let installedTabIconPrefix = "assets/mini_live_card_"
+    private static let installedTabIconPrefix = "assets/live_card_"
+    private static let installedListIconPrefix = "assets/pad_live_card_"
 
     /// 内存缓存：避免滚动时反复进行磁盘 I/O
     private static var tabImageCache: [String: UIImage] = [:]
     private static var cardImageCache: [String: UIImage] = [:]
+    private static var listImageCache: [String: UIImage] = [:]
 
     /// 清除缓存（插件更新后调用）
     static func clearCache() {
         tabImageCache.removeAll()
         cardImageCache.removeAll()
+        listImageCache.removeAll()
     }
 
     static func tabImage(for liveType: LiveType) -> UIImage? {
@@ -34,15 +37,18 @@ enum PlatformIconProvider {
         let pluginId = platform.pluginId
 
         if let installedImage = loadInstalledIcon(pluginId: pluginId, fileName: installedTabIconPrefix + pluginId) {
-            tabImageCache[cacheKey] = installedImage
-            return installedImage
+            let normalizedImage = normalizedTabImage(installedImage)
+            tabImageCache[cacheKey] = normalizedImage
+            return normalizedImage
         }
 
         let legacyImage = legacyTabImage(liveType: liveType)
         if let legacyImage {
-            tabImageCache[cacheKey] = legacyImage
+            let normalizedImage = normalizedTabImage(legacyImage)
+            tabImageCache[cacheKey] = normalizedImage
+            return normalizedImage
         }
-        return legacyImage
+        return nil
     }
 
     static func configCardImage(for liveType: LiveType, isDarkMode: Bool) -> UIImage? {
@@ -71,6 +77,29 @@ enum PlatformIconProvider {
         return legacyImage
     }
 
+    static func pluginManagementImage(for liveType: LiveType) -> UIImage? {
+        let cacheKey = liveType.rawValue
+        if let cached = listImageCache[cacheKey] {
+            return cached
+        }
+
+        guard let platform = SandboxPluginCatalog.platform(for: liveType) else {
+            return nil
+        }
+        let pluginId = platform.pluginId
+
+        if let installedImage = loadInstalledIcon(pluginId: pluginId, fileName: installedListIconPrefix + pluginId) {
+            listImageCache[cacheKey] = installedImage
+            return installedImage
+        }
+
+        let legacyImage = legacyListImage(liveType: liveType)
+        if let legacyImage {
+            listImageCache[cacheKey] = legacyImage
+        }
+        return legacyImage
+    }
+
     private static func loadInstalledIcon(pluginId: String, fileName: String) -> UIImage? {
         let storage = LiveParsePlugins.shared.storage
         let versionDirs = storage.listInstalledVersions(pluginId: pluginId)
@@ -92,19 +121,31 @@ enum PlatformIconProvider {
 
     private static func legacyTabImage(liveType: LiveType) -> UIImage? {
         let legacyNameByType: [String: String] = [
-            LiveType.bilibili.rawValue: "pad_live_card_bili",
-            LiveType.douyu.rawValue: "pad_live_card_douyu",
-            LiveType.huya.rawValue: "pad_live_card_huya",
-            LiveType.douyin.rawValue: "pad_live_card_douyin",
-            LiveType.yy.rawValue: "pad_live_card_yy",
-            LiveType.cc.rawValue: "pad_live_card_cc",
-            LiveType.ks.rawValue: "pad_live_card_ks",
-            LiveType.soop.rawValue: "pad_live_card_soop",
-            LiveType.youtube.rawValue: "pad_live_card_youtube"
+            LiveType.bilibili.rawValue: "live_card_bilibili",
+            LiveType.douyu.rawValue: "live_card_douyu",
+            LiveType.huya.rawValue: "live_card_huya",
+            LiveType.douyin.rawValue: "live_card_douyin",
+            LiveType.yy.rawValue: "live_card_yy",
+            LiveType.cc.rawValue: "live_card_cc",
+            LiveType.ks.rawValue: "live_card_ks",
+            LiveType.soop.rawValue: "live_card_soop",
+            LiveType.youtube.rawValue: "live_card_youtube"
         ]
-        let legacyName = legacyNameByType[liveType.rawValue] ?? "pad_live_card_bili"
+        let legacyName = legacyNameByType[liveType.rawValue] ?? "live_card_bilibili"
 
         return UIImage(named: legacyName)
+    }
+
+    private static func normalizedTabImage(_ image: UIImage) -> UIImage {
+        guard let cgImage = image.cgImage else { return image }
+
+        let targetPoints: CGFloat = 25
+        let pixelWidth = CGFloat(cgImage.width)
+        let pixelHeight = CGFloat(cgImage.height)
+        let scale = max(pixelWidth, pixelHeight) / targetPoints
+
+        guard scale.isFinite, scale > 0 else { return image }
+        return UIImage(cgImage: cgImage, scale: scale, orientation: image.imageOrientation)
     }
 
     private static func legacyCardImage(liveType: LiveType, isDarkMode: Bool) -> UIImage? {
@@ -121,6 +162,23 @@ enum PlatformIconProvider {
             LiveType.youtube.rawValue: "tv_youtube_big\(darkSuffix)"
         ]
         let legacyName = legacyNameByType[liveType.rawValue] ?? "tv_bilibili_big\(darkSuffix)"
+
+        return UIImage(named: legacyName)
+    }
+
+    private static func legacyListImage(liveType: LiveType) -> UIImage? {
+        let legacyNameByType: [String: String] = [
+            LiveType.bilibili.rawValue: "pad_live_card_bili",
+            LiveType.douyu.rawValue: "pad_live_card_douyu",
+            LiveType.huya.rawValue: "pad_live_card_huya",
+            LiveType.douyin.rawValue: "pad_live_card_douyin",
+            LiveType.yy.rawValue: "pad_live_card_yy",
+            LiveType.cc.rawValue: "pad_live_card_cc",
+            LiveType.ks.rawValue: "pad_live_card_ks",
+            LiveType.soop.rawValue: "pad_live_card_soop",
+            LiveType.youtube.rawValue: "pad_live_card_youtube"
+        ]
+        let legacyName = legacyNameByType[liveType.rawValue] ?? "pad_live_card_bili"
 
         return UIImage(named: legacyName)
     }

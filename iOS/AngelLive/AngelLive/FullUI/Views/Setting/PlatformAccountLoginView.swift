@@ -156,7 +156,7 @@ struct PlatformAccountLoginView: View {
                     } label: {
                         HStack(spacing: 12) {
                             Group {
-                                if let image = PlatformIconProvider.tabImage(for: platform.liveType) {
+                                if let image = PlatformIconProvider.pluginManagementImage(for: platform.liveType) {
                                     Image(uiImage: image)
                                         .resizable()
                                         .scaledToFit()

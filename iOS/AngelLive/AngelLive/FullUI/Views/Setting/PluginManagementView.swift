@@ -58,21 +58,7 @@ struct PluginManagementView: View {
             } else {
                 ForEach(pluginAvailability.installedPluginIds, id: \.self) { pluginId in
                     HStack {
-                        // 优先显示插件内置 iOS 图标
-                        if let platform = platformForPluginId(pluginId) {
-                            if let image = PlatformIconProvider.tabImage(for: platform.liveType) {
-                                Image(uiImage: image)
-                                    .resizable()
-                                    .frame(width: 32, height: 32)
-                                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                            } else {
-                                Image(systemName: "puzzlepiece.extension")
-                                    .frame(width: 32, height: 32)
-                            }
-                        } else {
-                            Image(systemName: "puzzlepiece.extension")
-                                .frame(width: 32, height: 32)
-                        }
+                        pluginIconView(for: pluginId)
 
                         VStack(alignment: .leading, spacing: 2) {
                             Text(pluginDisplayName(for: pluginId))
@@ -123,8 +109,7 @@ struct PluginManagementView: View {
             Section {
                 ForEach(notInstalled) { displayItem in
                     HStack {
-                        Image(systemName: "puzzlepiece.extension")
-                            .frame(width: 32, height: 32)
+                        pluginIconView(for: displayItem.id)
 
                         VStack(alignment: .leading, spacing: 2) {
                             Text(displayItem.displayName)
@@ -248,6 +233,24 @@ struct PluginManagementView: View {
     }
 
     @ViewBuilder
+    private func pluginIconView(for pluginId: String) -> some View {
+        if let platform = platformForPluginId(pluginId),
+           let image = PlatformIconProvider.pluginManagementImage(for: platform.liveType) {
+            Image(uiImage: image)
+                .resizable()
+                .interpolation(.high)
+                .antialiased(true)
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 32, height: 32)
+                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        } else {
+            Image(systemName: "puzzlepiece.extension")
+                .frame(width: 32, height: 32)
+                .foregroundStyle(AppConstants.Colors.secondaryText)
+        }
+    }
+
+    @ViewBuilder
     private func versionSubtitleView(for pluginId: String) -> some View {
         let installed = pluginSourceManager.installedVersion(for: pluginId) ?? "未知"
         if let latest = pluginSourceManager.latestVersion(for: pluginId),
@@ -309,8 +312,7 @@ struct PluginManagementView: View {
                     Section {
                         ForEach(pluginSourceManager.remotePlugins) { displayItem in
                             HStack {
-                                Image(systemName: "puzzlepiece.extension")
-                                    .frame(width: 32, height: 32)
+                                pluginIconView(for: displayItem.id)
 
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(displayItem.displayName)
