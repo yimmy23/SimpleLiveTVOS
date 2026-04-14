@@ -10,8 +10,8 @@ import Foundation
 public extension Error {
     /// 从错误中提取用户友好的错误消息（带详细位置信息）
     var liveParseMessage: String {
-        if isBilibiliAuthRequired {
-            return "当前内容需要登录 B站 账号后才能访问，请前往设置页登录后重试。"
+        if isAuthRequired {
+            return "当前内容需要登录账号后才能访问，请前往设置页登录后重试。"
         }
 
         if let liveParseError = self as? LiveParseError {
@@ -64,8 +64,9 @@ public extension Error {
         return nil
     }
 
-    /// 检查是否是 Bilibili -352 风控错误（需要登录）
-    var isBilibiliAuthRequired: Bool {
+    /// 检查是否是需要登录的错误（通用，适用于所有平台）
+    /// 包括：Bilibili -352 风控、小红书 406、以及任何插件返回的 AUTH_REQUIRED
+    var isAuthRequired: Bool {
         if let pluginError = self as? LiveParsePluginError {
             switch pluginError {
             case .standardized(let error):
@@ -93,7 +94,10 @@ public extension Error {
             #"错误代码:\s*-?352"#,
             #"code\s*=\s*\"?-?352\"?"#,
             #"\"code\"\s*:\s*\"?-?352\"?"#,
-            #"AUTH_REQUIRED"#
+            #"AUTH_REQUIRED"#,
+            #"错误代码:\s*-?406"#,
+            #"code\s*=\s*\"?-?406\"?"#,
+            #"\"code\"\s*:\s*\"?-?406\"?"#
         ]
 
         return authRequiredPatterns.contains { pattern in
@@ -102,5 +106,10 @@ public extension Error {
                 options: [.regularExpression, .caseInsensitive]
             ) != nil
         }
+    }
+
+    /// 向后兼容：检查是否是 Bilibili -352 风控错误（需要登录）
+    var isBilibiliAuthRequired: Bool {
+        isAuthRequired
     }
 }

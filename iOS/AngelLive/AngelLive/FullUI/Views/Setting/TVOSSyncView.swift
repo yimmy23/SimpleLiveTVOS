@@ -15,6 +15,12 @@ struct TVOSSyncView: View {
     @State private var sendResult: String?
     @State private var sendSuccess = false
 
+    // iCloud 确认弹窗状态
+    @State private var showUploadConfirm = false
+    @State private var showDownloadConfirm = false
+    @State private var confirmMessage = ""
+    @State private var isFetchingPreview = false
+
     var body: some View {
         ScrollView {
             VStack(spacing: AppConstants.Spacing.lg) {
@@ -67,23 +73,55 @@ struct TVOSSyncView: View {
                     }
 
                     if syncService.iCloudSyncEnabled {
-                        Button {
-                            Task {
-                                syncService.syncToICloud()
-                                await syncService.syncAllPlatformsToICloud()
-                                await MainActor.run {
-                                    sendResult = "已同步到 iCloud（含多平台）"
-                                    sendSuccess = true
-                                }
+                        // 上次同步时间
+                        if let lastSync = syncService.lastICloudSyncTime {
+                            HStack {
+                                Image(systemName: "clock")
+                                    .foregroundStyle(AppConstants.Colors.secondaryText)
+                                Text("上次同步: \(BilibiliCookieSyncService.formatSyncTime(lastSync))")
+                                    .font(.caption)
+                                    .foregroundStyle(AppConstants.Colors.secondaryText)
+                                Spacer()
                             }
+                        }
+
+                        Divider()
+
+                        // 同步到 iCloud
+                        Button {
+                            Task { await prepareUploadConfirm() }
                         } label: {
                             HStack {
-                                Image(systemName: "arrow.triangle.2.circlepath")
-                                Text("立即同步到 iCloud")
+                                if isFetchingPreview {
+                                    ProgressView()
+                                        .scaleEffect(0.7)
+                                } else {
+                                    Image(systemName: "icloud.and.arrow.up")
+                                }
+                                Text("同步到 iCloud")
                             }
                             .font(.subheadline)
                             .foregroundStyle(AppConstants.Colors.link)
                         }
+                        .disabled(isFetchingPreview)
+
+                        // 从 iCloud 同步
+                        Button {
+                            Task { await prepareDownloadConfirm() }
+                        } label: {
+                            HStack {
+                                if isFetchingPreview {
+                                    ProgressView()
+                                        .scaleEffect(0.7)
+                                } else {
+                                    Image(systemName: "icloud.and.arrow.down")
+                                }
+                                Text("从 iCloud 同步到本地")
+                            }
+                            .font(.subheadline)
+                            .foregroundStyle(AppConstants.Colors.link)
+                        }
+                        .disabled(isFetchingPreview)
                     }
                 }
                 .padding()
@@ -236,7 +274,104 @@ struct TVOSSyncView: View {
         .onDisappear {
             syncService.stopBonjourBrowsing()
         }
+        .alert("同步到 iCloud", isPresented: $showUploadConfirm) {
+            Button("取消", role: .cancel) {}
+            Button("确定上传") {
+                Task {
+                    syncService.syncToICloud()
+                    await syncService.syncAllPlatformsToICloud()
+                    await MainActor.run {
+                        sendResult = "已同步到 iCloud（含多平台）"
+                        sendSuccess = true
+                    }
+                }
+            }
+        } message: {
+            Text(confirmMessage)
+        }
+        .alert("从 iCloud 同步", isPresented: $showDownloadConfirm) {
+            Button("取消", role: .cancel) {}
+            Button("确定下载") {
+                Task {
+                    _ = await syncService.syncFromICloud()
+                    await syncService.syncAllPlatformsFromICloud()
+                    await MainActor.run {
+                        sendResult = "已从 iCloud 同步到本地"
+                        sendSuccess = true
+                    }
+                }
+            }
+        } message: {
+            Text(confirmMessage)
+        }
     }
+
+    // MARK: - iCloud 确认逻辑
+
+    private func prepareUploadConfirm() async {
+        isFetchingPreview = true
+        defer { isFetchingPreview = false }
+
+        let preview = await syncService.fetchCloudSyncPreview()
+        let localNames = await syncService.getLocalAuthenticatedPlatformNames()
+
+        var msg = ""
+        if let lastSync = syncService.lastICloudSyncTime {
+            msg += "上次同步: \(BilibiliCookieSyncService.formatSyncTime(lastSync))\n"
+        }
+        if !localNames.isEmpty {
+            msg += "本地已登录: \(localNames.joined(separator: "、"))\n"
+        } else {
+            msg += "本地无已登录平台\n"
+        }
+        msg += "\n"
+        if let cloudTime = preview.latestTime {
+            msg += "云端同步时间: \(BilibiliCookieSyncService.formatSyncTime(cloudTime))\n"
+            msg += "云端已有平台: \(preview.platformNames.joined(separator: "、"))\n"
+            msg += "\n上传后云端数据将被覆盖"
+        } else {
+            msg += "云端暂无数据"
+        }
+
+        confirmMessage = msg
+        showUploadConfirm = true
+    }
+
+    private func prepareDownloadConfirm() async {
+        isFetchingPreview = true
+        defer { isFetchingPreview = false }
+
+        let preview = await syncService.fetchCloudSyncPreview()
+
+        guard preview.latestTime != nil else {
+            sendResult = "iCloud 中没有同步数据"
+            sendSuccess = false
+            return
+        }
+
+        let localNames = await syncService.getLocalAuthenticatedPlatformNames()
+
+        var msg = ""
+        if let lastSync = syncService.lastICloudSyncTime {
+            msg += "上次同步: \(BilibiliCookieSyncService.formatSyncTime(lastSync))\n"
+        }
+        if !localNames.isEmpty {
+            msg += "本地已登录: \(localNames.joined(separator: "、"))\n"
+        }
+        msg += "\n"
+        if let cloudTime = preview.latestTime {
+            msg += "云端同步时间: \(BilibiliCookieSyncService.formatSyncTime(cloudTime))\n"
+        }
+        if !preview.platformNames.isEmpty {
+            msg += "云端平台: \(preview.platformNames.joined(separator: "、"))\n"
+        }
+        msg += "\n下载后本地数据将被覆盖"
+
+        confirmMessage = msg
+        showDownloadConfirm = true
+    }
+
+    // MARK: - Bonjour
 
     private func toggleSearch() {
         if isSearching {

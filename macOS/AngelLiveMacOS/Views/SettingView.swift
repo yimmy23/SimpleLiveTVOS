@@ -23,6 +23,14 @@ struct SettingView: View {
     @State private var selectedCookiePlatform: MacOSPlatformAccountItem?
     @State private var platformLoginStatus: [PlatformSessionID: Bool] = [:]
 
+    // iCloud 同步确认弹窗
+    @State private var showUploadConfirm = false
+    @State private var showDownloadConfirm = false
+    @State private var iCloudConfirmMessage = ""
+    @State private var isFetchingPreview = false
+    @State private var iCloudSyncResult: String?
+    @State private var iCloudSyncSuccess = false
+
     private var availableMacPlatforms: [MacOSPlatformAccountItem] {
         MacOSPlatformAccountItem.allCases.filter { pluginAvailability.isPluginInstalled(for: $0.sessionID) }
     }
@@ -45,6 +53,77 @@ struct SettingView: View {
 
                     ForEach(availableMacPlatforms) { platform in
                         platformAccountRow(platform)
+                    }
+                }
+            }
+
+            Section("iCloud 同步") {
+                Toggle(isOn: $syncService.iCloudSyncEnabled) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "icloud.fill")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(Color.cyan.gradient)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("iCloud 自动同步")
+                                .font(.body.weight(.medium))
+                            Text("登录后 Cookie 自动同步到其他设备")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .tint(AppConstants.Colors.accent)
+
+                if syncService.iCloudSyncEnabled {
+                    if let lastSync = syncService.lastICloudSyncTime {
+                        HStack(spacing: 8) {
+                            Image(systemName: "clock")
+                                .foregroundStyle(.secondary)
+                            Text("上次同步: \(BilibiliCookieSyncService.formatSyncTime(lastSync))")
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                        }
+                    }
+
+                    Button {
+                        Task { await prepareUploadConfirm() }
+                    } label: {
+                        PanelNavigationRow(
+                            title: "同步到 iCloud",
+                            subtitle: "上传本地登录信息到云端"
+                        ) {
+                            Image(systemName: "icloud.and.arrow.up")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(Color.cyan.gradient)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isFetchingPreview)
+
+                    Button {
+                        Task { await prepareDownloadConfirm() }
+                    } label: {
+                        PanelNavigationRow(
+                            title: "从 iCloud 同步",
+                            subtitle: "下载云端登录信息到本地"
+                        ) {
+                            Image(systemName: "icloud.and.arrow.down")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(Color.cyan.gradient)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isFetchingPreview)
+
+                    if let result = iCloudSyncResult {
+                        HStack(spacing: 6) {
+                            Image(systemName: iCloudSyncSuccess ? "checkmark.circle.fill" : "xmark.circle.fill")
+                                .foregroundStyle(iCloudSyncSuccess ? AppConstants.Colors.success : .red)
+                            Text(result)
+                                .font(.caption)
+                                .foregroundStyle(iCloudSyncSuccess ? AppConstants.Colors.success : .red)
+                        }
                     }
                 }
             }
@@ -141,6 +220,102 @@ struct SettingView: View {
             }
             .frame(minWidth: 640, minHeight: 560)
         }
+        .alert("同步到 iCloud", isPresented: $showUploadConfirm) {
+            Button("取消", role: .cancel) {}
+            Button("确定上传") {
+                Task {
+                    syncService.syncToICloud()
+                    await syncService.syncAllPlatformsToICloud()
+                    await MainActor.run {
+                        iCloudSyncResult = "已同步到 iCloud"
+                        iCloudSyncSuccess = true
+                    }
+                }
+            }
+        } message: {
+            Text(iCloudConfirmMessage)
+        }
+        .alert("从 iCloud 同步", isPresented: $showDownloadConfirm) {
+            Button("取消", role: .cancel) {}
+            Button("确定下载") {
+                Task {
+                    _ = await syncService.syncFromICloud()
+                    await syncService.syncAllPlatformsFromICloud()
+                    await MainActor.run {
+                        iCloudSyncResult = "已从 iCloud 同步到本地"
+                        iCloudSyncSuccess = true
+                    }
+                    await refreshLoginStatus()
+                }
+            }
+        } message: {
+            Text(iCloudConfirmMessage)
+        }
+    }
+
+    // MARK: - iCloud 确认逻辑
+
+    private func prepareUploadConfirm() async {
+        isFetchingPreview = true
+        defer { isFetchingPreview = false }
+
+        let preview = await syncService.fetchCloudSyncPreview()
+        let localNames = await syncService.getLocalAuthenticatedPlatformNames()
+
+        var msg = ""
+        if let lastSync = syncService.lastICloudSyncTime {
+            msg += "上次同步: \(BilibiliCookieSyncService.formatSyncTime(lastSync))\n"
+        }
+        if !localNames.isEmpty {
+            msg += "本地已登录: \(localNames.joined(separator: "、"))\n"
+        } else {
+            msg += "本地无已登录平台\n"
+        }
+        msg += "\n"
+        if let cloudTime = preview.latestTime {
+            msg += "云端同步时间: \(BilibiliCookieSyncService.formatSyncTime(cloudTime))\n"
+            msg += "云端已有平台: \(preview.platformNames.joined(separator: "、"))\n"
+            msg += "\n上传后云端数据将被覆盖"
+        } else {
+            msg += "云端暂无数据"
+        }
+
+        iCloudConfirmMessage = msg
+        showUploadConfirm = true
+    }
+
+    private func prepareDownloadConfirm() async {
+        isFetchingPreview = true
+        defer { isFetchingPreview = false }
+
+        let preview = await syncService.fetchCloudSyncPreview()
+
+        guard preview.latestTime != nil else {
+            iCloudSyncResult = "iCloud 中没有同步数据"
+            iCloudSyncSuccess = false
+            return
+        }
+
+        let localNames = await syncService.getLocalAuthenticatedPlatformNames()
+
+        var msg = ""
+        if let lastSync = syncService.lastICloudSyncTime {
+            msg += "上次同步: \(BilibiliCookieSyncService.formatSyncTime(lastSync))\n"
+        }
+        if !localNames.isEmpty {
+            msg += "本地已登录: \(localNames.joined(separator: "、"))\n"
+        }
+        msg += "\n"
+        if let cloudTime = preview.latestTime {
+            msg += "云端同步时间: \(BilibiliCookieSyncService.formatSyncTime(cloudTime))\n"
+        }
+        if !preview.platformNames.isEmpty {
+            msg += "云端平台: \(preview.platformNames.joined(separator: "、"))\n"
+        }
+        msg += "\n下载后本地数据将被覆盖"
+
+        iCloudConfirmMessage = msg
+        showDownloadConfirm = true
     }
 
     private var bilibiliAccountRow: some View {

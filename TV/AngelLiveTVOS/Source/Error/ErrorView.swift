@@ -75,7 +75,7 @@ struct ErrorView: View {
                         .font(.system(size: 24, weight: .medium))
                         .lineSpacing(6)
 
-                    // -352 错误且已登录时显示额外提示
+                    // 需要登录且已登录B站时显示额外提示
                     if showLoginButton && isBilibiliLoggedIn {
                         Text("tvOS 用户如已经登录依旧报错，请等待几分钟后重试")
                             .font(.system(size: 20, weight: .medium))
@@ -99,7 +99,7 @@ struct ErrorView: View {
                             }
                         }
 
-                        // -352 错误时，只有未登录才显示登录按钮
+                        // 需要登录时，只有未登录B站才显示登录按钮（其他平台始终显示）
                         if showLoginButton && !isBilibiliLoggedIn {
                             Button(action: {
                                 onDismiss()

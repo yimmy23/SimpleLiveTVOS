@@ -243,19 +243,27 @@ class RoomListViewController: UIViewController {
         // 如果已经显示错误视图，先移除
         hideErrorView()
 
+        let authTitle: String
+        if error.isAuthRequired, let liveType = viewModel?.platform.liveType {
+            let platformName = LiveParseTools.getLivePlatformName(liveType)
+            authTitle = "加载失败-请登录\(platformName)账号"
+        } else {
+            authTitle = "加载失败"
+        }
+
         let errorView = ErrorView(
-            title: error.isBilibiliAuthRequired ? "加载失败-请登录B站账号并检查官方页面" : "加载失败",
+            title: authTitle,
             message: error.liveParseMessage,
             detailMessage: error.liveParseDetail,
             curlCommand: error.liveParseCurl,
             showRetry: true,
-            showLoginButton: error.isBilibiliAuthRequired,
+            showLoginButton: error.isAuthRequired,
             showDetailButton: error.liveParseDetail != nil && !error.liveParseDetail!.isEmpty,
             onRetry: { [weak self] in
                 self?.hideErrorView()
                 self?.handleRefresh()
             },
-            onLogin: error.isBilibiliAuthRequired ? {
+            onLogin: error.isAuthRequired ? {
                 NotificationCenter.default.post(name: .switchToSettings, object: nil)
             } : nil
         )

@@ -117,6 +117,19 @@ enum MacOSPlatformAccountItem: String, CaseIterable, Identifiable {
         }
     }
 
+    /// 从 LiveType 映射到对应的平台账号项
+    static func from(liveType: LiveType) -> MacOSPlatformAccountItem? {
+        switch liveType {
+        case .douyin: return .douyin
+        case .ks: return .kuaishou
+        case .soop: return .soop
+        case .kick: return .kick
+        case .twitch: return .twitch
+        case .xiaohongshu: return .xiaohongshu
+        default: return nil
+        }
+    }
+
     func containsAuthenticatedCookie(names: Set<String>) -> Bool {
         switch self {
         case .douyin:

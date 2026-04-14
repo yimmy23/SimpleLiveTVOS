@@ -8,6 +8,7 @@
 import SwiftUI
 import AVKit
 import AngelLiveDependencies
+import AngelLiveCore
 
 
 struct DetailPlayerView: View {

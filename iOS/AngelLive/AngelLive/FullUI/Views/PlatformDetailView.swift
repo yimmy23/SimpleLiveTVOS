@@ -14,27 +14,33 @@ struct PlatformDetailView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var dragProgress: CGFloat = 0.0  // 拖动进度
 
+    /// 根据平台类型生成登录相关的错误标题
+    private func authErrorTitle(for liveType: LiveType) -> String {
+        let platformName = LiveParseTools.getLivePlatformName(liveType)
+        return "加载失败-请登录\(platformName)账号"
+    }
+
     var body: some View {
-        
+
         @Bindable var viewModel = viewModel
-        
+
         VStack(spacing: 0) {
             // 如果加载分类失败，显示错误视图
             if let error = viewModel.categoryError {
                 ErrorView(
-                    title: error.isBilibiliAuthRequired ? "加载失败-请登录B站账号并检查官方页面" : "加载失败",
+                    title: error.isAuthRequired ? authErrorTitle(for: viewModel.platform.liveType) : "加载失败",
                     message: error.liveParseMessage,
                     detailMessage: error.liveParseDetail,
                     curlCommand: error.liveParseCurl,
                     showRetry: true,
-                    showLoginButton: error.isBilibiliAuthRequired,
+                    showLoginButton: error.isAuthRequired,
                     showDetailButton: error.liveParseDetail != nil && !error.liveParseDetail!.isEmpty,
                     onRetry: {
                         Task {
                             await viewModel.loadCategories()
                         }
                     },
-                    onLogin: error.isBilibiliAuthRequired ? {
+                    onLogin: error.isAuthRequired ? {
                         NotificationCenter.default.post(name: .switchToSettings, object: nil)
                     } : nil
                 )
@@ -101,19 +107,19 @@ struct PlatformDetailView: View {
             } else if let error = viewModel.roomError, isCurrentPage && rooms.isEmpty {
                 // 如果当前页且加载房间列表失败，显示错误视图
                 ErrorView(
-                    title: error.isBilibiliAuthRequired ? "加载失败-请登录B站账号并检查官方页面" : "加载失败",
+                    title: error.isAuthRequired ? authErrorTitle(for: viewModel.platform.liveType) : "加载失败",
                     message: error.liveParseMessage,
                     detailMessage: error.liveParseDetail,
                     curlCommand: error.liveParseCurl,
                     showRetry: true,
-                    showLoginButton: error.isBilibiliAuthRequired,
+                    showLoginButton: error.isAuthRequired,
                     showDetailButton: error.liveParseDetail != nil && !error.liveParseDetail!.isEmpty,
                     onRetry: {
                         Task {
                             await viewModel.loadRoomList()
                         }
                     },
-                    onLogin: error.isBilibiliAuthRequired ? {
+                    onLogin: error.isAuthRequired ? {
                         NotificationCenter.default.post(name: .switchToSettings, object: nil)
                     } : nil
                 )

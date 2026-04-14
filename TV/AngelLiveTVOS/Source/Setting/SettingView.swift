@@ -144,6 +144,7 @@ struct SettingView: View {
             AccountManagementView()
                 .environmentObject(settingStore)
                 .environment(appViewModel)
+                .environment(appViewModel.pluginAvailability)
                 .onExitCommand {
                     selectedIndex = nil
                 }

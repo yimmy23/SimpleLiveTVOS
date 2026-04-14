@@ -142,6 +142,12 @@ struct AccountManagementView: View {
     @State private var currentPage: AccountPage = .main
     @State private var platformLoginStatus: [PlatformSessionID: Bool] = [:]
 
+    // iCloud 确认弹窗
+    @State private var showUploadConfirm = false
+    @State private var showDownloadConfirm = false
+    @State private var iCloudConfirmMessage = ""
+    @State private var isFetchingPreview = false
+
     private var availablePlatforms: [TVPlatformItem] {
         TVPlatformItem.allCases.filter { pluginAvailability.isPluginInstalled(for: $0.sessionID) }
     }
@@ -211,21 +217,45 @@ struct AccountManagementView: View {
             }
 
             if syncService.iCloudSyncEnabled {
-                Button {
-                    Task {
-                        _ = await syncService.syncFromICloud()
-                        await syncService.syncAllPlatformsFromICloud()
-                        await refreshAllLoginStatuses()
-                    }
-                } label: {
+                // 上次同步时间
+                if let lastSync = syncService.lastICloudSyncTime {
                     HStack(spacing: 15) {
-                        Text("立即从 iCloud 同步")
-                            .foregroundColor(.primary)
+                        Text("上次同步: \(BilibiliCookieSyncService.formatSyncTime(lastSync))")
+                            .font(.system(size: 28))
+                            .foregroundStyle(.secondary)
                         Spacer()
                     }
+                    .padding(.vertical, 5)
                 }
-            }
 
+                Button {
+                    Task { await prepareUploadConfirm() }
+                } label: {
+                    HStack(spacing: 15) {
+                        Text("同步到 iCloud")
+                            .foregroundColor(.primary)
+                        Spacer()
+                        if isFetchingPreview {
+                            ProgressView()
+                        }
+                    }
+                }
+                .disabled(isFetchingPreview)
+
+                Button {
+                    Task { await prepareDownloadConfirm() }
+                } label: {
+                    HStack(spacing: 15) {
+                        Text("从 iCloud 同步到本地")
+                            .foregroundColor(.primary)
+                        Spacer()
+                        if isFetchingPreview {
+                            ProgressView()
+                        }
+                    }
+                }
+                .disabled(isFetchingPreview)
+            }
 
             // 平台列表
             ForEach(availablePlatforms) { platform in
@@ -250,9 +280,96 @@ struct AccountManagementView: View {
         .task {
             await refreshAllLoginStatuses()
         }
+        .alert("同步到 iCloud", isPresented: $showUploadConfirm) {
+            Button("取消", role: .cancel) {}
+            Button("确定上传") {
+                Task {
+                    syncService.syncToICloud()
+                    await syncService.syncAllPlatformsToICloud()
+                }
+            }
+        } message: {
+            Text(iCloudConfirmMessage)
+        }
+        .alert("从 iCloud 同步", isPresented: $showDownloadConfirm) {
+            Button("取消", role: .cancel) {}
+            Button("确定下载") {
+                Task {
+                    _ = await syncService.syncFromICloud()
+                    await syncService.syncAllPlatformsFromICloud()
+                    await refreshAllLoginStatuses()
+                }
+            }
+        } message: {
+            Text(iCloudConfirmMessage)
+        }
     }
 
     // MARK: - 登录状态辅助方法
+
+    // MARK: - iCloud 确认逻辑
+
+    private func prepareUploadConfirm() async {
+        isFetchingPreview = true
+        defer { isFetchingPreview = false }
+
+        let preview = await syncService.fetchCloudSyncPreview()
+        let localNames = await syncService.getLocalAuthenticatedPlatformNames()
+
+        var msg = ""
+        if let lastSync = syncService.lastICloudSyncTime {
+            msg += "上次同步: \(BilibiliCookieSyncService.formatSyncTime(lastSync))\n"
+        }
+        if !localNames.isEmpty {
+            msg += "本地已登录: \(localNames.joined(separator: "、"))\n"
+        } else {
+            msg += "本地无已登录平台\n"
+        }
+        msg += "\n"
+        if let cloudTime = preview.latestTime {
+            msg += "云端同步时间: \(BilibiliCookieSyncService.formatSyncTime(cloudTime))\n"
+            msg += "云端已有平台: \(preview.platformNames.joined(separator: "、"))\n"
+            msg += "\n上传后云端数据将被覆盖"
+        } else {
+            msg += "云端暂无数据"
+        }
+
+        iCloudConfirmMessage = msg
+        showUploadConfirm = true
+    }
+
+    private func prepareDownloadConfirm() async {
+        isFetchingPreview = true
+        defer { isFetchingPreview = false }
+
+        let preview = await syncService.fetchCloudSyncPreview()
+
+        guard preview.latestTime != nil else {
+            // 无云端数据，不弹确认
+            return
+        }
+
+        let localNames = await syncService.getLocalAuthenticatedPlatformNames()
+
+        var msg = ""
+        if let lastSync = syncService.lastICloudSyncTime {
+            msg += "上次同步: \(BilibiliCookieSyncService.formatSyncTime(lastSync))\n"
+        }
+        if !localNames.isEmpty {
+            msg += "本地已登录: \(localNames.joined(separator: "、"))\n"
+        }
+        msg += "\n"
+        if let cloudTime = preview.latestTime {
+            msg += "云端同步时间: \(BilibiliCookieSyncService.formatSyncTime(cloudTime))\n"
+        }
+        if !preview.platformNames.isEmpty {
+            msg += "云端平台: \(preview.platformNames.joined(separator: "、"))\n"
+        }
+        msg += "\n下载后本地数据将被覆盖"
+
+        iCloudConfirmMessage = msg
+        showDownloadConfirm = true
+    }
 
     private func loginStatusText(for platform: TVPlatformItem) -> String {
         if platform == .bilibili {

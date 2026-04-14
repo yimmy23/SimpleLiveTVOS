@@ -85,6 +85,10 @@ public final class BilibiliCookieSyncService: ObservableObject {
         }
     }
 
+    // MARK: - iCloud 同步时间
+
+    @Published public var lastICloudSyncTime: Date?
+
     // MARK: - Bonjour 相关
 
     @Published public var discoveredDevices: [DiscoveredDevice] = []
@@ -100,6 +104,7 @@ public final class BilibiliCookieSyncService: ObservableObject {
         static let sessionSnapshotKey = "BilibiliCookieSyncService.sessionSnapshot"
         static let lastSyncedDataKey = "BilibiliCookieSyncService.lastSyncedData"
         static let iCloudSyncEnabled = "BilibiliCookieSyncService.iCloudSyncEnabled"
+        static let lastICloudSyncTime = "BilibiliCookieSyncService.lastICloudSyncTime"
     }
 
     private struct SessionSnapshot: Codable {
@@ -122,6 +127,11 @@ public final class BilibiliCookieSyncService: ObservableObject {
         if let data = UserDefaults.standard.data(forKey: Keys.lastSyncedDataKey),
            let syncedData = try? JSONDecoder().decode(SyncedCookieData.self, from: data) {
             self.lastSyncedData = syncedData
+        }
+
+        // 恢复上次 iCloud 同步时间
+        if let timeInterval = UserDefaults.standard.object(forKey: Keys.lastICloudSyncTime) as? Double {
+            self.lastICloudSyncTime = Date(timeIntervalSince1970: timeInterval)
         }
 
         if let snapshot = loadSessionSnapshot() {
@@ -283,6 +293,7 @@ public final class BilibiliCookieSyncService: ObservableObject {
 
             do {
                 try await database.save(record)
+                await MainActor.run { recordICloudSyncTime() }
                 Logger.info("已同步 Bilibili Cookie 到 CloudKit", category: .general)
             } catch {
                 Logger.warning("同步 Bilibili Cookie 到 CloudKit 失败: \(error.localizedDescription)", category: .general)
@@ -333,12 +344,109 @@ public final class BilibiliCookieSyncService: ObservableObject {
         switch result {
         case .valid:
             setCookie(syncedData.cookie, uid: syncedData.uid, source: .iCloud)
+            recordICloudSyncTime()
             print("[BilibiliCookieSyncService] 从 iCloud 同步成功")
             return true
         default:
             print("[BilibiliCookieSyncService] iCloud Cookie 无效")
             return false
         }
+    }
+
+    // MARK: - iCloud 同步时间 & 预览
+
+    /// 记录 iCloud 同步时间
+    private func recordICloudSyncTime() {
+        let now = Date()
+        lastICloudSyncTime = now
+        UserDefaults.standard.set(now.timeIntervalSince1970, forKey: Keys.lastICloudSyncTime)
+    }
+
+    /// iCloud 云端预览信息
+    public struct ICloudSyncPreview: Sendable {
+        public let latestTime: Date?
+        public let platformNames: [String]
+    }
+
+    /// 从 CloudKit 获取云端同步预览（时间 + 平台列表），不下载 Cookie
+    public func fetchCloudSyncPreview() async -> ICloudSyncPreview {
+        let container = CKContainer(identifier: CloudCookieFields.containerIdentifier)
+        let database = container.privateCloudDatabase
+
+        var latestDate: Date?
+        var platformNames: [String] = []
+
+        // 检查 Bilibili 记录
+        let biliRecordID = CKRecord.ID(recordName: CloudCookieFields.bilibiliRecordName)
+        if let record = try? await database.record(for: biliRecordID),
+           let data = record[CloudCookieFields.cookieDataField] as? Data,
+           let _ = try? JSONDecoder().decode(SyncedCookieData.self, from: data) {
+            if let date = record[CloudCookieFields.updatedAtField] as? Date {
+                latestDate = date
+            }
+            platformNames.append(LiveParseTools.getLivePlatformName(.bilibili))
+        }
+
+        // 检查所有平台记录
+        for platformId in PlatformSessionID.allCases.filter({ $0 != .bilibili }) {
+            let recordName = CloudCookieFields.sessionRecordName(for: platformId.rawValue)
+            let recordID = CKRecord.ID(recordName: recordName)
+            if let record = try? await database.record(for: recordID),
+               let data = record[CloudCookieFields.cookieDataField] as? Data,
+               let syncedData = try? JSONDecoder().decode(SyncedCookieData.self, from: data),
+               !syncedData.cookie.isEmpty {
+                if let date = record[CloudCookieFields.updatedAtField] as? Date {
+                    if latestDate == nil || date > latestDate! {
+                        latestDate = date
+                    }
+                }
+                let liveType = LiveType(rawValue: platformId.pluginId) ?? LiveType(rawValue: platformId.rawValue)
+                let name: String
+                if let lt = liveType {
+                    name = LiveParseTools.getLivePlatformName(lt)
+                } else {
+                    name = platformId.rawValue
+                }
+                platformNames.append(name)
+            }
+        }
+
+        return ICloudSyncPreview(latestTime: latestDate, platformNames: platformNames)
+    }
+
+    /// 获取本地已登录的平台名称列表
+    public func getLocalAuthenticatedPlatformNames() async -> [String] {
+        var names: [String] = []
+
+        // Bilibili 从自身管理
+        if !getCurrentCookie().isEmpty {
+            names.append(LiveParseTools.getLivePlatformName(.bilibili))
+        }
+
+        // 其他平台
+        for platformId in PlatformSessionID.allCases.filter({ $0 != .bilibili }) {
+            if let session = await PlatformSessionManager.shared.getSession(platformId: platformId),
+               session.state == .authenticated,
+               let cookie = session.cookie, !cookie.isEmpty {
+                let liveType = LiveType(rawValue: platformId.pluginId) ?? LiveType(rawValue: platformId.rawValue)
+                let name: String
+                if let lt = liveType {
+                    name = LiveParseTools.getLivePlatformName(lt)
+                } else {
+                    name = platformId.rawValue
+                }
+                names.append(name)
+            }
+        }
+
+        return names
+    }
+
+    /// 格式化同步时间
+    public static func formatSyncTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd HH:mm"
+        return formatter.string(from: date)
     }
 
     // MARK: - 局域网同步 (Bonjour)
@@ -696,7 +804,7 @@ public final class BilibiliCookieSyncService: ObservableObject {
     }
 
     private func clearAllPlatformICloudSessions() {
-        let platformIds: [PlatformSessionID] = [.bilibili, .douyin, .kuaishou, .soop, .kick]
+        let platformIds = PlatformSessionID.allCases
         Task {
             let container = CKContainer(identifier: CloudCookieFields.containerIdentifier)
             let database = container.privateCloudDatabase
@@ -759,7 +867,7 @@ extension BilibiliCookieSyncService {
         }
 
         // 其他平台从 PlatformSessionManager 获取
-        let otherPlatforms: [PlatformSessionID] = [.douyin, .kuaishou, .soop, .kick]
+        let otherPlatforms = PlatformSessionID.allCases.filter { $0 != .bilibili }
         for platformId in otherPlatforms {
             if let session = await PlatformSessionManager.shared.getSession(platformId: platformId),
                session.state == .authenticated,
@@ -836,8 +944,7 @@ extension BilibiliCookieSyncService {
         let container = CKContainer(identifier: CloudCookieFields.containerIdentifier)
         let database = container.privateCloudDatabase
 
-        let platformIds: [PlatformSessionID] = [.bilibili, .douyin, .kuaishou, .soop, .kick]
-        for platformId in platformIds {
+        for platformId in PlatformSessionID.allCases {
             let recordName = CloudCookieFields.sessionRecordName(for: platformId.rawValue)
             let recordID = CKRecord.ID(recordName: recordName)
 
@@ -868,6 +975,7 @@ extension BilibiliCookieSyncService {
                 }
             }
         }
+        recordICloudSyncTime()
         Logger.info("已同步 \(sessions.count) 个平台 session 到 CloudKit", category: .general)
     }
 
@@ -876,8 +984,7 @@ extension BilibiliCookieSyncService {
         let container = CKContainer(identifier: CloudCookieFields.containerIdentifier)
         let database = container.privateCloudDatabase
 
-        let platformIds: [PlatformSessionID] = [.douyin, .kuaishou, .soop, .kick]
-        for platformId in platformIds {
+        for platformId in PlatformSessionID.allCases.filter({ $0 != .bilibili }) {
             let recordName = CloudCookieFields.sessionRecordName(for: platformId.rawValue)
             let recordID = CKRecord.ID(recordName: recordName)
 
@@ -908,6 +1015,7 @@ extension BilibiliCookieSyncService {
                 // 该平台无云端记录或获取失败，跳过
             }
         }
+        recordICloudSyncTime()
     }
 
     /// 处理多平台 Bonjour 接收数据（tvOS 端调用）

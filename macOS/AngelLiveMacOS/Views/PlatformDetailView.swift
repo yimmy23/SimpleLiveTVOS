@@ -17,8 +17,27 @@ struct PlatformDetailView: View {
     @Environment(FullscreenPlayerManager.self) private var fullscreenPlayerManager
     @State private var showCategorySheet = false
     @State private var isRefreshing = false
-    @State private var showBilibiliLogin = false
+    @State private var showPlatformLogin = false
     @State private var showCapabilityPopover = false
+
+    /// 根据平台类型生成登录相关的错误标题
+    private var authErrorTitle: String {
+        let platformName = LiveParseTools.getLivePlatformName(viewModel.platform.liveType)
+        return "加载失败-请登录\(platformName)账号"
+    }
+
+    /// 根据平台类型显示对应的登录视图
+    @ViewBuilder
+    private var platformLoginView: some View {
+        if viewModel.platform.liveType == .bilibili {
+            BilibiliWebLoginView()
+        } else if let item = MacOSPlatformAccountItem.from(liveType: viewModel.platform.liveType) {
+            MacOSPlatformCookieWebLoginView(platform: item)
+        } else {
+            // Fallback：不应该到这里，但以防万一
+            BilibiliWebLoginView()
+        }
+    }
 
     /// 当前分类图标 URL（如果有）
     private var categoryIconURL: URL? {
@@ -37,19 +56,19 @@ struct PlatformDetailView: View {
         VStack(spacing: 0) {
             if let error = viewModel.categoryError {
                 ErrorView(
-                    title: error.isBilibiliAuthRequired ? "加载失败-请登录B站账号并检查官方页面" : "加载失败",
+                    title: error.isAuthRequired ? authErrorTitle : "加载失败",
                     message: error.liveParseMessage,
                     detailMessage: error.liveParseDetail,
                     curlCommand: error.liveParseCurl,
                     showRetry: true,
-                    showLoginButton: error.isBilibiliAuthRequired,
+                    showLoginButton: error.isAuthRequired,
                     onRetry: {
                         Task {
                             await viewModel.loadCategories()
                         }
                     },
-                    onLogin: error.isBilibiliAuthRequired ? {
-                        showBilibiliLogin = true
+                    onLogin: error.isAuthRequired ? {
+                        showPlatformLogin = true
                     } : nil
                 )
             } else if viewModel.isLoadingCategories && viewModel.categories.isEmpty {
@@ -186,8 +205,8 @@ struct PlatformDetailView: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: showCategorySheet)
-        .sheet(isPresented: $showBilibiliLogin) {
-            BilibiliWebLoginView()
+        .sheet(isPresented: $showPlatformLogin) {
+            platformLoginView
         }
         .task {
             if viewModel.categories.isEmpty {
@@ -281,19 +300,19 @@ struct PlatformDetailView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if let error = viewModel.roomError, rooms.isEmpty {
             ErrorView(
-                title: error.isBilibiliAuthRequired ? "加载失败-请登录B站账号并检查官方页面" : "加载失败",
+                title: error.isAuthRequired ? authErrorTitle : "加载失败",
                 message: error.liveParseMessage,
                 detailMessage: error.liveParseDetail,
                 curlCommand: error.liveParseCurl,
                 showRetry: true,
-                showLoginButton: error.isBilibiliAuthRequired,
+                showLoginButton: error.isAuthRequired,
                 onRetry: {
                     Task {
                         await viewModel.loadRoomList()
                     }
                 },
-                onLogin: error.isBilibiliAuthRequired ? {
-                    showBilibiliLogin = true
+                onLogin: error.isAuthRequired ? {
+                    showPlatformLogin = true
                 } : nil
             )
         } else if rooms.isEmpty {

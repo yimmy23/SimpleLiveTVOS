@@ -270,13 +270,21 @@ struct ListMainView: View {
     }
 
     private func errorView(_ error: Error) -> some View {
-        ErrorView(
-            title: error.isBilibiliAuthRequired ? "加载失败-请登录B站账号并检查官方页面" : "加载失败",
+        let authTitle: String = {
+            if error.isAuthRequired {
+                let platformName = LiveParseTools.getLivePlatformName(liveViewModel.liveType)
+                return "加载失败-请登录\(platformName)账号"
+            }
+            return "加载失败"
+        }()
+
+        return ErrorView(
+            title: authTitle,
             message: error.liveParseMessage,
             detailMessage: error.liveParseDetail,
             curlCommand: error.liveParseCurl,
             showRetry: true,
-            showLoginButton: error.isBilibiliAuthRequired,
+            showLoginButton: error.isAuthRequired,
             onDismiss: {
                 liveViewModel.hasError = false
                 liveViewModel.currentError = nil
