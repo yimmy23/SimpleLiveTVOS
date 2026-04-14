@@ -198,16 +198,17 @@ struct DetailPlayerView: View {
                             DragGesture(minimumDistance: 1)
                                 .onChanged { _ in }
                         )
+                        // FIXME: EdgeSwipeDismissView 的 .overlay 会破坏 PreferenceKey 传递，导致竖屏直播布局错乱
                         // 左边缘 20pt: UIScreenEdgePanGestureRecognizer 触发返回
-                        .overlay {
-                            EdgeSwipeDismissView(edgeWidth: 20) {
-                                if AppConstants.Device.isIPad && isIPadFullscreen {
-                                    isIPadFullscreen = false
-                                } else {
-                                    dismiss()
-                                }
-                            }
-                        }
+//                        .overlay {
+//                            EdgeSwipeDismissView(edgeWidth: 20) {
+//                                if AppConstants.Device.isIPad && isIPadFullscreen {
+//                                    isIPadFullscreen = false
+//                                } else {
+//                                    dismiss()
+//                                }
+//                            }
+//                        }
                         .onPreferenceChange(PlayerHeightPreferenceKey.self) { height in
                             if !AppConstants.Device.isIPad {
                                 iPhonePlayerHeight = height
