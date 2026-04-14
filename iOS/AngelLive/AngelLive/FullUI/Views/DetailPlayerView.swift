@@ -45,8 +45,9 @@ struct DetailPlayerView: View {
     }
 
     private var playbackErrorTitle: String {
-        if currentPlaybackError?.isBilibiliAuthRequired == true {
-            return "播放失败-请登录B站账号并检查官方页面"
+        if currentPlaybackError?.isAuthRequired == true {
+            let platformName = LiveParseTools.getLivePlatformName(viewModel.currentRoom.liveType)
+            return "播放失败-请登录\(platformName)账号"
         }
         return "播放失败"
     }
@@ -59,7 +60,7 @@ struct DetailPlayerView: View {
     }
 
     private var shouldShowBilibiliLoginPrompt: Bool {
-        currentPlaybackError?.isBilibiliAuthRequired == true
+        currentPlaybackError?.isAuthRequired == true
     }
 
     private var shouldHideSystemBackButton: Bool {

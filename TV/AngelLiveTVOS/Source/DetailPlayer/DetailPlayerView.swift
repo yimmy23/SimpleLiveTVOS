@@ -41,12 +41,12 @@ struct DetailPlayerView: View {
             .background(.black)
         } else if roomInfoViewModel.hasError, let error = roomInfoViewModel.currentError {
             ErrorView(
-                title: error.isBilibiliAuthRequired ? "播放失败-请登录B站账号并检查官方页面" : "播放失败",
+                title: error.isAuthRequired ? "播放失败-请登录\(LiveParseTools.getLivePlatformName(roomInfoViewModel.currentRoom.liveType))账号" : "播放失败",
                 message: error.liveParseMessage,
                 detailMessage: error.liveParseDetail,
                 curlCommand: error.liveParseCurl,
                 showRetry: true,
-                showLoginButton: error.isBilibiliAuthRequired,
+                showLoginButton: error.isAuthRequired,
                 onDismiss: {
                     endPlay()
                 },

@@ -97,7 +97,8 @@ public extension Error {
             #"AUTH_REQUIRED"#,
             #"错误代码:\s*-?406"#,
             #"code\s*=\s*\"?-?406\"?"#,
-            #"\"code\"\s*:\s*\"?-?406\"?"#
+            #"\"code\"\s*:\s*\"?-?406\"?"#,
+            #"\"httpCode\"\s*:\s*\"?-?406\"?"#
         ]
 
         return authRequiredPatterns.contains { pattern in

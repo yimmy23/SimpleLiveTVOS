@@ -6,6 +6,27 @@
         <description>Angel Live macOS 应用更新</description>
         <language>zh-cn</language>
         <item>
+            <title>Version 2.0.0 (Build 24)</title>
+            <sparkle:version>24</sparkle:version>
+            <sparkle:shortVersionString>2.0.0</sparkle:shortVersionString>
+            <description><![CDATA[
+                <h2>更新内容</h2>
+                <ul>
+                    <li>新增：新平台底层支持</li>
+                    <li>优化：登录逻辑</li>
+                    <li>优化：优化其他问题</li>
+                </ul>
+                <p><strong>如遇到自动更新失败，请手动下载：</strong><a href="https://github.com/pcccccc/AngelLive/releases/download/v2.0.0/Angel.Live.2.0.0.universal.ver24.dmg">点击下载</a></p>
+                <p>使用中遇到问题？欢迎加入 <a href="https://t.me/angelliveapp">Telegram 群组</a> 反馈交流</p>
+            ]]></description>
+            <pubDate>Mon, 14 Apr 2026 18:00:00 +0800</pubDate>
+            <enclosure url="https://github.com/pcccccc/AngelLive/releases/download/v2.0.0/Angel.Live.2.0.0.universal.ver24.dmg"
+                       sparkle:edSignature="RKGEGPtjuRD4VMQkTIcpVK3S0rlUMYGZkfObga4u4zALG4tST8VTW6VpZAm27gS3hCgVVD2nWUaEbwG0L49DDw=="
+                       length="41784260"
+                       type="application/octet-stream"/>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+        </item>
+        <item>
             <title>Version 2.0.0 (Build 23)</title>
             <sparkle:version>23</sparkle:version>
             <sparkle:shortVersionString>2.0.0</sparkle:shortVersionString>
