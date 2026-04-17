@@ -132,6 +132,17 @@ public extension KSPlayerLayerDelegate {
     func player(layer _: KSPlayer.KSPlayerLayer, bufferedCount _: Int, consumeTime _: TimeInterval) {}
 }
 
+public enum LogLevel: Int32 {
+    case panic = 0
+    case fatal = 8
+    case error = 16
+    case warning = 24
+    case info = 32
+    case verbose = 40
+    case debug = 48
+    case trace = 56
+}
+
 open class KSOptions {
     public nonisolated(unsafe) static var isAutoPlay: Bool = true
     public nonisolated(unsafe) static var isSecondOpen: Bool = false
@@ -139,6 +150,7 @@ open class KSOptions {
     public nonisolated(unsafe) static var secondPlayerType: MediaPlayerProtocol.Type? = KSMEPlayer.self
     public nonisolated(unsafe) static var canBackgroundPlay: Bool = false
     public nonisolated(unsafe) static var hudLog: Bool = false
+    public nonisolated(unsafe) static var logLevel: LogLevel = .error
     public nonisolated(unsafe) static var subtitleDynamicRange: String = ""
 
     #if os(iOS)

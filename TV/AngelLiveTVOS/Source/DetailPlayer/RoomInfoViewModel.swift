@@ -483,7 +483,7 @@ final class RoomInfoViewModel {
         let liveType = currentRoom.liveType
         Task {
             do {
-                let danmuArgs: ([String : String], [String : String]?)
+                let danmakuPlan: LiveParseDanmakuPlan
                 guard let platform = SandboxPluginCatalog.platform(for: liveType) else {
                     throw NSError(
                         domain: "danmu.platform",
@@ -491,30 +491,37 @@ final class RoomInfoViewModel {
                         userInfo: [NSLocalizedDescriptionKey: "未找到平台映射：\(liveType.rawValue)"]
                     )
                 }
-                danmuArgs = try await LiveParseJSPlatformManager.getDanmukuArgs(
+                danmakuPlan = try await LiveParseJSPlatformManager.getDanmakuPlan(
                     platform: platform,
                     roomId: roomId,
                     userId: userId
                 )
                 await MainActor.run {
-                    // 判断弹幕类型
-                    let danmuType = danmuArgs.0["_danmu_type"] ?? "websocket"
+                    let parameters = danmakuPlan.legacyParameters
 
-                    if danmuType == "http_polling" {
+                    if danmakuPlan.prefersHTTPPolling {
                         // 使用 HTTP 轮询连接
                         httpPollingConnection = HTTPPollingDanmakuConnection(
-                            parameters: danmuArgs.0,
-                            headers: danmuArgs.1,
-                            liveType: liveType
+                            parameters: parameters,
+                            headers: danmakuPlan.headers,
+                            liveType: liveType,
+                            pluginId: platform.pluginId,
+                            roomId: roomId,
+                            userId: userId,
+                            danmakuPlan: danmakuPlan
                         )
                         httpPollingConnection?.delegate = self
                         httpPollingConnection?.connect()
                     } else {
                         // 使用 WebSocket 连接
                         socketConnection = WebSocketConnection(
-                            parameters: danmuArgs.0,
-                            headers: danmuArgs.1,
-                            liveType: liveType
+                            parameters: parameters,
+                            headers: danmakuPlan.headers,
+                            liveType: liveType,
+                            pluginId: platform.pluginId,
+                            roomId: roomId,
+                            userId: userId,
+                            danmakuPlan: danmakuPlan
                         )
                         socketConnection?.delegate = self
                         socketConnection?.connect()

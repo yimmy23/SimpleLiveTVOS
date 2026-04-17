@@ -79,6 +79,8 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         }
 
         // 初始化屏幕方向设置
+        KSOptions.logLevel = .error
+        KSOptions.hudLog = false
         if AppConstants.Device.isIPad {
             KSOptions.supportedInterfaceOrientations = .all
         } else {

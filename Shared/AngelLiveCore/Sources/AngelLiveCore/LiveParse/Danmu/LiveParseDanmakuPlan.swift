@@ -1,0 +1,217 @@
+import Foundation
+
+public struct LiveParseDanmakuPlan: Decodable, Sendable {
+    public let args: [String: String]
+    public let headers: [String: String]?
+    public let transport: LiveParseDanmakuTransportPlan?
+    public let runtime: LiveParseDanmakuRuntimePlan?
+
+    public init(
+        args: [String: String],
+        headers: [String: String]? = nil,
+        transport: LiveParseDanmakuTransportPlan? = nil,
+        runtime: LiveParseDanmakuRuntimePlan? = nil
+    ) {
+        self.args = args
+        self.headers = headers
+        self.transport = transport
+        self.runtime = runtime
+    }
+
+    public var prefersHTTPPolling: Bool {
+        if transport?.kind == .httpPolling {
+            return true
+        }
+        return args["_danmu_type"]?.lowercased() == "http_polling"
+    }
+
+    public var usesPluginRuntimeDriver: Bool {
+        runtime?.driver == .pluginJSV1
+    }
+
+    public var legacyParameters: [String: String] {
+        var parameters = args
+
+        if let transport {
+            switch transport.kind {
+            case .websocket:
+                if let url = transport.url, !(parameters["ws_url"]?.isEmpty == false) {
+                    parameters["ws_url"] = url
+                }
+                if let frameType = transport.frameType {
+                    parameters["_ws_frame_type"] = frameType.rawValue
+                }
+                if let subprotocols = transport.subprotocols, !subprotocols.isEmpty {
+                    parameters["_ws_subprotocols"] = subprotocols.joined(separator: ",")
+                }
+            case .httpPolling:
+                parameters["_danmu_type"] = "http_polling"
+                if let url = transport.url, !(parameters["_polling_url"]?.isEmpty == false) {
+                    parameters["_polling_url"] = url
+                }
+                if let method = transport.polling?.method {
+                    parameters["_polling_method"] = method
+                }
+                if let intervalMs = transport.polling?.intervalMs {
+                    parameters["_polling_interval"] = String(intervalMs)
+                }
+                if let sendOnConnect = transport.polling?.sendOnConnect {
+                    parameters["_polling_send_on_connect"] = sendOnConnect ? "true" : "false"
+                }
+            }
+        }
+
+        return parameters
+    }
+
+    public func updating(args: [String: String]) -> LiveParseDanmakuPlan {
+        LiveParseDanmakuPlan(
+            args: args,
+            headers: headers,
+            transport: transport,
+            runtime: runtime
+        )
+    }
+}
+
+public struct LiveParseDanmakuTransportPlan: Decodable, Sendable {
+    public enum Kind: String, Decodable, Sendable {
+        case websocket
+        case httpPolling = "http_polling"
+    }
+
+    public enum FrameType: String, Decodable, Sendable {
+        case text
+        case binary
+    }
+
+    public let kind: Kind
+    public let url: String?
+    public let frameType: FrameType?
+    public let subprotocols: [String]?
+    public let polling: LiveParseDanmakuPollingPlan?
+
+    public init(
+        kind: Kind,
+        url: String? = nil,
+        frameType: FrameType? = nil,
+        subprotocols: [String]? = nil,
+        polling: LiveParseDanmakuPollingPlan? = nil
+    ) {
+        self.kind = kind
+        self.url = url
+        self.frameType = frameType
+        self.subprotocols = subprotocols
+        self.polling = polling
+    }
+
+    func dictionaryValue() -> [String: Any] {
+        var payload: [String: Any] = ["kind": kind.rawValue]
+        if let url, !url.isEmpty {
+            payload["url"] = url
+        }
+        if let frameType {
+            payload["frameType"] = frameType.rawValue
+        }
+        if let subprotocols, !subprotocols.isEmpty {
+            payload["subprotocols"] = subprotocols
+        }
+        if let polling {
+            payload["polling"] = polling.dictionaryValue()
+        }
+        return payload
+    }
+}
+
+public struct LiveParseDanmakuPollingPlan: Decodable, Sendable {
+    public let method: String?
+    public let intervalMs: Int?
+    public let sendOnConnect: Bool?
+
+    public init(method: String? = nil, intervalMs: Int? = nil, sendOnConnect: Bool? = nil) {
+        self.method = method
+        self.intervalMs = intervalMs
+        self.sendOnConnect = sendOnConnect
+    }
+
+    func dictionaryValue() -> [String: Any] {
+        var payload: [String: Any] = [:]
+        if let method, !method.isEmpty {
+            payload["method"] = method
+        }
+        if let intervalMs {
+            payload["intervalMs"] = intervalMs
+        }
+        if let sendOnConnect {
+            payload["sendOnConnect"] = sendOnConnect
+        }
+        return payload
+    }
+}
+
+public struct LiveParseDanmakuRuntimePlan: Decodable, Sendable {
+    public enum Driver: String, Decodable, Sendable {
+        case pluginJSV1 = "plugin_js_v1"
+    }
+
+    public let driver: Driver
+    public let protocolId: String?
+    public let protocolVersion: String?
+
+    public init(driver: Driver, protocolId: String? = nil, protocolVersion: String? = nil) {
+        self.driver = driver
+        self.protocolId = protocolId
+        self.protocolVersion = protocolVersion
+    }
+}
+
+struct LiveParseDanmakuDriverResult: Decodable, Sendable {
+    let ok: Bool?
+    let messages: [LiveParseDanmakuMessage]?
+    let writes: [LiveParseDanmakuWriteAction]?
+    let timer: LiveParseDanmakuTimerPlan?
+    let poll: LiveParseDanmakuPollRequest?
+}
+
+struct LiveParseDanmakuMessage: Decodable, Sendable {
+    let text: String
+    let nickname: String
+    let color: UInt32?
+}
+
+struct LiveParseDanmakuWriteAction: Decodable, Sendable {
+    enum Kind: String, Decodable, Sendable {
+        case text
+        case binary
+    }
+
+    let kind: Kind
+    let text: String?
+    let bytesBase64: String?
+}
+
+struct LiveParseDanmakuTimerPlan: Decodable, Sendable {
+    enum Mode: String, Decodable, Sendable {
+        case off
+        case heartbeat
+        case polling
+    }
+
+    let mode: Mode
+    let intervalMs: Int?
+}
+
+struct LiveParseDanmakuPollRequest: Decodable, Sendable {
+    let url: String?
+    let method: String?
+    let headers: [String: String]?
+    let query: [String: String]?
+    let bodyText: String?
+    let bodyBase64: String?
+    let signing: LiveParseDanmakuPollSigning?
+}
+
+struct LiveParseDanmakuPollSigning: Decodable, Sendable {
+    let profile: String
+    let injectRequestUserId: Bool?
+}

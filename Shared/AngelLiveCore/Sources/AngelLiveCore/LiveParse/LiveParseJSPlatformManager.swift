@@ -234,13 +234,13 @@ public enum LiveParseJSPlatformManager {
         return room.toLiveModel(liveType: platform.liveType)
     }
 
-    public static func getDanmukuArgs(
+    public static func getDanmakuPlan(
         platform: LiveParseJSPlatform,
         roomId: String,
         userId: String?,
         context: [String: Any] = [:]
-    ) async throws -> ([String: String], [String: String]?) {
-        let result: PluginDanmukuResult = try await callWithFallback(
+    ) async throws -> LiveParseDanmakuPlan {
+        let result: LiveParseDanmakuPlan = try await callWithFallback(
             platform: platform,
             function: "getDanmaku",
             fallback: "getDanmukuArgs",
@@ -249,6 +249,36 @@ public enum LiveParseJSPlatformManager {
                 "userId": userId
             ])
         )
+        let normalized = normalizeDanmakuPlan(result, for: platform, roomId: roomId)
+        guard normalized.usesPluginRuntimeDriver else {
+            throw LiveParseError.danmuArgsParseError(
+                "弹幕驱动不受支持",
+                "插件 \(platform.pluginId) 未声明 runtime.driver = plugin_js_v1"
+            )
+        }
+        return normalized
+    }
+
+    public static func getDanmukuArgs(
+        platform: LiveParseJSPlatform,
+        roomId: String,
+        userId: String?,
+        context: [String: Any] = [:]
+    ) async throws -> ([String: String], [String: String]?) {
+        let plan = try await getDanmakuPlan(
+            platform: platform,
+            roomId: roomId,
+            userId: userId,
+            context: context
+        )
+        return (plan.legacyParameters, plan.headers)
+    }
+
+    private static func normalizeDanmakuPlan(
+        _ result: LiveParseDanmakuPlan,
+        for platform: LiveParseJSPlatform,
+        roomId: String
+    ) -> LiveParseDanmakuPlan {
         if platform.pluginId == "yy" {
             var args = result.args
             let fallbackRoomId = roomId.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -275,9 +305,9 @@ public enum LiveParseJSPlatformManager {
                 args["ws_url"] = "wss://h5-sinchl.yy.com/websocket?appid=yymwebh5&version=3.2.10&uuid=\(wsUUID)&sign=a8d7eef2"
             }
 
-            return (args, result.headers)
+            return result.updating(args: args)
         }
-        return (result.args, result.headers)
+        return result
     }
 
     // MARK: - Internal
@@ -592,11 +622,6 @@ private struct PluginRoomDTO: Decodable {
             liveWatchedCount: liveWatchedCount
         )
     }
-}
-
-private struct PluginDanmukuResult: Decodable {
-    let args: [String: String]
-    let headers: [String: String]?
 }
 
 private struct PluginLiveStatePayload: Decodable {

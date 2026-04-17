@@ -46,6 +46,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        KSOptions.logLevel = .error
+        KSOptions.hudLog = false
+
         // 打印当前 Bilibili Cookie
         let cookie = BilibiliCookieSyncService.shared.getCurrentCookie()
         print("[App Launch] Bilibili Cookie: \(cookie.isEmpty ? "(空)" : cookie)")

@@ -10,7 +10,7 @@ public final class JSRuntime: @unchecked Sendable {
     private let context: JSContext
     private let pluginId: String
     private let session: URLSession
-    private static var sharedXHSSigner: XHSSigningService?
+    static var sharedXHSSigner: XHSSigningService?
 
     public init(pluginId: String, session: URLSession = .shared, logHandler: LogHandler? = nil) {
         self.queue = DispatchQueue(label: "liveparse.jsruntime.\(UUID().uuidString)")
@@ -145,6 +145,60 @@ private extension JSRuntime {
           if (typeof globalThis.navigator === "undefined") globalThis.navigator = {};
           if (!globalThis.navigator.userAgent) {
             globalThis.navigator.userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36";
+          }
+
+          // JavaScriptCore 默认没有浏览器环境里的 btoa/atob，弹幕插件会用它处理二进制帧。
+          var __lpBase64Alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+          if (typeof globalThis.btoa !== "function") {
+            globalThis.btoa = function (input) {
+              var source = String(input || "");
+              var output = "";
+              for (var i = 0; i < source.length; i += 3) {
+                var byte1 = source.charCodeAt(i);
+                var byte2 = i + 1 < source.length ? source.charCodeAt(i + 1) : NaN;
+                var byte3 = i + 2 < source.length ? source.charCodeAt(i + 2) : NaN;
+
+                if (byte1 > 0xff || (!isNaN(byte2) && byte2 > 0xff) || (!isNaN(byte3) && byte3 > 0xff)) {
+                  throw new Error("InvalidCharacterError");
+                }
+
+                var chunk = (byte1 << 16) | ((isNaN(byte2) ? 0 : byte2) << 8) | (isNaN(byte3) ? 0 : byte3);
+                output += __lpBase64Alphabet.charAt((chunk >> 18) & 63);
+                output += __lpBase64Alphabet.charAt((chunk >> 12) & 63);
+                output += isNaN(byte2) ? "=" : __lpBase64Alphabet.charAt((chunk >> 6) & 63);
+                output += isNaN(byte3) ? "=" : __lpBase64Alphabet.charAt(chunk & 63);
+              }
+              return output;
+            };
+          }
+          if (typeof globalThis.atob !== "function") {
+            globalThis.atob = function (input) {
+              var source = String(input || "").replace(/[\\t\\n\\f\\r ]+/g, "");
+              if (source.length % 4 === 1) {
+                throw new Error("InvalidCharacterError");
+              }
+              var output = "";
+              for (var i = 0; i < source.length; i += 4) {
+                var enc1 = source.charAt(i);
+                var enc2 = source.charAt(i + 1);
+                var enc3 = source.charAt(i + 2);
+                var enc4 = source.charAt(i + 3);
+                var idx1 = __lpBase64Alphabet.indexOf(enc1);
+                var idx2 = __lpBase64Alphabet.indexOf(enc2);
+                var idx3 = enc3 === "=" ? 0 : __lpBase64Alphabet.indexOf(enc3);
+                var idx4 = enc4 === "=" ? 0 : __lpBase64Alphabet.indexOf(enc4);
+
+                if (idx1 < 0 || idx2 < 0 || (enc3 !== "=" && idx3 < 0) || (enc4 !== "=" && idx4 < 0)) {
+                  throw new Error("InvalidCharacterError");
+                }
+
+                var chunk = (idx1 << 18) | (idx2 << 12) | (idx3 << 6) | idx4;
+                output += String.fromCharCode((chunk >> 16) & 0xff);
+                if (enc3 !== "=") output += String.fromCharCode((chunk >> 8) & 0xff);
+                if (enc4 !== "=") output += String.fromCharCode(chunk & 0xff);
+              }
+              return output;
+            };
           }
 
           globalThis.Host = globalThis.Host || {};
