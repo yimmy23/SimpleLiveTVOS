@@ -8,27 +8,6 @@
 import Foundation
 import Security
 
-public enum PlatformSessionID: String, Codable, Sendable, CaseIterable {
-    case bilibili
-    case douyin
-    case kuaishou
-    case soop
-    case kick
-    case twitch
-    case xiaohongshu
-    case panda
-
-    /// LiveParse 插件 ID，可能与会话 ID 不同（例如 kuaishou -> ks）。
-    public var pluginId: String {
-        switch self {
-        case .kuaishou:
-            return "ks"
-        default:
-            return rawValue
-        }
-    }
-}
-
 public enum PlatformSessionState: String, Codable, Sendable {
     case anonymous
     case authenticated
@@ -51,8 +30,33 @@ public enum PlatformSessionValidationResult: Sendable {
     case networkError(String)
 }
 
+/// 插件侧 `validateCredential` / `getCredentialStatus` 的标准返回结构。
+public struct CredentialStatus: Codable, Sendable {
+    public let state: String
+    public let expireAt: Double?
+    public let userId: String?
+    public let userName: String?
+    public let message: String?
+
+    public init(
+        state: String,
+        expireAt: Double? = nil,
+        userId: String? = nil,
+        userName: String? = nil,
+        message: String? = nil
+    ) {
+        self.state = state
+        self.expireAt = expireAt
+        self.userId = userId
+        self.userName = userName
+        self.message = message
+    }
+}
+
 public struct PlatformSession: Codable, Sendable {
-    public let platformId: PlatformSessionID
+    public let pluginId: String
+    /// 关联的 liveType（rawValue），便于 UI 层查 manifest/icon。
+    public var liveType: String?
     public var cookie: String?
     public var csrf: String?
     public var refreshToken: String?
@@ -63,7 +67,8 @@ public struct PlatformSession: Codable, Sendable {
     public var updatedAt: Date
 
     public init(
-        platformId: PlatformSessionID,
+        pluginId: String,
+        liveType: String? = nil,
         cookie: String?,
         csrf: String? = nil,
         refreshToken: String? = nil,
@@ -73,7 +78,8 @@ public struct PlatformSession: Codable, Sendable {
         state: PlatformSessionState = .anonymous,
         updatedAt: Date = Date()
     ) {
-        self.platformId = platformId
+        self.pluginId = pluginId
+        self.liveType = liveType
         self.cookie = cookie
         self.csrf = csrf
         self.refreshToken = refreshToken
@@ -93,6 +99,7 @@ public struct PlatformSessionData: Sendable {
     public var expireAt: Date?
     public var source: PlatformSessionSource
     public var state: PlatformSessionState
+    public var liveType: String?
 
     public init(
         cookie: String?,
@@ -101,7 +108,8 @@ public struct PlatformSessionData: Sendable {
         uid: String? = nil,
         expireAt: Date? = nil,
         source: PlatformSessionSource,
-        state: PlatformSessionState
+        state: PlatformSessionState,
+        liveType: String? = nil
     ) {
         self.cookie = cookie
         self.csrf = csrf
@@ -110,6 +118,7 @@ public struct PlatformSessionData: Sendable {
         self.expireAt = expireAt
         self.source = source
         self.state = state
+        self.liveType = liveType
     }
 }
 
@@ -120,15 +129,16 @@ public actor PlatformSessionManager {
 
     private init() {}
 
-    public func getSession(platformId: PlatformSessionID) -> PlatformSession? {
-        store.loadSession(for: platformId)
+    public func getSession(pluginId: String) -> PlatformSession? {
+        store.loadSession(for: pluginId)
     }
 
     @discardableResult
     public func loginWithCookie(
-        platformId: PlatformSessionID,
+        pluginId: String,
         cookie: String,
         uid: String? = nil,
+        liveType: String? = nil,
         source: PlatformSessionSource = .local,
         validateBeforeSave: Bool = true
     ) async -> PlatformSessionValidationResult {
@@ -139,7 +149,7 @@ public actor PlatformSessionManager {
 
         let validationResult: PlatformSessionValidationResult
         if validateBeforeSave {
-            validationResult = await validateCookie(platformId: platformId, cookie: normalizedCookie)
+            validationResult = await validateCookie(pluginId: pluginId, cookie: normalizedCookie)
         } else {
             validationResult = .valid
         }
@@ -150,17 +160,19 @@ public actor PlatformSessionManager {
                 cookie: normalizedCookie,
                 uid: uid,
                 source: source,
-                state: .authenticated
+                state: .authenticated,
+                liveType: liveType
             )
-            updateSession(platformId: platformId, data: sessionData)
+            updateSession(pluginId: pluginId, data: sessionData)
         case .expired:
             let sessionData = PlatformSessionData(
                 cookie: normalizedCookie,
                 uid: uid,
                 source: source,
-                state: .expired
+                state: .expired,
+                liveType: liveType
             )
-            updateSession(platformId: platformId, data: sessionData)
+            updateSession(pluginId: pluginId, data: sessionData)
         case .invalid, .networkError:
             break
         }
@@ -168,9 +180,10 @@ public actor PlatformSessionManager {
         return validationResult
     }
 
-    public func updateSession(platformId: PlatformSessionID, data: PlatformSessionData) {
+    public func updateSession(pluginId: String, data: PlatformSessionData) {
         let session = PlatformSession(
-            platformId: platformId,
+            pluginId: pluginId,
+            liveType: data.liveType,
             cookie: data.cookie,
             csrf: data.csrf,
             refreshToken: data.refreshToken,
@@ -184,117 +197,91 @@ public actor PlatformSessionManager {
         PlatformSessionLiveParseBridge.syncSessionToLiveParse(session)
     }
 
-    public func clearSession(platformId: PlatformSessionID) {
-        store.clearSession(for: platformId)
-        PlatformSessionLiveParseBridge.clearForPlatform(platformId)
+    public func clearSession(pluginId: String) {
+        store.clearSession(for: pluginId)
+        PlatformSessionLiveParseBridge.clearForPlatform(pluginId: pluginId)
     }
 
-    public func validateSession(platformId: PlatformSessionID) async -> PlatformSessionValidationResult {
-        guard let session = getSession(platformId: platformId),
+    public func validateSession(pluginId: String) async -> PlatformSessionValidationResult {
+        guard let session = getSession(pluginId: pluginId),
               let cookie = session.cookie,
               !cookie.isEmpty else {
             return .invalid(reason: "Cookie 为空")
         }
 
-        return await validateCookie(platformId: platformId, cookie: cookie)
+        return await validateCookie(pluginId: pluginId, cookie: cookie)
     }
 
-    private func validateCookie(platformId: PlatformSessionID, cookie: String) async -> PlatformSessionValidationResult {
-        switch platformId {
-        case .bilibili:
-            return await validateBilibiliSession(cookie: cookie)
-        case .douyin:
-            return validateDouyinSession(cookie: cookie)
-        case .kuaishou:
-            return validateKuaishouSession(cookie: cookie)
-        case .soop:
-            return validateSoopSession(cookie: cookie)
-        case .kick:
-            return validateKickSession(cookie: cookie)
-        case .twitch:
-            return validateTwitchSession(cookie: cookie)
-        case .xiaohongshu:
-            return validateXiaohongshuSession(cookie: cookie)
-        case .panda:
-            return validatePandaSession(cookie: cookie)
-        }
+    /// 返回所有已持久化会话（按 pluginId 去重后的最新版本）。
+    public func allSessions() -> [PlatformSession] {
+        store.loadAllSessions()
     }
 
-    private func validateBilibiliSession(cookie: String) async -> PlatformSessionValidationResult {
-        let result = await BilibiliAccountService.shared.loadUserInfo(
-            cookie: cookie,
-            userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15"
-        )
+    // MARK: - 插件驱动的凭证校验
 
-        switch result {
-        case .success:
-            return .valid
-        case .failure(let error):
+    private func validateCookie(pluginId: String, cookie: String) async -> PlatformSessionValidationResult {
+        // 写入共享会话池，确保插件后续发 HTTP 请求可通过 authMode: "platform_cookie" 使用。
+        LiveParsePlatformSessionVault.update(platformId: pluginId, cookie: cookie, uid: nil)
+
+        let payload: [String: Any] = [
+            "credential": ["cookie": cookie]
+        ]
+
+        do {
+            let status: CredentialStatus = try await LiveParsePlugins.shared.callDecodable(
+                pluginId: pluginId,
+                function: "validateCredential",
+                payload: payload
+            )
+            return mapStatus(status, cookieFallback: cookie)
+        } catch let error as LiveParsePluginError {
             switch error {
-            case .cookieExpired:
-                return .expired
-            case .networkError(let message):
-                return .networkError(message)
-            case .emptyCookie:
-                return .invalid(reason: "Cookie 为空")
-            case .invalidURL:
-                return .invalid(reason: "无效的验证 URL")
-            case .decodingError(let message), .invalidResponse(let message):
-                return .invalid(reason: message)
+            case .pluginNotFound:
+                // 插件尚未安装：cookie 暂无法校验，但保留本地会话（下次插件就绪再复验）。
+                return .valid
+            case .jsException(let message), .invalidReturnValue(let message), .invalidManifest(let message):
+                if message.lowercased().contains("network") {
+                    return .networkError(message)
+                }
+                // JS 未实现 validateCredential / 返回异常：按未知处理，不阻断登录。
+                return .valid
+            case .standardized(let std):
+                switch std.code {
+                case .network, .timeout:
+                    return .networkError(std.message)
+                case .authRequired:
+                    return .expired
+                case .blocked:
+                    return .invalid(reason: std.message)
+                default:
+                    return .valid
+                }
+            default:
+                return .networkError(error.localizedDescription)
             }
+        } catch {
+            return .networkError(error.localizedDescription)
         }
     }
 
-    private func validateDouyinSession(cookie: String) -> PlatformSessionValidationResult {
-        guard cookie.contains("ttwid=") else {
-            return .invalid(reason: "抖音 Cookie 缺少 ttwid")
+    private func mapStatus(_ status: CredentialStatus, cookieFallback: String) -> PlatformSessionValidationResult {
+        switch status.state.lowercased() {
+        case "valid":
+            return .valid
+        case "expired":
+            return .expired
+        case "invalid", "missing", "risk_control":
+            return .invalid(reason: status.message ?? status.state)
+        case "unknown":
+            // 插件无法判定：只要 cookie 非空就暂按有效处理（由上层业务 401 触发再登录）。
+            return cookieFallback.isEmpty ? .invalid(reason: "Cookie 为空") : .valid
+        default:
+            return .valid
         }
-        return .valid
-    }
-
-    private func validateKuaishouSession(cookie: String) -> PlatformSessionValidationResult {
-        guard cookie.contains("=") else {
-            return .invalid(reason: "快手 Cookie 格式无效")
-        }
-        return .valid
-    }
-
-    private func validateSoopSession(cookie: String) -> PlatformSessionValidationResult {
-        guard cookie.contains("AuthTicket=") else {
-            return .invalid(reason: "SOOP Cookie 缺少 AuthTicket")
-        }
-        return .valid
-    }
-
-    private func validateKickSession(cookie: String) -> PlatformSessionValidationResult {
-        let normalizedCookie = cookie.lowercased()
-        guard normalizedCookie.contains("kick_session=") || normalizedCookie.contains("session_token=") else {
-            return .invalid(reason: "Kick Cookie 缺少 kick_session 或 session_token")
-        }
-        return .valid
-    }
-
-    private func validateTwitchSession(cookie: String) -> PlatformSessionValidationResult {
-        guard cookie.contains("auth-token=") else {
-            return .invalid(reason: "Twitch Cookie 缺少 auth-token")
-        }
-        return .valid
-    }
-
-    private func validateXiaohongshuSession(cookie: String) -> PlatformSessionValidationResult {
-        guard cookie.contains("web_session=") || cookie.contains("a1=") else {
-            return .invalid(reason: "小红书 Cookie 缺少 web_session")
-        }
-        return .valid
-    }
-
-    private func validatePandaSession(cookie: String) -> PlatformSessionValidationResult {
-        guard cookie.contains("sessKey=") || cookie.contains("userLoginYN=") else {
-            return .invalid(reason: "PandaTV Cookie 缺少 sessKey")
-        }
-        return .valid
     }
 }
+
+// MARK: - SessionStore
 
 private final class SessionStore {
     private enum Constants {
@@ -307,6 +294,7 @@ private final class SessionStore {
         let state: PlatformSessionState
         let expireAt: Date?
         let updatedAt: Date
+        let liveType: String?
     }
 
     private struct SessionSensitivePayload: Codable {
@@ -318,24 +306,35 @@ private final class SessionStore {
     private struct LegacyKeys {
         static let bilibiliCookie = "SimpleLive.Setting.BilibiliCookie"
         static let bilibiliUid = "LiveParse.Bilibili.uid"
+        static let bilibiliCookieSnapshot = "BilibiliCookieSyncService.sessionSnapshot"
     }
+
+    private static let knownPluginIds = [
+        "bilibili", "douyin", "ks", "soop", "kick", "twitch", "xiaohongshu", "panda"
+    ]
+
+    /// 旧版本 PlatformSessionID rawValue → 新版 pluginId 映射（kuaishou → ks）
+    private static let legacyRawToPluginId: [String: String] = [
+        "kuaishou": "ks"
+    ]
 
     private let defaults = UserDefaults.standard
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
     private let keychain = KeychainStore(service: Constants.keychainService)
 
-    func loadSession(for platformId: PlatformSessionID) -> PlatformSession? {
-        migrateLegacyIfNeeded(for: platformId)
+    func loadSession(for pluginId: String) -> PlatformSession? {
+        migrateLegacyIfNeeded(for: pluginId)
 
-        guard let metadataData = defaults.data(forKey: metadataKey(for: platformId)),
+        guard let metadataData = defaults.data(forKey: metadataKey(for: pluginId)),
               let metadata = try? decoder.decode(SessionMetadata.self, from: metadataData) else {
             return nil
         }
 
-        let sensitive = loadSensitivePayload(for: platformId)
+        let sensitive = loadSensitivePayload(for: pluginId)
         return PlatformSession(
-            platformId: platformId,
+            pluginId: pluginId,
+            liveType: metadata.liveType,
             cookie: sensitive?.cookie,
             csrf: sensitive?.csrf,
             refreshToken: sensitive?.refreshToken,
@@ -347,16 +346,23 @@ private final class SessionStore {
         )
     }
 
+    func loadAllSessions() -> [PlatformSession] {
+        // 遍历已安装插件 + 历史已知平台（防止插件暂时卸载时会话丢失）
+        let pluginIds = Set(SandboxPluginCatalog.installedPluginIds() + SessionStore.knownPluginIds)
+        return pluginIds.compactMap { loadSession(for: $0) }
+    }
+
     func saveSession(_ session: PlatformSession) {
         let metadata = SessionMetadata(
             uid: session.uid,
             source: session.source,
             state: session.state,
             expireAt: session.expireAt,
-            updatedAt: session.updatedAt
+            updatedAt: session.updatedAt,
+            liveType: session.liveType
         )
         if let metadataData = try? encoder.encode(metadata) {
-            defaults.set(metadataData, forKey: metadataKey(for: session.platformId))
+            defaults.set(metadataData, forKey: metadataKey(for: session.pluginId))
         }
 
         let sensitive = SessionSensitivePayload(
@@ -365,34 +371,57 @@ private final class SessionStore {
             refreshToken: session.refreshToken
         )
         if let sensitiveData = try? encoder.encode(sensitive) {
-            keychain.write(sensitiveData, account: keychainAccount(for: session.platformId))
+            keychain.write(sensitiveData, account: keychainAccount(for: session.pluginId))
         }
 
-        defaults.set(true, forKey: migrationKey(for: session.platformId))
+        defaults.set(true, forKey: migrationKey(for: session.pluginId))
     }
 
-    func clearSession(for platformId: PlatformSessionID) {
-        defaults.removeObject(forKey: metadataKey(for: platformId))
-        keychain.delete(account: keychainAccount(for: platformId))
+    func clearSession(for pluginId: String) {
+        defaults.removeObject(forKey: metadataKey(for: pluginId))
+        keychain.delete(account: keychainAccount(for: pluginId))
     }
 
-    private func migrateLegacyIfNeeded(for platformId: PlatformSessionID) {
-        guard !defaults.bool(forKey: migrationKey(for: platformId)) else { return }
+    private func migrateLegacyIfNeeded(for pluginId: String) {
+        guard !defaults.bool(forKey: migrationKey(for: pluginId)) else { return }
+        defer { defaults.set(true, forKey: migrationKey(for: pluginId)) }
 
-        guard platformId == .bilibili else {
-            defaults.set(true, forKey: migrationKey(for: platformId))
-            return
+        // 1. 旧 PlatformSessionID.rawValue 与 pluginId 不同的情况（kuaishou → ks）
+        if let legacyRaw = SessionStore.legacyRawToPluginId.first(where: { $0.value == pluginId })?.key {
+            migrateLegacyRawKeyed(from: legacyRaw, to: pluginId)
         }
 
+        // 2. Bilibili 专属遗留键
+        if pluginId == "bilibili" {
+            migrateBilibiliLegacy()
+        }
+    }
+
+    private func migrateLegacyRawKeyed(from legacyRaw: String, to pluginId: String) {
+        let legacyMetadataKey = "AngelLive.SessionStore.\(legacyRaw).metadata"
+        let legacyKeychainAccount = "session.\(legacyRaw)"
+
+        if let legacyMetadataData = defaults.data(forKey: legacyMetadataKey) {
+            defaults.set(legacyMetadataData, forKey: metadataKey(for: pluginId))
+            defaults.removeObject(forKey: legacyMetadataKey)
+        }
+
+        if let legacyData = keychain.read(account: legacyKeychainAccount) {
+            keychain.write(legacyData, account: keychainAccount(for: pluginId))
+            keychain.delete(account: legacyKeychainAccount)
+        }
+    }
+
+    private func migrateBilibiliLegacy() {
         let legacyCookie = defaults.string(forKey: LegacyKeys.bilibiliCookie) ?? ""
         let legacyUid = defaults.string(forKey: LegacyKeys.bilibiliUid)
         guard !legacyCookie.isEmpty else {
-            defaults.set(true, forKey: migrationKey(for: platformId))
             return
         }
 
         let migrated = PlatformSession(
-            platformId: .bilibili,
+            pluginId: "bilibili",
+            liveType: "0",
             cookie: legacyCookie,
             uid: legacyUid,
             source: .legacy,
@@ -402,21 +431,21 @@ private final class SessionStore {
         saveSession(migrated)
     }
 
-    private func loadSensitivePayload(for platformId: PlatformSessionID) -> SessionSensitivePayload? {
-        guard let data = keychain.read(account: keychainAccount(for: platformId)) else { return nil }
+    private func loadSensitivePayload(for pluginId: String) -> SessionSensitivePayload? {
+        guard let data = keychain.read(account: keychainAccount(for: pluginId)) else { return nil }
         return try? decoder.decode(SessionSensitivePayload.self, from: data)
     }
 
-    private func metadataKey(for platformId: PlatformSessionID) -> String {
-        "AngelLive.SessionStore.\(platformId.rawValue).metadata"
+    private func metadataKey(for pluginId: String) -> String {
+        "AngelLive.SessionStore.\(pluginId).metadata"
     }
 
-    private func migrationKey(for platformId: PlatformSessionID) -> String {
-        "AngelLive.SessionStore.\(platformId.rawValue).migrated.v1"
+    private func migrationKey(for pluginId: String) -> String {
+        "AngelLive.SessionStore.\(pluginId).migrated.v2"
     }
 
-    private func keychainAccount(for platformId: PlatformSessionID) -> String {
-        "session.\(platformId.rawValue)"
+    private func keychainAccount(for pluginId: String) -> String {
+        "session.\(pluginId)"
     }
 }
 

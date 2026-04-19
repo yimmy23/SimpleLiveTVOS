@@ -36,9 +36,9 @@ public final class PluginAvailabilityService: @unchecked Sendable {
         hasAvailablePlugins = !pluginIds.isEmpty
     }
 
-    /// 检查某个平台会话对应的插件是否已安装
-    public func isPluginInstalled(for sessionID: PlatformSessionID) -> Bool {
-        installedPluginIds.contains(sessionID.pluginId)
+    /// 检查某个 pluginId 的插件是否已安装
+    public func isPluginInstalled(for pluginId: String) -> Bool {
+        installedPluginIds.contains(pluginId)
     }
 
     /// 刷新状态（插件安装成功后调用）

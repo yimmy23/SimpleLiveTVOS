@@ -109,6 +109,17 @@ public final class LiveParsePluginManager: @unchecked Sendable {
             LiveParsePlatformSessionVault.clear(platformId: pluginId)
             return ["ok": true, "managedByHost": true, "hasCookie": false]
         }
+        // 新 credential 入口：写入 vault 后继续 forward 到插件，让插件初始化 runtime 并返回 status。
+        // 若插件未实现 setCredential/clearCredential，则在 forward 时会抛错；host 端的 Bridge 负责 fallback 到 setCookie/clearCookie。
+        if function == "setCredential" {
+            let (cookie, uid) = extractCredentialCookie(from: payload)
+            LiveParsePlatformSessionVault.update(platformId: pluginId, cookie: cookie, uid: uid)
+            // 不 return；继续走下方常规 forward 逻辑，让插件自身 runtime 处理。
+        }
+        if function == "clearCredential" {
+            LiveParsePlatformSessionVault.clear(platformId: pluginId)
+            // 同上，继续 forward。
+        }
 
         // 开发者控制台日志
         let console = PluginConsoleService.shared
@@ -166,6 +177,21 @@ public final class LiveParsePluginManager: @unchecked Sendable {
                 "Decoding \(String(describing: T.self)) failed in \(pluginId).\(function): \(error.localizedDescription)"
             )
         }
+    }
+
+    private func extractCredentialCookie(from payload: [String: Any]) -> (String, String?) {
+        // 支持 payload = { credential: { cookie, uid } } 或扁平 { cookie, uid }
+        if let credential = payload["credential"] as? [String: Any] {
+            let cookie = (credential["cookie"] as? String)
+                ?? (credential["Cookie"] as? String)
+                ?? ""
+            let uid = credential["uid"] as? String
+            return (cookie, uid)
+        }
+        if let cookie = payload["cookie"] as? String {
+            return (cookie, payload["uid"] as? String)
+        }
+        return ("", nil)
     }
 }
 

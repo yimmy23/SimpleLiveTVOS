@@ -4,6 +4,10 @@
 //
 //  Created by pangchong on 2024/11/28.
 //
+//  ⚠️ 过渡文件：整体将由 PlatformCredentialSyncService 替换（见 functional-roaming-ocean.md）。
+//  保留内部 LegacyPlatformSessionID 仅为让 Core 模块在 PlatformSessionManager → pluginId: String 重构后
+//  仍可编译。UI 迁移完成后整份删除。
+//
 
 import Foundation
 import Network
@@ -11,6 +15,30 @@ import CloudKit
 #if canImport(UIKit)
 import UIKit
 #endif
+
+// MARK: - 过渡期平台枚举（本文件删除时同步移除）
+
+enum LegacyPlatformSessionID: String, CaseIterable, Sendable {
+    case bilibili
+    case douyin
+    case kuaishou
+    case soop
+    case kick
+    case twitch
+    case xiaohongshu
+    case panda
+
+    /// 对应 LiveParse pluginId（kuaishou → ks）
+    var pluginId: String {
+        switch self {
+        case .kuaishou: return "ks"
+        default: return rawValue
+        }
+    }
+}
+
+// 文件内别名，减少改动面；外部代码不应引用。
+fileprivate typealias PlatformSessionID = LegacyPlatformSessionID
 
 // MARK: - CloudKit 配置
 
@@ -330,7 +358,7 @@ public final class BilibiliCookieSyncService: ObservableObject {
         }
 
         // 如果本地已有更新的已认证 session，跳过 iCloud 覆盖
-        if let local = await PlatformSessionManager.shared.getSession(platformId: .bilibili),
+        if let local = await PlatformSessionManager.shared.getSession(pluginId: "bilibili"),
            local.state == .authenticated,
            let localCookie = local.cookie, !localCookie.isEmpty,
            local.updatedAt >= syncedData.timestamp {
@@ -425,7 +453,7 @@ public final class BilibiliCookieSyncService: ObservableObject {
 
         // 其他平台
         for platformId in PlatformSessionID.allCases.filter({ $0 != .bilibili }) {
-            if let session = await PlatformSessionManager.shared.getSession(platformId: platformId),
+            if let session = await PlatformSessionManager.shared.getSession(pluginId: platformId.pluginId),
                session.state == .authenticated,
                let cookie = session.cookie, !cookie.isEmpty {
                 let liveType = LiveType(rawValue: platformId.pluginId) ?? LiveType(rawValue: platformId.rawValue)
@@ -682,7 +710,7 @@ public final class BilibiliCookieSyncService: ObservableObject {
         if cookie.contains("SESSDATA") {
             Task {
                 _ = await PlatformSessionManager.shared.loginWithCookie(
-                    platformId: .bilibili,
+                    pluginId: "bilibili",
                     cookie: cookie,
                     uid: uid,
                     source: sessionSource,
@@ -699,13 +727,13 @@ public final class BilibiliCookieSyncService: ObservableObject {
             state: .invalid
         )
         Task {
-            await PlatformSessionManager.shared.updateSession(platformId: .bilibili, data: sessionData)
+            await PlatformSessionManager.shared.updateSession(pluginId: "bilibili", data: sessionData)
         }
     }
 
     private func mirrorSessionClear() {
         Task {
-            await PlatformSessionManager.shared.clearSession(platformId: .bilibili)
+            await PlatformSessionManager.shared.clearSession(pluginId: "bilibili")
         }
     }
 
@@ -723,7 +751,7 @@ public final class BilibiliCookieSyncService: ObservableObject {
     }
 
     private func bootstrapSessionCache() async {
-        if let session = await PlatformSessionManager.shared.getSession(platformId: .bilibili),
+        if let session = await PlatformSessionManager.shared.getSession(pluginId: "bilibili"),
            let cookie = session.cookie,
            !cookie.isEmpty {
             applyRuntimeCache(cookie: cookie, uid: session.uid)
@@ -869,7 +897,7 @@ extension BilibiliCookieSyncService {
         // 其他平台从 PlatformSessionManager 获取
         let otherPlatforms = PlatformSessionID.allCases.filter { $0 != .bilibili }
         for platformId in otherPlatforms {
-            if let session = await PlatformSessionManager.shared.getSession(platformId: platformId),
+            if let session = await PlatformSessionManager.shared.getSession(pluginId: platformId.pluginId),
                session.state == .authenticated,
                let cookie = session.cookie, !cookie.isEmpty {
                 sessions.append(SyncedCookieData(
@@ -997,7 +1025,7 @@ extension BilibiliCookieSyncService {
                 }
 
                 // 如果本地已有更新的 authenticated session，跳过 iCloud 覆盖
-                if let local = await PlatformSessionManager.shared.getSession(platformId: platformId),
+                if let local = await PlatformSessionManager.shared.getSession(pluginId: platformId.pluginId),
                    local.state == .authenticated,
                    let localCookie = local.cookie, !localCookie.isEmpty,
                    local.updatedAt >= syncedData.timestamp {
@@ -1005,7 +1033,7 @@ extension BilibiliCookieSyncService {
                 }
 
                 _ = await PlatformSessionManager.shared.loginWithCookie(
-                    platformId: platformId,
+                    pluginId: platformId.pluginId,
                     cookie: syncedData.cookie,
                     uid: syncedData.uid,
                     source: .iCloud,
@@ -1036,7 +1064,7 @@ extension BilibiliCookieSyncService {
                     } else {
                         // 其他平台走 PlatformSessionManager
                         let result = await PlatformSessionManager.shared.loginWithCookie(
-                            platformId: platformId,
+                            pluginId: platformId.pluginId,
                             cookie: session.cookie,
                             uid: session.uid,
                             source: .bonjour,
