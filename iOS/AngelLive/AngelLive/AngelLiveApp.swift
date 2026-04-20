@@ -36,7 +36,7 @@ struct AngelLiveApp: App {
                 .environment(playerManager)
                 .environment(welcomeManager)
                 .installToast(position: .top)
-                .setupBilibiliCookieIfNeeded()
+                // 旧 BilibiliCookieManager 已删除，凭证同步由 PlatformCredentialSyncService 管理
                 .onAppear {
                     GeneralSettingModel().globalGeneralSettingFavoriteStyle = AngelLiveFavoriteStyle.liveState.rawValue
                 }
@@ -68,9 +68,8 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 
         Task {
             await PlatformSessionLiveParseBridge.syncFromPersistedSessionsOnLaunch()
-            if BilibiliCookieSyncService.shared.iCloudSyncEnabled {
-                _ = await BilibiliCookieSyncService.shared.syncFromICloud()
-                await BilibiliCookieSyncService.shared.syncAllPlatformsFromICloud()
+            if PlatformCredentialSyncService.shared.iCloudSyncEnabled {
+                await PlatformCredentialSyncService.shared.syncAllFromICloud()
             }
             #if IOS_DEVELOPER_MODE
             await logKuaishouCookieOnLaunch()
@@ -107,7 +106,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     }
 
     private func logKuaishouCookieOnLaunch() async {
-        let session = await PlatformSessionManager.shared.getSession(platformId: .kuaishou)
+        let session = await PlatformSessionManager.shared.getSession(pluginId: "ks")
         if let cookie = session?.cookie, !cookie.isEmpty {
             print("[iOS] 快手 Cookie: \(cookie)")
         } else {
@@ -116,7 +115,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     }
 
     private func logXiaohongshuCookieOnLaunch() async {
-        let session = await PlatformSessionManager.shared.getSession(platformId: .xiaohongshu)
+        let session = await PlatformSessionManager.shared.getSession(pluginId: "xiaohongshu")
         if let cookie = session?.cookie, !cookie.isEmpty {
             print("[iOS] 小红书 Cookie: \(cookie)")
         } else {

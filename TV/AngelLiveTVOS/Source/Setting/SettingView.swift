@@ -18,7 +18,7 @@ struct SettingView: View {
     @State private var selectedIndex: Int? = nil
     @State private var fullScreenIndex: Int? = nil
     @StateObject var settingStore = SettingStore()
-    @StateObject private var syncService = BilibiliCookieSyncService.shared
+    @ObservedObject private var syncService = PlatformCredentialSyncService.shared
     @Environment(AppState.self) var appViewModel
     @FocusState private var focusedIndex: Int?
 
@@ -107,7 +107,7 @@ struct SettingView: View {
                                 .foregroundColor(.primary)
                             Spacer()
                             if index == 0 {
-                                Text(syncService.loginStatusDescription)
+                                Text(syncService.loggedInByPluginId.values.contains(true) ? "已登录" : "未登录")
                                     .font(.system(size: 30))
                                     .foregroundStyle(.gray)
                             } else if index == 4 {

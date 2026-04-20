@@ -9,7 +9,7 @@ import SwiftUI
 import AngelLiveCore
 
 struct SettingView: View {
-    @StateObject private var syncService = BilibiliCookieSyncService.shared
+    @ObservedObject private var syncService = PlatformCredentialSyncService.shared
     @State private var generalSetting = GeneralSettingModel()
     @State private var cloudKitReady = false
     @State private var cloudKitStateString = "检查中..."

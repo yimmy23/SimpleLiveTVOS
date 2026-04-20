@@ -32,15 +32,11 @@ struct ErrorView: View {
 
     @State private var showingDetailSheet = false
     @State private var showingCookieDebugView = false
-    @StateObject private var syncService = BilibiliCookieSyncService.shared
+    @ObservedObject private var syncService = PlatformCredentialSyncService.shared
 
-    // 检查是否已登录B站
+    /// 是否有任何平台已登录
     private var isBilibiliLoggedIn: Bool {
-        syncService.isLoggedIn
-    }
-
-    private var bilibiliCookie: String {
-        syncService.getCurrentCookie()
+        syncService.loggedInByPluginId.values.contains(true)
     }
 
     init(
@@ -100,7 +96,8 @@ struct ErrorView: View {
             )
         }
         .sheet(isPresented: $showingCookieDebugView) {
-            BilibiliCookieDebugView(cookie: bilibiliCookie)
+            // 调试视图已随旧服务删除
+            Text("调试视图不可用")
         }
     }
 }

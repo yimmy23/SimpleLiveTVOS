@@ -49,15 +49,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         KSOptions.logLevel = .error
         KSOptions.hudLog = false
 
-        // 打印当前 Bilibili Cookie
-        let cookie = BilibiliCookieSyncService.shared.getCurrentCookie()
-        print("[App Launch] Bilibili Cookie: \(cookie.isEmpty ? "(空)" : cookie)")
-
         Task {
             await PlatformSessionLiveParseBridge.syncFromPersistedSessionsOnLaunch()
-            if BilibiliCookieSyncService.shared.iCloudSyncEnabled {
-                _ = await BilibiliCookieSyncService.shared.syncFromICloud()
-                await BilibiliCookieSyncService.shared.syncAllPlatformsFromICloud()
+            if PlatformCredentialSyncService.shared.iCloudSyncEnabled {
+                await PlatformCredentialSyncService.shared.syncAllFromICloud()
             }
         }
     }

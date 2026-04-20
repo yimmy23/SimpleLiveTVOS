@@ -9,138 +9,13 @@ import SwiftUI
 import AngelLiveCore
 import AngelLiveDependencies
 
-// MARK: - Bilibili 用户信息模型 (tvOS)
-
-struct BilibiliUserInfoTV: Codable {
-    let mid: Int?
-    let uname: String?
-    let userid: String?
-    let sign: String?
-    let birthday: String?
-    let sex: String?
-    let rank: String?
-    let face: String?
-    let nickFree: Bool?
-
-    enum CodingKeys: String, CodingKey {
-        case mid, uname, userid, sign, birthday, sex, rank, face
-        case nickFree = "nick_free"
-    }
-
-    var displayName: String {
-        uname ?? "未知用户"
-    }
-}
-
-private extension BilibiliUserInfoTV {
-    init(from info: BilibiliAccountUserInfo) {
-        self.mid = info.mid
-        self.uname = info.uname
-        self.userid = info.userid
-        self.sign = info.sign
-        self.birthday = info.birthday
-        self.sex = info.sex
-        self.rank = info.rank
-        self.face = info.face
-        self.nickFree = info.nickFree
-    }
-}
-
-// MARK: - 统一平台模型
-
-enum TVPlatformItem: String, CaseIterable, Identifiable, Equatable {
-    case bilibili
-    case douyin
-    case kuaishou
-    case soop
-    case kick
-    case twitch
-    case xiaohongshu
-    case panda
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .bilibili: return "哔哩哔哩"
-        case .douyin: return "抖音"
-        case .kuaishou: return "快手"
-        case .soop: return "SOOP"
-        case .kick: return "Kick"
-        case .twitch: return "Twitch"
-        case .xiaohongshu: return "小红书"
-        case .panda: return "PandaTV"
-        }
-    }
-
-    var sessionID: PlatformSessionID {
-        switch self {
-        case .bilibili: return .bilibili
-        case .douyin: return .douyin
-        case .kuaishou: return .kuaishou
-        case .soop: return .soop
-        case .kick: return .kick
-        case .twitch: return .twitch
-        case .xiaohongshu: return .xiaohongshu
-        case .panda: return .panda
-        }
-    }
-
-    var liveType: LiveType {
-        switch self {
-        case .bilibili: return .bilibili
-        case .douyin: return .douyin
-        case .kuaishou: return .ks
-        case .soop: return .soop
-        case .kick: return .kick
-        case .twitch: return .twitch
-        case .xiaohongshu: return .xiaohongshu
-        case .panda: return .panda
-        }
-    }
-
-    /// 是否支持 HTTP 级别的 Cookie 验证（Bilibili 通过 API 验证，其他平台仅正则校验）
-    var supportsHTTPValidation: Bool {
-        self == .bilibili
-    }
-
-    /// 手动输入帮助文本中的网站域名
-    var websiteHost: String {
-        switch self {
-        case .bilibili: return "bilibili.com"
-        case .douyin: return "douyin.com"
-        case .kuaishou: return "kuaishou.com"
-        case .soop: return "sooplive.co.kr"
-        case .kick: return "kick.com"
-        case .twitch: return "twitch.tv"
-        case .xiaohongshu: return "xiaohongshu.com"
-        case .panda: return "pandalive.co.kr"
-        }
-    }
-
-    /// Cookie 格式提示
-    var requiredCookieHint: String {
-        switch self {
-        case .bilibili: return "需包含 SESSDATA"
-        case .douyin: return "需包含 ttwid"
-        case .kuaishou: return "需包含 key=value 格式"
-        case .soop: return "需包含 AuthTicket"
-        case .kick: return "需包含 kick_session 或 session_token"
-        case .twitch: return "需包含 auth-token"
-        case .xiaohongshu: return "需包含 web_session"
-        case .panda: return "需包含 sessKey"
-        }
-    }
-}
-
 // MARK: - 账号管理主视图
 
 struct AccountManagementView: View {
-    @StateObject private var syncService = BilibiliCookieSyncService.shared
-    @Environment(PluginAvailabilityService.self) private var pluginAvailability
+    @ObservedObject private var syncService = PlatformCredentialSyncService.shared
 
+    @State private var platforms: [LoginPlatformEntry] = []
     @State private var currentPage: AccountPage = .main
-    @State private var platformLoginStatus: [PlatformSessionID: Bool] = [:]
 
     // iCloud 确认弹窗
     @State private var showUploadConfirm = false
@@ -148,15 +23,21 @@ struct AccountManagementView: View {
     @State private var iCloudConfirmMessage = ""
     @State private var isFetchingPreview = false
 
-    private var availablePlatforms: [TVPlatformItem] {
-        TVPlatformItem.allCases.filter { pluginAvailability.isPluginInstalled(for: $0.sessionID) }
-    }
-
     enum AccountPage: Equatable {
         case main
-        case platformDetail(TVPlatformItem)
+        case platformDetail(LoginPlatformEntry)
         case lanSync
-        case manualInput(TVPlatformItem)
+        case manualInput(LoginPlatformEntry)
+
+        static func == (lhs: AccountPage, rhs: AccountPage) -> Bool {
+            switch (lhs, rhs) {
+            case (.main, .main): return true
+            case (.lanSync, .lanSync): return true
+            case (.platformDetail(let a), .platformDetail(let b)): return a.pluginId == b.pluginId
+            case (.manualInput(let a), .manualInput(let b)): return a.pluginId == b.pluginId
+            default: return false
+            }
+        }
     }
 
     var body: some View {
@@ -165,24 +46,24 @@ struct AccountManagementView: View {
             case .main:
                 accountMainView
                     .transition(.opacity)
-            case .platformDetail(let platform):
+            case .platformDetail(let entry):
                 PlatformDetailPageView(
-                    platform: platform,
+                    entry: entry,
                     onBack: {
                         currentPage = .main
                     },
-                    onManualInput: { p in
-                        currentPage = .manualInput(p)
+                    onManualInput: { e in
+                        currentPage = .manualInput(e)
                     }
                 )
                 .transition(.move(edge: .trailing).combined(with: .opacity))
             case .lanSync:
-                BilibiliLANSyncPageView(onBack: { currentPage = .main })
+                LANSyncPageView(onBack: { currentPage = .main })
                     .transition(.move(edge: .trailing).combined(with: .opacity))
-            case .manualInput(let platform):
+            case .manualInput(let entry):
                 PlatformManualInputPageView(
-                    platform: platform,
-                    onBack: { currentPage = .platformDetail(platform) }
+                    entry: entry,
+                    onBack: { currentPage = .platformDetail(entry) }
                 )
                 .transition(.move(edge: .trailing).combined(with: .opacity))
             }
@@ -220,7 +101,7 @@ struct AccountManagementView: View {
                 // 上次同步时间
                 if let lastSync = syncService.lastICloudSyncTime {
                     HStack(spacing: 15) {
-                        Text("上次同步: \(BilibiliCookieSyncService.formatSyncTime(lastSync))")
+                        Text("上次同步: \(PlatformCredentialSyncService.formatSyncTime(lastSync))")
                             .font(.system(size: 28))
                             .foregroundStyle(.secondary)
                         Spacer()
@@ -258,17 +139,17 @@ struct AccountManagementView: View {
             }
 
             // 平台列表
-            ForEach(availablePlatforms) { platform in
+            ForEach(platforms) { entry in
                 Button {
-                    currentPage = .platformDetail(platform)
+                    currentPage = .platformDetail(entry)
                 } label: {
                     HStack(spacing: 15) {
-                        Text(platform.title)
+                        Text(entry.displayName)
                             .foregroundColor(.primary)
                         Spacer()
-                        Text(loginStatusText(for: platform))
+                        Text(loginStatusText(for: entry))
                             .font(.system(size: 30))
-                            .foregroundStyle(loginStatusColor(for: platform))
+                            .foregroundStyle(loginStatusColor(for: entry))
                         Image(systemName: "chevron.right")
                             .foregroundStyle(.secondary)
                     }
@@ -278,14 +159,14 @@ struct AccountManagementView: View {
             Spacer(minLength: 200)
         }
         .task {
-            await refreshAllLoginStatuses()
+            platforms = await PlatformLoginRegistry.shared.availablePlatforms()
+            await syncService.refreshAllLoginStatus()
         }
         .alert("同步到 iCloud", isPresented: $showUploadConfirm) {
             Button("取消", role: .cancel) {}
             Button("确定上传") {
                 Task {
-                    syncService.syncToICloud()
-                    await syncService.syncAllPlatformsToICloud()
+                    await syncService.syncAllToICloud()
                 }
             }
         } message: {
@@ -295,9 +176,7 @@ struct AccountManagementView: View {
             Button("取消", role: .cancel) {}
             Button("确定下载") {
                 Task {
-                    _ = await syncService.syncFromICloud()
-                    await syncService.syncAllPlatformsFromICloud()
-                    await refreshAllLoginStatuses()
+                    await syncService.syncAllFromICloud()
                 }
             }
         } message: {
@@ -306,6 +185,14 @@ struct AccountManagementView: View {
     }
 
     // MARK: - 登录状态辅助方法
+
+    private func loginStatusText(for entry: LoginPlatformEntry) -> String {
+        syncService.isLoggedIn(pluginId: entry.pluginId) ? "已登录" : "未登录"
+    }
+
+    private func loginStatusColor(for entry: LoginPlatformEntry) -> Color {
+        syncService.isLoggedIn(pluginId: entry.pluginId) ? .green : .gray
+    }
 
     // MARK: - iCloud 确认逻辑
 
@@ -318,7 +205,7 @@ struct AccountManagementView: View {
 
         var msg = ""
         if let lastSync = syncService.lastICloudSyncTime {
-            msg += "上次同步: \(BilibiliCookieSyncService.formatSyncTime(lastSync))\n"
+            msg += "上次同步: \(PlatformCredentialSyncService.formatSyncTime(lastSync))\n"
         }
         if !localNames.isEmpty {
             msg += "本地已登录: \(localNames.joined(separator: "、"))\n"
@@ -327,7 +214,7 @@ struct AccountManagementView: View {
         }
         msg += "\n"
         if let cloudTime = preview.latestTime {
-            msg += "云端同步时间: \(BilibiliCookieSyncService.formatSyncTime(cloudTime))\n"
+            msg += "云端同步时间: \(PlatformCredentialSyncService.formatSyncTime(cloudTime))\n"
             msg += "云端已有平台: \(preview.platformNames.joined(separator: "、"))\n"
             msg += "\n上传后云端数据将被覆盖"
         } else {
@@ -353,14 +240,14 @@ struct AccountManagementView: View {
 
         var msg = ""
         if let lastSync = syncService.lastICloudSyncTime {
-            msg += "上次同步: \(BilibiliCookieSyncService.formatSyncTime(lastSync))\n"
+            msg += "上次同步: \(PlatformCredentialSyncService.formatSyncTime(lastSync))\n"
         }
         if !localNames.isEmpty {
             msg += "本地已登录: \(localNames.joined(separator: "、"))\n"
         }
         msg += "\n"
         if let cloudTime = preview.latestTime {
-            msg += "云端同步时间: \(BilibiliCookieSyncService.formatSyncTime(cloudTime))\n"
+            msg += "云端同步时间: \(PlatformCredentialSyncService.formatSyncTime(cloudTime))\n"
         }
         if !preview.platformNames.isEmpty {
             msg += "云端平台: \(preview.platformNames.joined(separator: "、"))\n"
@@ -370,42 +257,25 @@ struct AccountManagementView: View {
         iCloudConfirmMessage = msg
         showDownloadConfirm = true
     }
-
-    private func loginStatusText(for platform: TVPlatformItem) -> String {
-        if platform == .bilibili {
-            return syncService.isLoggedIn ? "已登录" : "未登录"
-        }
-        return (platformLoginStatus[platform.sessionID] ?? false) ? "已登录" : "未登录"
-    }
-
-    private func loginStatusColor(for platform: TVPlatformItem) -> Color {
-        if platform == .bilibili {
-            return syncService.isLoggedIn ? .green : .gray
-        }
-        return (platformLoginStatus[platform.sessionID] ?? false) ? .green : .gray
-    }
-
-    private func refreshAllLoginStatuses() async {
-        for platform in availablePlatforms where platform != .bilibili {
-            let session = await PlatformSessionManager.shared.getSession(platformId: platform.sessionID)
-            platformLoginStatus[platform.sessionID] = session?.state == .authenticated
-        }
-    }
 }
 
 // MARK: - 平台详情页面
 
 struct PlatformDetailPageView: View {
-    let platform: TVPlatformItem
+    let entry: LoginPlatformEntry
     let onBack: () -> Void
-    let onManualInput: (TVPlatformItem) -> Void
+    let onManualInput: (LoginPlatformEntry) -> Void
 
-    @StateObject private var syncService = BilibiliCookieSyncService.shared
+    @ObservedObject private var syncService = PlatformCredentialSyncService.shared
     @State private var isLoggedIn = false
     @State private var isValidating = false
     @State private var validationMessage: String?
-    @State private var bilibiliUserInfo: BilibiliUserInfoTV?
     @State private var showLogoutConfirm = false
+
+    /// 是否支持服务端 Cookie 验证
+    private var supportsValidation: Bool {
+        entry.auth?.supportsValidation ?? false
+    }
 
     var body: some View {
         VStack(spacing: 15) {
@@ -418,10 +288,10 @@ struct PlatformDetailPageView: View {
 
             // 已登录时的操作
             if isLoggedIn {
-                // Bilibili 专属：验证 Cookie
-                if platform.supportsHTTPValidation {
+                // 支持验证的平台：验证 Cookie
+                if supportsValidation {
                     Button {
-                        Task { await validateBilibiliCookie() }
+                        Task { await validateCookie() }
                     } label: {
                         HStack {
                             Text("验证 Cookie")
@@ -449,7 +319,7 @@ struct PlatformDetailPageView: View {
 
             // 手动输入 Cookie（始终可用）
             Button {
-                onManualInput(platform)
+                onManualInput(entry)
             } label: {
                 HStack {
                     Text("手动输入 Cookie")
@@ -467,7 +337,7 @@ struct PlatformDetailPageView: View {
             Button("取消", role: .cancel) {}
             Button("确定", role: .destructive) { logout() }
         } message: {
-            Text("确定要退出\(platform.title)登录吗？")
+            Text("确定要退出\(entry.displayName)登录吗？")
         }
         .task {
             await refreshStatus()
@@ -484,18 +354,6 @@ struct PlatformDetailPageView: View {
                     .scaleEffect(1.5)
                 Text("正在验证...")
                     .font(.headline)
-            } else if platform == .bilibili, let user = bilibiliUserInfo {
-                // Bilibili 已登录且有用户信息
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 60))
-                    .foregroundStyle(.green)
-                Text(user.displayName)
-                    .font(.title2.bold())
-                if let mid = user.mid {
-                    Text("UID: \(mid)")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
             } else if let error = validationMessage {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: 60))
@@ -524,45 +382,30 @@ struct PlatformDetailPageView: View {
     // MARK: - 状态刷新
 
     private func refreshStatus() async {
-        if platform == .bilibili {
-            isLoggedIn = syncService.isLoggedIn
-            if isLoggedIn {
-                await validateBilibiliCookie()
-            }
-        } else {
-            let session = await PlatformSessionManager.shared.getSession(platformId: platform.sessionID)
-            isLoggedIn = session?.state == .authenticated
+        await syncService.refreshLoginStatus(pluginId: entry.pluginId)
+        isLoggedIn = syncService.isLoggedIn(pluginId: entry.pluginId)
+        if isLoggedIn && supportsValidation {
+            await validateCookie()
         }
     }
 
-    // MARK: - Bilibili Cookie 验证
+    // MARK: - Cookie 验证
 
-    private func validateBilibiliCookie() async {
+    private func validateCookie() async {
         isValidating = true
         validationMessage = nil
 
-        let cookie = syncService.getCurrentCookie()
-        guard !cookie.isEmpty else {
-            validationMessage = "Cookie 为空"
-            isValidating = false
-            return
-        }
-
-        let result = await BilibiliAccountService.shared.loadUserInfo(
-            cookie: cookie,
-            userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15"
-        )
+        let result = await PlatformSessionManager.shared.validateSession(pluginId: entry.pluginId)
 
         switch result {
-        case .success(let info):
-            bilibiliUserInfo = BilibiliUserInfoTV(from: info)
+        case .valid:
             validationMessage = nil
-            if let mid = info.mid {
-                syncService.setCookie(cookie, uid: "\(mid)", source: .local, save: false)
-            }
-        case .failure(let error):
-            bilibiliUserInfo = nil
-            validationMessage = error.localizedDescription
+        case .invalid(let reason):
+            validationMessage = "Cookie 无效: \(reason)"
+        case .expired:
+            validationMessage = "Cookie 已过期"
+        case .networkError(let message):
+            validationMessage = "网络错误: \(message)"
         }
 
         isValidating = false
@@ -571,12 +414,8 @@ struct PlatformDetailPageView: View {
     // MARK: - 退出登录
 
     private func logout() {
-        if platform == .bilibili {
-            syncService.clearCookie()
-            bilibiliUserInfo = nil
-        }
         Task {
-            await PlatformSessionManager.shared.clearSession(platformId: platform.sessionID)
+            await syncService.clearSession(pluginId: entry.pluginId)
         }
         isLoggedIn = false
         validationMessage = nil
@@ -586,15 +425,25 @@ struct PlatformDetailPageView: View {
 // MARK: - 通用手动输入页面
 
 struct PlatformManualInputPageView: View {
-    let platform: TVPlatformItem
+    let entry: LoginPlatformEntry
     let onBack: () -> Void
 
     @Environment(AppState.self) private var appViewModel
-    @StateObject private var syncService = BilibiliCookieSyncService.shared
+    @ObservedObject private var syncService = PlatformCredentialSyncService.shared
     @State private var cookieInput = ""
     @State private var isValidating = false
     @State private var validationMessage: String?
     @State private var isSuccess = false
+
+    /// 网站域名（从 manifest 获取，可能为 nil）
+    private var websiteHost: String {
+        entry.loginFlow.websiteHost ?? entry.pluginId
+    }
+
+    /// Cookie 格式提示（从 manifest 获取）
+    private var requiredCookieHint: String {
+        entry.loginFlow.requiredCookieHint ?? "需包含有效的登录 Cookie"
+    }
 
     var body: some View {
         HStack(alignment: .center, spacing: 80) {
@@ -620,10 +469,10 @@ struct PlatformManualInputPageView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 40)
                 } else {
-                    Text("手动输入 \(platform.title) Cookie")
+                    Text("手动输入 \(entry.displayName) Cookie")
                         .font(.system(size: 38, weight: .bold))
 
-                    TextField("请输入 \(platform.title) Cookie 字符串", text: $cookieInput)
+                    TextField("请输入 \(entry.displayName) Cookie 字符串", text: $cookieInput)
                         .frame(maxWidth: 700, alignment: .leading)
 
                     if let message = validationMessage {
@@ -652,7 +501,7 @@ struct PlatformManualInputPageView: View {
                         Text("如何获取 Cookie")
                             .font(.headline)
 
-                        Text("1. 在电脑浏览器中登录 \(platform.websiteHost)")
+                        Text("1. 在电脑浏览器中登录 \(websiteHost)")
                             .font(.callout)
                             .foregroundColor(.secondary)
                         Text("2. 按 F12 打开开发者工具")
@@ -667,7 +516,7 @@ struct PlatformManualInputPageView: View {
                         Text("5. 在 Headers 中找到 Cookie 字段并复制")
                             .font(.callout)
                             .foregroundColor(.secondary)
-                        Text("提示：\(platform.requiredCookieHint)")
+                        Text("提示：\(requiredCookieHint)")
                             .font(.callout)
                             .foregroundColor(.secondary)
                     }
@@ -698,8 +547,8 @@ struct PlatformManualInputPageView: View {
 
     private var cookieRemoteInputQRPanel: some View {
         let service = appViewModel.remoteInputService
-        let platformEncoded = platform.title.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? platform.title
-        let hintEncoded = platform.requiredCookieHint.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        let platformEncoded = entry.displayName.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? entry.displayName
+        let hintEncoded = requiredCookieHint.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
         let url = "http://\(service.localIPAddress):\(service.port)/cookie?platform=\(platformEncoded)&hint=\(hintEncoded)"
         return VStack(spacing: 16) {
             Spacer()
@@ -742,37 +591,16 @@ struct PlatformManualInputPageView: View {
         isValidating = true
         validationMessage = nil
 
-        if platform == .bilibili {
-            // Bilibili 使用专用的 setManualCookie 保持缓存同步
-            let result = await syncService.setManualCookie(cookieInput)
-            switch result {
-            case .valid:
-                isSuccess = true
-            case .invalid(let reason):
-                validationMessage = "Cookie 无效: \(reason)"
-            case .expired:
-                validationMessage = "Cookie 已过期"
-            case .networkError(let error):
-                validationMessage = "网络错误: \(error.localizedDescription)"
-            }
-        } else {
-            // 其他平台使用 PlatformSessionManager
-            let result = await PlatformSessionManager.shared.loginWithCookie(
-                platformId: platform.sessionID,
-                cookie: cookieInput,
-                source: .manual,
-                validateBeforeSave: platform != .kick && platform != .kuaishou && platform != .panda
-            )
-            switch result {
-            case .valid:
-                isSuccess = true
-            case .invalid(let reason):
-                validationMessage = "Cookie 无效: \(reason)"
-            case .expired:
-                validationMessage = "Cookie 已过期"
-            case .networkError(let message):
-                validationMessage = "网络错误: \(message)"
-            }
+        let result = await syncService.setManualCookie(pluginId: entry.pluginId, cookie: cookieInput)
+        switch result {
+        case .valid:
+            isSuccess = true
+        case .invalid(let reason):
+            validationMessage = "Cookie 无效: \(reason)"
+        case .expired:
+            validationMessage = "Cookie 已过期"
+        case .networkError(let message):
+            validationMessage = "网络错误: \(message)"
         }
 
         isValidating = false
@@ -781,8 +609,8 @@ struct PlatformManualInputPageView: View {
 
 // MARK: - 局域网同步页面视图
 
-struct BilibiliLANSyncPageView: View {
-    @StateObject private var syncService = BilibiliCookieSyncService.shared
+struct LANSyncPageView: View {
+    @ObservedObject private var syncService = PlatformCredentialSyncService.shared
     let onBack: () -> Void
 
     @State private var isSuccess = false
@@ -864,30 +692,16 @@ struct BilibiliLANSyncPageView: View {
         }
     }
 
-    private func platformSummary(_ platformIds: [String]) -> String {
-        guard !platformIds.isEmpty else { return "登录信息已保存" }
+    private func platformSummary(_ pluginIds: [String]) -> String {
+        guard !pluginIds.isEmpty else { return "登录信息已保存" }
 
-        let names = platformIds.compactMap { platformId -> String? in
-            switch platformId {
-            case PlatformSessionID.bilibili.rawValue:
-                return "哔哩哔哩"
-            case PlatformSessionID.douyin.rawValue:
-                return "抖音"
-            case PlatformSessionID.kuaishou.rawValue:
-                return "快手"
-            case PlatformSessionID.soop.rawValue:
-                return "SOOP"
-            case PlatformSessionID.kick.rawValue:
-                return "Kick"
-            case PlatformSessionID.twitch.rawValue:
-                return "Twitch"
-            case PlatformSessionID.xiaohongshu.rawValue:
-                return "小红书"
-            case PlatformSessionID.panda.rawValue:
-                return "PandaTV"
-            default:
-                return nil
+        // 动态查找平台名称：从注册表获取 displayName
+        let names: [String] = pluginIds.compactMap { pluginId in
+            // 尝试通过 LiveType 获取名称（同步方式 fallback）
+            if let liveType = LiveType(rawValue: pluginId) {
+                return LiveParseTools.getLivePlatformName(liveType)
             }
+            return pluginId
         }
 
         guard !names.isEmpty else { return "登录信息已保存" }

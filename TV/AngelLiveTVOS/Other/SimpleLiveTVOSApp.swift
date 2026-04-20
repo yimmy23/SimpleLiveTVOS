@@ -50,9 +50,8 @@ struct SimpleLiveTVOSApp: App {
                     // 启动时同步所有平台的 Cookie 到 JS 插件
                     await PlatformSessionLiveParseBridge.syncFromPersistedSessionsOnLaunch()
                     // tvOS 启动时尝试从 iCloud 同步 Cookie
-                    if BilibiliCookieSyncService.shared.iCloudSyncEnabled {
-                        _ = await BilibiliCookieSyncService.shared.syncFromICloud()
-                        await BilibiliCookieSyncService.shared.syncAllPlatformsFromICloud()
+                    if PlatformCredentialSyncService.shared.iCloudSyncEnabled {
+                        await PlatformCredentialSyncService.shared.syncAllFromICloud()
                     }
                 }
                 .onOpenURL { url in

@@ -10,18 +10,17 @@ import SwiftUI
 import AngelLiveCore
 
 struct SettingView: View {
-    @StateObject private var syncService = BilibiliCookieSyncService.shared
+    @ObservedObject private var syncService = PlatformCredentialSyncService.shared
     @EnvironmentObject private var updaterViewModel: UpdaterViewModel
     @Environment(PluginAvailabilityService.self) private var pluginAvailability
     @Environment(HistoryModel.self) private var historyModel
 
-    @State private var showBilibiliLogin = false
     @State private var showOpenSourceList = false
     @State private var showPluginManagement = false
     @State private var showHistory = false
     @State private var showDanmuSetting = false
-    @State private var selectedCookiePlatform: MacOSPlatformAccountItem?
-    @State private var platformLoginStatus: [PlatformSessionID: Bool] = [:]
+    @State private var selectedLoginPluginId: String?
+    @State private var platforms: [LoginPlatformEntry] = []
 
     // iCloud 同步确认弹窗
     @State private var showUploadConfirm = false
@@ -31,28 +30,12 @@ struct SettingView: View {
     @State private var iCloudSyncResult: String?
     @State private var iCloudSyncSuccess = false
 
-    private var availableMacPlatforms: [MacOSPlatformAccountItem] {
-        MacOSPlatformAccountItem.allCases.filter { pluginAvailability.isPluginInstalled(for: $0.sessionID) }
-    }
-
-    private var isBilibiliAvailable: Bool {
-        pluginAvailability.isPluginInstalled(for: .bilibili)
-    }
-
-    private var bilibiliAccountIcon: NSImage? {
-        MacPlatformIconProvider.tabImage(for: .bilibili)
-    }
-
     var body: some View {
         Form {
-            if pluginAvailability.hasAvailablePlugins {
+            if pluginAvailability.hasAvailablePlugins && !platforms.isEmpty {
                 Section("账号管理") {
-                    if isBilibiliAvailable {
-                        bilibiliAccountRow
-                    }
-
-                    ForEach(availableMacPlatforms) { platform in
-                        platformAccountRow(platform)
+                    ForEach(platforms) { entry in
+                        platformAccountRow(entry)
                     }
                 }
             }
@@ -79,7 +62,7 @@ struct SettingView: View {
                         HStack(spacing: 8) {
                             Image(systemName: "clock")
                                 .foregroundStyle(.secondary)
-                            Text("上次同步: \(BilibiliCookieSyncService.formatSyncTime(lastSync))")
+                            Text("上次同步: \(PlatformCredentialSyncService.formatSyncTime(lastSync))")
                                 .font(.callout)
                                 .foregroundStyle(.secondary)
                             Spacer()
@@ -158,15 +141,14 @@ struct SettingView: View {
         .formStyle(.grouped)
         .navigationTitle("设置")
         .task {
-            await refreshLoginStatus()
+            await loadPlatforms()
+            await syncService.refreshAllLoginStatus()
         }
-        .sheet(isPresented: $showBilibiliLogin) {
-            BilibiliWebLoginView()
-        }
-        .sheet(item: $selectedCookiePlatform, onDismiss: {
-            Task { await refreshLoginStatus() }
-        }) { platform in
-            MacOSPlatformCookieWebLoginView(platform: platform)
+        .sheet(item: selectedPlatformBinding, onDismiss: {
+            Task { await syncService.refreshAllLoginStatus() }
+        }) { entry in
+            MacPlatformLoginWebSheet(pluginId: entry.pluginId)
+                .frame(minWidth: 800, minHeight: 600)
         }
         .sheet(isPresented: $showPluginManagement) {
             NavigationStack {
@@ -224,8 +206,7 @@ struct SettingView: View {
             Button("取消", role: .cancel) {}
             Button("确定上传") {
                 Task {
-                    syncService.syncToICloud()
-                    await syncService.syncAllPlatformsToICloud()
+                    await syncService.syncAllToICloud()
                     await MainActor.run {
                         iCloudSyncResult = "已同步到 iCloud"
                         iCloudSyncSuccess = true
@@ -239,8 +220,7 @@ struct SettingView: View {
             Button("取消", role: .cancel) {}
             Button("确定下载") {
                 Task {
-                    _ = await syncService.syncFromICloud()
-                    await syncService.syncAllPlatformsFromICloud()
+                    await syncService.syncAllFromICloud()
                     await MainActor.run {
                         iCloudSyncResult = "已从 iCloud 同步到本地"
                         iCloudSyncSuccess = true
@@ -264,7 +244,7 @@ struct SettingView: View {
 
         var msg = ""
         if let lastSync = syncService.lastICloudSyncTime {
-            msg += "上次同步: \(BilibiliCookieSyncService.formatSyncTime(lastSync))\n"
+            msg += "上次同步: \(PlatformCredentialSyncService.formatSyncTime(lastSync))\n"
         }
         if !localNames.isEmpty {
             msg += "本地已登录: \(localNames.joined(separator: "、"))\n"
@@ -273,7 +253,7 @@ struct SettingView: View {
         }
         msg += "\n"
         if let cloudTime = preview.latestTime {
-            msg += "云端同步时间: \(BilibiliCookieSyncService.formatSyncTime(cloudTime))\n"
+            msg += "云端同步时间: \(PlatformCredentialSyncService.formatSyncTime(cloudTime))\n"
             msg += "云端已有平台: \(preview.platformNames.joined(separator: "、"))\n"
             msg += "\n上传后云端数据将被覆盖"
         } else {
@@ -300,14 +280,14 @@ struct SettingView: View {
 
         var msg = ""
         if let lastSync = syncService.lastICloudSyncTime {
-            msg += "上次同步: \(BilibiliCookieSyncService.formatSyncTime(lastSync))\n"
+            msg += "上次同步: \(PlatformCredentialSyncService.formatSyncTime(lastSync))\n"
         }
         if !localNames.isEmpty {
             msg += "本地已登录: \(localNames.joined(separator: "、"))\n"
         }
         msg += "\n"
         if let cloudTime = preview.latestTime {
-            msg += "云端同步时间: \(BilibiliCookieSyncService.formatSyncTime(cloudTime))\n"
+            msg += "云端同步时间: \(PlatformCredentialSyncService.formatSyncTime(cloudTime))\n"
         }
         if !preview.platformNames.isEmpty {
             msg += "云端平台: \(preview.platformNames.joined(separator: "、"))\n"
@@ -318,45 +298,47 @@ struct SettingView: View {
         showDownloadConfirm = true
     }
 
-    private var bilibiliAccountRow: some View {
+    private func platformAccountRow(_ entry: LoginPlatformEntry) -> some View {
         Button {
-            showBilibiliLogin = true
+            selectedLoginPluginId = entry.pluginId
         } label: {
             PanelNavigationRow(
-                title: "哔哩哔哩",
-                subtitle: "同步登录状态，获取更完整的搜索与解析能力"
-            ) {
-                accountIconView(image: bilibiliAccountIcon, fallbackImageName: "bilibili")
-            } trailing: {
-                loginStatusBadge(syncService.isLoggedIn)
-            }
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func platformAccountRow(_ platform: MacOSPlatformAccountItem) -> some View {
-        Button {
-            selectedCookiePlatform = platform
-        } label: {
-            PanelNavigationRow(
-                title: platform.title,
+                title: entry.displayName,
                 subtitle: "网页登录 Cookie 同步"
             ) {
-                if let icon = accountIcon(for: platform) {
+                if let liveType = LiveType(rawValue: entry.liveType),
+                   let icon = MacPlatformIconProvider.tabImage(for: liveType) {
                     Image(nsImage: icon)
                         .resizable()
                         .scaledToFit()
                         .frame(width: 20, height: 20)
                 } else {
-                    Image(systemName: platform.iconSystemName)
+                    Image(systemName: "globe")
                         .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(platform.iconTint.gradient)
+                        .foregroundStyle(.secondary)
                 }
             } trailing: {
-                loginStatusBadge(platformLoginStatus[platform.sessionID] == true)
+                loginStatusBadge(syncService.isLoggedIn(pluginId: entry.pluginId))
             }
         }
         .buttonStyle(.plain)
+    }
+
+    private var selectedPlatformBinding: Binding<LoginPlatformEntry?> {
+        Binding(
+            get: {
+                guard let id = selectedLoginPluginId else { return nil }
+                return platforms.first { $0.pluginId == id }
+            },
+            set: { newValue in
+                selectedLoginPluginId = newValue?.pluginId
+            }
+        )
+    }
+
+    private func loadPlatforms() async {
+        let all = await PlatformLoginRegistry.shared.availablePlatforms()
+        platforms = all.filter { pluginAvailability.isPluginInstalled(for: $0.pluginId) }
     }
 
     private var pluginManagementRow: some View {
@@ -487,34 +469,6 @@ struct SettingView: View {
 
     private func loginStatusBadge(_ isLoggedIn: Bool) -> some View {
         PanelStatusBadge(isLoggedIn ? "已登录" : "未登录", tint: isLoggedIn ? AppConstants.Colors.success : .secondary)
-    }
-
-    private func accountIcon(for platform: MacOSPlatformAccountItem) -> NSImage? {
-        switch platform {
-        case .douyin:
-            return MacPlatformIconProvider.tabImage(for: .douyin)
-        case .kuaishou:
-            return MacPlatformIconProvider.tabImage(for: .ks)
-        case .soop:
-            return MacPlatformIconProvider.tabImage(for: .soop)
-        case .kick:
-            return MacPlatformIconProvider.tabImage(for: .kick)
-        case .twitch:
-            return MacPlatformIconProvider.tabImage(for: .twitch)
-        case .xiaohongshu:
-            return MacPlatformIconProvider.tabImage(for: .xiaohongshu)
-        case .panda:
-            return MacPlatformIconProvider.tabImage(for: .panda)
-        }
-    }
-
-    private func refreshLoginStatus() async {
-        for platform in availableMacPlatforms {
-            let session = await PlatformSessionManager.shared.getSession(platformId: platform.sessionID)
-            let loggedIn = session?.state == .authenticated
-                && session?.cookie?.isEmpty == false
-            platformLoginStatus[platform.sessionID] = loggedIn
-        }
     }
 }
 

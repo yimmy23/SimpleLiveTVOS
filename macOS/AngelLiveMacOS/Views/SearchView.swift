@@ -74,7 +74,8 @@ struct SearchView: View {
             }
         }
         .sheet(isPresented: $showBilibiliLogin) {
-            BilibiliWebLoginView()
+            MacPlatformLoginWebSheet(pluginId: "bilibili")
+                .frame(minWidth: 800, minHeight: 600)
         }
     }
 

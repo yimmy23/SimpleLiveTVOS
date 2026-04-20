@@ -27,16 +27,9 @@ struct PlatformDetailView: View {
     }
 
     /// 根据平台类型显示对应的登录视图
-    @ViewBuilder
     private var platformLoginView: some View {
-        if viewModel.platform.liveType == .bilibili {
-            BilibiliWebLoginView()
-        } else if let item = MacOSPlatformAccountItem.from(liveType: viewModel.platform.liveType) {
-            MacOSPlatformCookieWebLoginView(platform: item)
-        } else {
-            // Fallback：不应该到这里，但以防万一
-            BilibiliWebLoginView()
-        }
+        MacPlatformLoginWebSheet(pluginId: viewModel.platform.liveType.rawValue)
+            .frame(minWidth: 800, minHeight: 600)
     }
 
     /// 当前分类图标 URL（如果有）

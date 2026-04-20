@@ -22,11 +22,11 @@ struct ErrorView: View {
     let onRetry: (() -> Void)?
 
     @State private var showDetailView = false
-    @StateObject private var syncService = BilibiliCookieSyncService.shared
+    @ObservedObject private var syncService = PlatformCredentialSyncService.shared
 
-    // 检查是否已登录B站
+    /// 是否有任何平台已登录
     private var isBilibiliLoggedIn: Bool {
-        syncService.isLoggedIn
+        syncService.loggedInByPluginId.values.contains(true)
     }
 
     // 是否有详情可显示

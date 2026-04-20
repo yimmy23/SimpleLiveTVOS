@@ -9,7 +9,7 @@ import SwiftUI
 import AngelLiveCore
 
 struct TVOSSyncView: View {
-    @StateObject private var syncService = BilibiliCookieSyncService.shared
+    @ObservedObject private var syncService = PlatformCredentialSyncService.shared
     @State private var isSearching = false
     @State private var isSending = false
     @State private var sendResult: String?
@@ -27,9 +27,9 @@ struct TVOSSyncView: View {
                 // Cookie 状态卡片
                 VStack(spacing: AppConstants.Spacing.md) {
                     HStack {
-                        Image(systemName: syncService.isLoggedIn ? "checkmark.circle.fill" : "xmark.circle.fill")
+                        Image(systemName: hasAnyLogin ? "checkmark.circle.fill" : "xmark.circle.fill")
                             .font(.title2)
-                            .foregroundStyle(syncService.isLoggedIn ? AppConstants.Colors.success.gradient : AppConstants.Colors.error.gradient)
+                            .foregroundStyle(hasAnyLogin ? AppConstants.Colors.success.gradient : AppConstants.Colors.error.gradient)
 
                         VStack(alignment: .leading, spacing: 2) {
                             Text("多平台 Cookie")
@@ -78,7 +78,7 @@ struct TVOSSyncView: View {
                             HStack {
                                 Image(systemName: "clock")
                                     .foregroundStyle(AppConstants.Colors.secondaryText)
-                                Text("上次同步: \(BilibiliCookieSyncService.formatSyncTime(lastSync))")
+                                Text("上次同步: \(PlatformCredentialSyncService.formatSyncTime(lastSync))")
                                     .font(.caption)
                                     .foregroundStyle(AppConstants.Colors.secondaryText)
                                 Spacer()
@@ -278,8 +278,7 @@ struct TVOSSyncView: View {
             Button("取消", role: .cancel) {}
             Button("确定上传") {
                 Task {
-                    syncService.syncToICloud()
-                    await syncService.syncAllPlatformsToICloud()
+                    await syncService.syncAllToICloud()
                     await MainActor.run {
                         sendResult = "已同步到 iCloud（含多平台）"
                         sendSuccess = true
@@ -293,8 +292,7 @@ struct TVOSSyncView: View {
             Button("取消", role: .cancel) {}
             Button("确定下载") {
                 Task {
-                    _ = await syncService.syncFromICloud()
-                    await syncService.syncAllPlatformsFromICloud()
+                    await syncService.syncAllFromICloud()
                     await MainActor.run {
                         sendResult = "已从 iCloud 同步到本地"
                         sendSuccess = true
@@ -317,7 +315,7 @@ struct TVOSSyncView: View {
 
         var msg = ""
         if let lastSync = syncService.lastICloudSyncTime {
-            msg += "上次同步: \(BilibiliCookieSyncService.formatSyncTime(lastSync))\n"
+            msg += "上次同步: \(PlatformCredentialSyncService.formatSyncTime(lastSync))\n"
         }
         if !localNames.isEmpty {
             msg += "本地已登录: \(localNames.joined(separator: "、"))\n"
@@ -326,7 +324,7 @@ struct TVOSSyncView: View {
         }
         msg += "\n"
         if let cloudTime = preview.latestTime {
-            msg += "云端同步时间: \(BilibiliCookieSyncService.formatSyncTime(cloudTime))\n"
+            msg += "云端同步时间: \(PlatformCredentialSyncService.formatSyncTime(cloudTime))\n"
             msg += "云端已有平台: \(preview.platformNames.joined(separator: "、"))\n"
             msg += "\n上传后云端数据将被覆盖"
         } else {
@@ -353,14 +351,14 @@ struct TVOSSyncView: View {
 
         var msg = ""
         if let lastSync = syncService.lastICloudSyncTime {
-            msg += "上次同步: \(BilibiliCookieSyncService.formatSyncTime(lastSync))\n"
+            msg += "上次同步: \(PlatformCredentialSyncService.formatSyncTime(lastSync))\n"
         }
         if !localNames.isEmpty {
             msg += "本地已登录: \(localNames.joined(separator: "、"))\n"
         }
         msg += "\n"
         if let cloudTime = preview.latestTime {
-            msg += "云端同步时间: \(BilibiliCookieSyncService.formatSyncTime(cloudTime))\n"
+            msg += "云端同步时间: \(PlatformCredentialSyncService.formatSyncTime(cloudTime))\n"
         }
         if !preview.platformNames.isEmpty {
             msg += "云端平台: \(preview.platformNames.joined(separator: "、"))\n"
@@ -383,11 +381,15 @@ struct TVOSSyncView: View {
         }
     }
 
-    private func sendToDevice(_ device: BilibiliCookieSyncService.DiscoveredDevice) async {
+    private var hasAnyLogin: Bool {
+        syncService.loggedInByPluginId.values.contains(true)
+    }
+
+    private func sendToDevice(_ device: PlatformCredentialSyncService.DiscoveredDevice) async {
         isSending = true
         sendResult = nil
 
-        let success = await syncService.sendAllPlatformCookiesToDevice(device)
+        let success = await syncService.sendAllToDevice(device)
 
         if success {
             sendResult = "已成功发送多平台登录信息到 \(device.name)"
