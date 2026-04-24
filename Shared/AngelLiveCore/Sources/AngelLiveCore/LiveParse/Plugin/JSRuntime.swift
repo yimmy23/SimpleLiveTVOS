@@ -36,6 +36,7 @@ public final class JSRuntime: @unchecked Sendable {
             Self.configureExceptionHandler(in: context)
             Self.configureHostHTTP(in: context, queue: queue, session: session, pluginId: pluginId)
             Self.configureHostCrypto(in: context)
+            Self.configureHostSession(in: context)
             Self.configureHostRuntime(in: context)
             Self.configureHostBootstrap(in: context)
             Self.configureHostYY(in: context, queue: queue)
@@ -247,6 +248,11 @@ private extension JSRuntime {
           };
           Host.crypto.base64Decode = function (input) {
             return __lp_crypto_base64_decode(String(input));
+          };
+
+          Host.session = Host.session || {};
+          Host.session.getCookieHeader = function (platformId) {
+            return __lp_host_session_get_cookie_header(String(platformId || ""));
           };
 
           Host.runtime = Host.runtime || {};
@@ -760,6 +766,20 @@ private extension JSRuntime {
         }
         context.setObject(md5Block, forKeyedSubscript: "__lp_crypto_md5" as NSString)
         context.setObject(base64DecodeBlock, forKeyedSubscript: "__lp_crypto_base64_decode" as NSString)
+    }
+
+    static func configureHostSession(in context: JSContext) {
+        // Expose the merged cookie header for a given platformId to the plugin JS.
+        // Plugins that need to sign a request themselves (e.g. xiaohongshu's
+        // in-plugin mnsv2 signer) can read the cookie synchronously rather than
+        // routing through authMode: "platform_cookie" which only attaches the
+        // Cookie header on the host side.
+        let getCookieHeaderBlock: @convention(block) (String) -> String = { platformId in
+            let trimmed = platformId.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return "" }
+            return LiveParsePlatformSessionVault.mergedCookieHeader(for: trimmed) ?? ""
+        }
+        context.setObject(getCookieHeaderBlock, forKeyedSubscript: "__lp_host_session_get_cookie_header" as NSString)
     }
 
     static func isPromise(_ value: JSValue) -> Bool {

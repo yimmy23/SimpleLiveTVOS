@@ -88,12 +88,7 @@ struct SettingView: View {
                             Text("通用设置")
                         }
                     }
-                } header: {
-                    Text("设置")
-                }
 
-                // 播放设置（始终可用）
-                Section {
                     NavigationLink {
                         DanmuSettingView()
                             .toolbar(.hidden, for: .tabBar)
@@ -107,20 +102,15 @@ struct SettingView: View {
                         }
                     }
                 } header: {
-                    Text("播放")
+                    Text("设置")
                 }
 
                 // 数据同步（有插件时可用）
                 if pluginAvailability.hasAvailablePlugins {
                     Section {
                         NavigationLink {
-                            if cloudKitReady {
-                                SyncView()
-                                    .toolbar(.hidden, for: .tabBar)
-                            } else {
-                                CloudKitStatusView(stateString: cloudKitStateString)
-                                    .toolbar(.hidden, for: .tabBar)
-                            }
+                            SyncView()
+                                .toolbar(.hidden, for: .tabBar)
                         } label: {
                             HStack {
                                 Image(systemName: "icloud.fill")
@@ -129,16 +119,14 @@ struct SettingView: View {
                                     .frame(width: 32)
 
                                 Text("数据同步")
-
-                                Spacer()
-
-                                Text(cloudKitReady ? "iCloud 就绪" : "状态异常")
-                                    .font(.caption)
-                                    .foregroundStyle(cloudKitReady ? AppConstants.Colors.success : AppConstants.Colors.error)
                             }
                         }
                     } header: {
                         Text("同步")
+                    } footer: {
+                        Text("使用 iCloud 同步收藏和平台账号，也可将已登录的平台账号同步到 Apple TV。")
+                            .font(.caption)
+                            .foregroundStyle(AppConstants.Colors.secondaryText)
                     }
                 }
 
@@ -158,37 +146,6 @@ struct SettingView: View {
                     }
                 } header: {
                     Text("记录")
-                }
-
-                // tvOS 同步
-                if pluginAvailability.hasAvailablePlugins {
-                    Section {
-                        NavigationLink {
-                            TVOSSyncView()
-                                .toolbar(.hidden, for: .tabBar)
-                        } label: {
-                            HStack {
-                                Image(systemName: "appletv.fill")
-                                    .font(.title3)
-                                    .foregroundStyle(Color.purple.gradient)
-                                    .frame(width: 32)
-
-                                Text("同步到 tvOS")
-
-                                Spacer()
-
-                                Text("多平台账号")
-                                    .font(.caption)
-                                    .foregroundStyle(AppConstants.Colors.secondaryText)
-                            }
-                        }
-                    } header: {
-                        Text("tvOS")
-                    } footer: {
-                        Text("将已登录的平台账号同步到 Apple TV，支持局域网自动发现。")
-                            .font(.caption)
-                            .foregroundStyle(AppConstants.Colors.secondaryText)
-                    }
                 }
 
                 #if IOS_DEVELOPER_MODE

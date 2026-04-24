@@ -23,24 +23,34 @@ struct PlatformLoginWebSheet: View {
     @State private var isLoggedIn = false
     @State private var errorMessage: String?
     @State private var lastSavedCookieSignature: String?
+    @State private var cookiePollingTimer: Timer?
+    @State private var showWebView = false
+    @State private var currentSession: PlatformSession?
+    @State private var isValidating = false
+    @State private var validationMessage: String?
+    @State private var userDisplayName: String?
 
     var body: some View {
         NavigationStack {
             Group {
                 if let entry {
-                    loginContent(entry: entry)
+                    if isLoggedIn && !showWebView {
+                        statusContent(entry: entry)
+                    } else {
+                        loginContent(entry: entry)
+                    }
                 } else {
                     ProgressView("加载中...")
                 }
             }
-            .navigationTitle("\(entry?.displayName ?? pluginId) 登录")
+            .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("关闭") { dismiss() }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    if isLoggedIn {
+                    if isLoggedIn && !showWebView {
                         Button("退出登录", role: .destructive) {
                             logout()
                         }
@@ -51,7 +61,105 @@ struct PlatformLoginWebSheet: View {
                 entry = await PlatformLoginRegistry.shared.entry(pluginId: pluginId)
                 await reloadLoginStatus()
             }
+            .onDisappear {
+                stopCookiePolling()
+            }
         }
+    }
+
+    private var navigationTitle: String {
+        let name = entry?.displayName ?? pluginId
+        if isLoggedIn && !showWebView {
+            return "\(name) 账号"
+        }
+        return "\(name) 登录"
+    }
+
+    @ViewBuilder
+    private func statusContent(entry: LoginPlatformEntry) -> some View {
+        List {
+            Section("账号信息") {
+                LabeledContent("平台", value: entry.displayName)
+                if let name = userDisplayName, !name.isEmpty {
+                    LabeledContent("昵称", value: name)
+                }
+                if let uid = currentSession?.uid, !uid.isEmpty {
+                    LabeledContent("UID", value: uid)
+                }
+                if let updatedAt = currentSession?.updatedAt {
+                    LabeledContent("登录时间", value: updatedAt.formatted(date: .abbreviated, time: .shortened))
+                }
+                LabeledContent("状态") {
+                    Text(sessionStateLabel)
+                        .foregroundStyle(isLoggedIn ? AppConstants.Colors.success : .secondary)
+                }
+            }
+
+            if entry.auth?.supportsValidation == true {
+                Section {
+                    Button {
+                        Task { await revalidate() }
+                    } label: {
+                        HStack {
+                            Text("重新校验凭证")
+                            Spacer()
+                            if isValidating {
+                                ProgressView().controlSize(.small)
+                            }
+                        }
+                    }
+                    .disabled(isValidating)
+
+                    if let validationMessage {
+                        Text(validationMessage)
+                            .font(.footnote)
+                            .foregroundStyle(validationMessage.hasPrefix("✅") ? AppConstants.Colors.success : .red)
+                    }
+                } footer: {
+                    Text("插件会调用 validateCredential 向平台校验 Cookie 是否仍然有效。")
+                }
+            }
+
+            Section {
+                Button("重新登录") {
+                    Task { await prepareRelogin(entry: entry) }
+                }
+            } footer: {
+                Text("Cookie 过期或切换账号时点这里，会打开登录页重新抓取。")
+            }
+        }
+    }
+
+    private var sessionStateLabel: String {
+        switch currentSession?.state {
+        case .some(.authenticated): return "已登录"
+        case .some(.anonymous): return "匿名"
+        case .none: return "未登录"
+        @unknown default: return "未知"
+        }
+    }
+
+    private func revalidate() async {
+        isValidating = true
+        validationMessage = nil
+        let status = await PlatformSessionManager.shared.fetchCredentialStatus(pluginId: pluginId)
+        if let name = status?.userName, !name.isEmpty {
+            userDisplayName = name
+        }
+        let result = await PlatformSessionManager.shared.validateSession(pluginId: pluginId)
+        await syncService.refreshLoginStatus(pluginId: pluginId)
+        await reloadLoginStatus()
+        switch result {
+        case .valid:
+            validationMessage = "✅ 凭证有效"
+        case .expired:
+            validationMessage = "Cookie 已过期，请重新登录"
+        case .invalid(let reason):
+            validationMessage = reason
+        case .networkError(let message):
+            validationMessage = "网络错误：\(message)"
+        }
+        isValidating = false
     }
 
     @ViewBuilder
@@ -61,11 +169,12 @@ struct PlatformLoginWebSheet: View {
                 loginFlow: entry.loginFlow,
                 onWebViewCreated: { webView in
                     currentWebView = webView
+                    startCookiePolling(entry: entry)
                 },
                 onNavigationStateChange: { title, url, didFinish in
                     updateNavigationStatus(title: title, url: url)
                     if didFinish {
-                        autoSaveCookieIfNeeded(entry: entry)
+                        pollCookieOnce(entry: entry)
                     }
                 }
             )
@@ -113,7 +222,20 @@ struct PlatformLoginWebSheet: View {
 
     // MARK: - Cookie 抓取
 
-    private func autoSaveCookieIfNeeded(entry: LoginPlatformEntry) {
+    private func startCookiePolling(entry: LoginPlatformEntry) {
+        cookiePollingTimer?.invalidate()
+        pollCookieOnce(entry: entry)
+        cookiePollingTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { _ in
+            pollCookieOnce(entry: entry)
+        }
+    }
+
+    private func stopCookiePolling() {
+        cookiePollingTimer?.invalidate()
+        cookiePollingTimer = nil
+    }
+
+    private func pollCookieOnce(entry: LoginPlatformEntry) {
         guard !isSavingCookie, let currentWebView else { return }
         let loginFlow = entry.loginFlow
 
@@ -163,13 +285,13 @@ struct PlatformLoginWebSheet: View {
         switch result {
         case .valid:
             isLoggedIn = true
+            stopCookiePolling()
             lastSavedCookieSignature = signature
             statusText = "登录信息已保存（宿主托管鉴权）"
             errorMessage = nil
             await syncService.refreshLoginStatus(pluginId: pluginId)
-            if syncService.iCloudSyncEnabled {
-                await syncService.syncAllToICloud()
-            }
+            // 登录成功后刷新 session 并切回状态页
+            await reloadLoginStatus()
         case .expired:
             isLoggedIn = false
             statusText = "登录信息已过期"
@@ -224,23 +346,124 @@ struct PlatformLoginWebSheet: View {
 
     // MARK: - Actions
 
+    private func prepareRelogin(entry: LoginPlatformEntry) async {
+        statusText = "正在清理网页登录缓存..."
+        errorMessage = nil
+        lastSavedCookieSignature = nil
+        currentWebView = nil
+        await clearWebLoginData(for: entry.loginFlow)
+        showWebView = true
+        statusText = "请在网页中完成登录，系统会自动保存会话并由宿主托管鉴权。"
+    }
+
     private func logout() {
         Task {
             await syncService.clearSession(pluginId: pluginId)
-            if syncService.iCloudSyncEnabled {
-                await syncService.syncAllToICloud()
+            if let entry {
+                await clearWebLoginData(for: entry.loginFlow)
             }
             await MainActor.run {
                 isLoggedIn = false
+                currentSession = nil
+                validationMessage = nil
+                userDisplayName = nil
+                showWebView = false
                 statusText = "已退出登录"
                 errorMessage = nil
+                lastSavedCookieSignature = nil
             }
         }
     }
 
+    @MainActor
+    private func clearWebLoginData(for loginFlow: ManifestLoginFlow) async {
+        let dataStore = WKWebsiteDataStore.default()
+        let domainHints = webDataDomainHints(for: loginFlow)
+        guard !domainHints.isEmpty else { return }
+
+        await withCheckedContinuation { continuation in
+            dataStore.httpCookieStore.getAllCookies { cookies in
+                let matchingCookies = cookies.filter { cookie in
+                    domainHints.contains { hint in
+                        normalizedDomain(cookie.domain).contains(hint)
+                    }
+                }
+
+                guard !matchingCookies.isEmpty else {
+                    continuation.resume()
+                    return
+                }
+
+                let group = DispatchGroup()
+                for cookie in matchingCookies {
+                    group.enter()
+                    dataStore.httpCookieStore.delete(cookie) {
+                        group.leave()
+                    }
+                }
+                group.notify(queue: .main) {
+                    continuation.resume()
+                }
+            }
+        }
+
+        let dataTypes = WKWebsiteDataStore.allWebsiteDataTypes()
+        await withCheckedContinuation { continuation in
+            dataStore.fetchDataRecords(ofTypes: dataTypes) { records in
+                let matchingRecords = records.filter { record in
+                    domainHints.contains { hint in
+                        normalizedDomain(record.displayName).contains(hint)
+                    }
+                }
+
+                guard !matchingRecords.isEmpty else {
+                    continuation.resume()
+                    return
+                }
+
+                dataStore.removeData(ofTypes: dataTypes, for: matchingRecords) {
+                    continuation.resume()
+                }
+            }
+        }
+    }
+
+    private func webDataDomainHints(for loginFlow: ManifestLoginFlow) -> [String] {
+        var hints = loginFlow.cookieDomains
+        if let host = URL(string: loginFlow.loginURL)?.host {
+            hints.append(host)
+        }
+        if let host = loginFlow.websiteHost {
+            hints.append(host)
+        }
+
+        return Array(Set(hints.map(normalizedDomain).filter { !$0.isEmpty }))
+    }
+
+    private func normalizedDomain(_ domain: String) -> String {
+        domain
+            .lowercased()
+            .trimmingCharacters(in: CharacterSet(charactersIn: ". "))
+    }
+
     private func reloadLoginStatus() async {
         let session = await PlatformSessionManager.shared.getSession(pluginId: pluginId)
-        isLoggedIn = session?.state == .authenticated
+        currentSession = session
+        let loggedIn = session?.state == .authenticated
+        isLoggedIn = loggedIn
+        if loggedIn {
+            // 已登录：默认显示状态页，只有用户点"重新登录"才切到 webview
+            showWebView = false
+            // 后台拉一次 validateCredential，把昵称显示出来；失败不打断 UI
+            Task {
+                if let status = await PlatformSessionManager.shared.fetchCredentialStatus(pluginId: pluginId),
+                   let name = status.userName, !name.isEmpty {
+                    await MainActor.run { userDisplayName = name }
+                }
+            }
+        } else {
+            userDisplayName = nil
+        }
     }
 }
 

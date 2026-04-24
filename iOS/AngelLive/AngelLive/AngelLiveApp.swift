@@ -68,9 +68,6 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 
         Task {
             await PlatformSessionLiveParseBridge.syncFromPersistedSessionsOnLaunch()
-            if PlatformCredentialSyncService.shared.iCloudSyncEnabled {
-                await PlatformCredentialSyncService.shared.syncAllFromICloud()
-            }
             #if IOS_DEVELOPER_MODE
             await logKuaishouCookieOnLaunch()
             await logXiaohongshuCookieOnLaunch()

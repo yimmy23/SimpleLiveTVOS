@@ -306,6 +306,49 @@ public final class PlatformCredentialSyncService: ObservableObject {
         return ICloudSyncPreview(latestTime: latestDate, platformNames: platformNames)
     }
 
+    /// 清理 CloudKit 中保存的所有平台登录信息，不影响本地登录态。
+    @discardableResult
+    public func clearAllICloudSessions() async -> Int {
+        isSyncing = true
+        defer { isSyncing = false }
+
+        let container = CKContainer(identifier: CloudCookieFields.containerIdentifier)
+        let database = container.privateCloudDatabase
+        var recordIDsByName: [String: CKRecord.ID] = [:]
+
+        let query = CKQuery(recordType: CloudCookieFields.recordType, predicate: NSPredicate(value: true))
+        do {
+            let records = try await database.records(matching: query, resultsLimit: 99999)
+            for record in records.matchResults.compactMap({ try? $0.1.get() }) {
+                recordIDsByName[record.recordID.recordName] = record.recordID
+            }
+        } catch {
+            Logger.warning("查询 CloudKit session 记录失败: \(error.localizedDescription)", category: .general)
+        }
+
+        for pluginId in await knownCloudPluginIds() {
+            let recordName = CloudCookieFields.sessionRecordName(for: pluginId)
+            recordIDsByName[recordName] = CKRecord.ID(recordName: recordName)
+        }
+        recordIDsByName[CloudCookieFields.legacyBilibiliRecordName] = CKRecord.ID(recordName: CloudCookieFields.legacyBilibiliRecordName)
+
+        var deletedCount = 0
+        for recordID in recordIDsByName.values {
+            do {
+                try await database.deleteRecord(withID: recordID)
+                deletedCount += 1
+            } catch let error as CKError where error.code == .unknownItem {
+                // 记录本就不存在，忽略。
+            } catch {
+                Logger.warning("清理 CloudKit session 失败 (\(recordID.recordName)): \(error.localizedDescription)", category: .general)
+            }
+        }
+
+        recordICloudSyncTime()
+        Logger.info("已清理 \(deletedCount) 个 CloudKit 平台 session", category: .general)
+        return deletedCount
+    }
+
     /// 获取本地已登录的平台名称列表
     public func getLocalAuthenticatedPlatformNames() async -> [String] {
         let sessions = await PlatformSessionManager.shared.allSessions()

@@ -24,23 +24,32 @@ struct MacPlatformLoginWebSheet: View {
     @State private var errorMessage: String?
     @State private var lastSavedCookieSignature: String?
     @State private var cookiePollingTimer: Timer?
+    @State private var showWebView = false
+    @State private var currentSession: PlatformSession?
+    @State private var isValidating = false
+    @State private var validationMessage: String?
+    @State private var userDisplayName: String?
 
     var body: some View {
         NavigationStack {
             Group {
                 if let entry {
-                    loginContent(entry: entry)
+                    if isLoggedIn && !showWebView {
+                        statusContent(entry: entry)
+                    } else {
+                        loginContent(entry: entry)
+                    }
                 } else {
                     ProgressView("加载中...")
                 }
             }
-            .navigationTitle("\(entry?.displayName ?? pluginId) 登录")
+            .navigationTitle(navigationTitle)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("关闭") { dismiss() }
                 }
                 ToolbarItem(placement: .primaryAction) {
-                    if isLoggedIn {
+                    if isLoggedIn && !showWebView {
                         Button("退出登录", role: .destructive) {
                             logout()
                         }
@@ -56,6 +65,107 @@ struct MacPlatformLoginWebSheet: View {
                 cookiePollingTimer = nil
             }
         }
+    }
+
+    private var navigationTitle: String {
+        let name = entry?.displayName ?? pluginId
+        if isLoggedIn && !showWebView {
+            return "\(name) 账号"
+        }
+        return "\(name) 登录"
+    }
+
+    @ViewBuilder
+    private func statusContent(entry: LoginPlatformEntry) -> some View {
+        Form {
+            Section("账号信息") {
+                LabeledContent("平台", value: entry.displayName)
+                if let name = userDisplayName, !name.isEmpty {
+                    LabeledContent("昵称", value: name)
+                }
+                if let uid = currentSession?.uid, !uid.isEmpty {
+                    LabeledContent("UID", value: uid)
+                }
+                if let updatedAt = currentSession?.updatedAt {
+                    LabeledContent("登录时间", value: updatedAt.formatted(date: .abbreviated, time: .shortened))
+                }
+                LabeledContent("状态") {
+                    Text(sessionStateLabel)
+                        .foregroundStyle(isLoggedIn ? AppConstants.Colors.success : .secondary)
+                }
+            }
+
+            if entry.auth?.supportsValidation == true {
+                Section {
+                    HStack {
+                        Button {
+                            Task { await revalidate() }
+                        } label: {
+                            Text("重新校验凭证")
+                        }
+                        .disabled(isValidating)
+                        if isValidating {
+                            ProgressView().controlSize(.small)
+                        }
+                    }
+                    if let validationMessage {
+                        Text(validationMessage)
+                            .font(.footnote)
+                            .foregroundStyle(validationMessage.hasPrefix("✅") ? AppConstants.Colors.success : .red)
+                    }
+                } footer: {
+                    Text("插件会调用 validateCredential 向平台校验 Cookie 是否仍然有效。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Section {
+                Button("重新登录") {
+                    showWebView = true
+                    statusText = "请在网页中完成登录，系统会自动保存会话并由宿主托管鉴权。"
+                    errorMessage = nil
+                }
+            } footer: {
+                Text("Cookie 过期或切换账号时点这里，会打开登录页重新抓取。")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+        .frame(minWidth: 420, minHeight: 320)
+    }
+
+    private var sessionStateLabel: String {
+        switch currentSession?.state {
+        case .some(.authenticated): return "已登录"
+        case .some(.anonymous): return "匿名"
+        case .none: return "未登录"
+        @unknown default: return "未知"
+        }
+    }
+
+    private func revalidate() async {
+        isValidating = true
+        validationMessage = nil
+        let status = await PlatformSessionManager.shared.fetchCredentialStatus(pluginId: pluginId)
+        if let name = status?.userName, !name.isEmpty {
+            userDisplayName = name
+        }
+        let result = await PlatformSessionManager.shared.validateSession(pluginId: pluginId)
+        await syncService.refreshLoginStatus(pluginId: pluginId)
+        await reloadLoginStatus()
+        switch result {
+        case .valid:
+            validationMessage = "✅ 凭证有效"
+        case .expired:
+            validationMessage = "Cookie 已过期，请重新登录"
+        case .invalid(let reason):
+            validationMessage = reason
+        case .networkError(let message):
+            validationMessage = "网络错误：\(message)"
+        }
+        isValidating = false
     }
 
     @ViewBuilder
@@ -178,6 +288,7 @@ struct MacPlatformLoginWebSheet: View {
             if syncService.iCloudSyncEnabled {
                 await syncService.syncAllToICloud()
             }
+            await reloadLoginStatus()
         case .expired:
             statusText = "登录信息已过期"
             errorMessage = "Cookie 已过期，请重新登录。"
@@ -237,6 +348,10 @@ struct MacPlatformLoginWebSheet: View {
             }
             await MainActor.run {
                 isLoggedIn = false
+                currentSession = nil
+                validationMessage = nil
+                userDisplayName = nil
+                showWebView = false
                 statusText = "已退出登录"
                 errorMessage = nil
             }
@@ -245,7 +360,20 @@ struct MacPlatformLoginWebSheet: View {
 
     private func reloadLoginStatus() async {
         let session = await PlatformSessionManager.shared.getSession(pluginId: pluginId)
-        isLoggedIn = session?.state == .authenticated
+        currentSession = session
+        let loggedIn = session?.state == .authenticated
+        isLoggedIn = loggedIn
+        if loggedIn {
+            showWebView = false
+            Task {
+                if let status = await PlatformSessionManager.shared.fetchCredentialStatus(pluginId: pluginId),
+                   let name = status.userName, !name.isEmpty {
+                    await MainActor.run { userDisplayName = name }
+                }
+            }
+        } else {
+            userDisplayName = nil
+        }
     }
 }
 

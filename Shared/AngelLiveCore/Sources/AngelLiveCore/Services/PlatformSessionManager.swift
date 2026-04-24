@@ -217,6 +217,33 @@ public actor PlatformSessionManager {
         store.loadAllSessions()
     }
 
+    /// 调用插件 `validateCredential`，返回完整的 CredentialStatus（含 userId / userName / message / state）。
+    /// 与 `validateSession` 的区别：后者把插件返回值归一化成 valid/expired/invalid/networkError，丢掉 userName。
+    /// UI 需要展示昵称时用这个。
+    public func fetchCredentialStatus(pluginId: String) async -> CredentialStatus? {
+        guard let session = getSession(pluginId: pluginId),
+              let cookie = session.cookie,
+              !cookie.isEmpty else {
+            return nil
+        }
+
+        LiveParsePlatformSessionVault.update(platformId: pluginId, cookie: cookie, uid: nil)
+
+        let payload: [String: Any] = [
+            "credential": ["cookie": cookie]
+        ]
+
+        do {
+            return try await LiveParsePlugins.shared.callDecodable(
+                pluginId: pluginId,
+                function: "validateCredential",
+                payload: payload
+            )
+        } catch {
+            return nil
+        }
+    }
+
     // MARK: - 插件驱动的凭证校验
 
     private func validateCookie(pluginId: String, cookie: String) async -> PlatformSessionValidationResult {

@@ -81,7 +81,6 @@ struct AngelLiveMacOSApp: App {
                 .environment(toastManager)
                 .environment(fullscreenPlayerManager)
                 .environmentObject(updaterViewModel)
-                .setupBilibiliCookieIfNeeded()
                 .frame(minWidth: 800, maxWidth: .infinity, minHeight: 500, maxHeight: .infinity)
         }
         .commands {

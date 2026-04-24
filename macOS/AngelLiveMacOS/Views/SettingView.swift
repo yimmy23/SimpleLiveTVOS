@@ -225,7 +225,6 @@ struct SettingView: View {
                         iCloudSyncResult = "已从 iCloud 同步到本地"
                         iCloudSyncSuccess = true
                     }
-                    await refreshLoginStatus()
                 }
             }
         } message: {
