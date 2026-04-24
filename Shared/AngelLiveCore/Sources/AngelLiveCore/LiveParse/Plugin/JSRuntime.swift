@@ -10,7 +10,6 @@ public final class JSRuntime: @unchecked Sendable {
     private let context: JSContext
     private let pluginId: String
     private let session: URLSession
-    static var sharedXHSSigner: XHSSigningService?
 
     public init(pluginId: String, session: URLSession = .shared, logHandler: LogHandler? = nil) {
         self.queue = DispatchQueue(label: "liveparse.jsruntime.\(UUID().uuidString)")
@@ -22,14 +21,6 @@ public final class JSRuntime: @unchecked Sendable {
             createdContext = JSContext()
         }
         self.context = createdContext!
-
-        if Self.sharedXHSSigner == nil {
-            do {
-                Self.sharedXHSSigner = try XHSSigningService()
-            } catch {
-                print("[JSRuntime] XHS signer init failed: \(error)")
-            }
-        }
 
         queue.sync {
             Self.configureConsole(in: context, logHandler: logHandler)
@@ -304,44 +295,6 @@ private extension JSRuntime {
                 requestHeaders = removeProtectedHeaders(requestHeaders)
                 if let cookieHeader = LiveParsePlatformSessionVault.mergedCookieHeader(for: envelope.platformId) {
                     requestHeaders["Cookie"] = cookieHeader
-
-                    if envelope.signing?.profile == "xhs_live_web" {
-                        var lowerHeaders: [String: String] = [:]
-                        for (key, value) in requestHeaders {
-                            lowerHeaders[key.lowercased()] = value
-                        }
-                        requestHeaders.removeValue(forKey: "Cookie")
-                        requestHeaders.removeValue(forKey: "X-s")
-                        requestHeaders.removeValue(forKey: "X-t")
-                        requestHeaders.removeValue(forKey: "X-s-common")
-                        lowerHeaders.removeValue(forKey: "x-s")
-                        lowerHeaders.removeValue(forKey: "x-t")
-                        lowerHeaders.removeValue(forKey: "x-s-common")
-
-                        var finalURL = envelope.urlString
-                        if envelope.signing?.injectRequestUserId == true {
-                            if let userId = Self.sharedXHSSigner?.requestUserId(from: cookieHeader), !userId.isEmpty {
-                                var components = URLComponents(string: finalURL)
-                                var queryItems = components?.queryItems ?? []
-                                queryItems.removeAll { $0.name == "request_user_id" }
-                                queryItems.append(URLQueryItem(name: "request_user_id", value: userId))
-                                components?.queryItems = queryItems
-                                finalURL = components?.string ?? finalURL
-                            }
-                        }
-
-                        if let signer = Self.sharedXHSSigner {
-                            do {
-                                let signedHeaders = try signer.sign(url: finalURL, cookies: cookieHeader)
-                                for (key, value) in signedHeaders {
-                                    requestHeaders[key] = value
-                                }
-                                requestHeaders["Cookie"] = cookieHeader
-                            } catch {
-                                print("[JSRuntime] XHS signing failed: \(error)")
-                            }
-                        }
-                    }
                 }
             }
 
@@ -487,11 +440,6 @@ private extension JSRuntime {
         case platformCookie = "platform_cookie"
     }
 
-    private struct HostHTTPRequestSigning {
-        let profile: String
-        let injectRequestUserId: Bool
-    }
-
     /// 通用 cookie 值注入规则：从 cookie 取值注入到 header、query 或 JSON body
     private struct CookieInjectRule {
         enum Target: String { case header, query, body }
@@ -516,7 +464,6 @@ private extension JSRuntime {
         let timeout: TimeInterval
         let authMode: HostHTTPAuthMode
         let platformId: String
-        let signing: HostHTTPRequestSigning?
         let cookieInject: [CookieInjectRule]
     }
 
@@ -553,7 +500,6 @@ private extension JSRuntime {
             timeout: timeout,
             authMode: authMode,
             platformId: platformId,
-            signing: resolveSigning(options: options),
             cookieInject: resolveCookieInject(options: options)
         )
     }
@@ -588,38 +534,6 @@ private extension JSRuntime {
             ))
         }
         return rules
-    }
-
-    private static func resolveSigning(options: [String: Any]) -> HostHTTPRequestSigning? {
-        guard let signing = options["signing"] as? [String: Any],
-              let rawProfile = signing["profile"] as? String else {
-            return nil
-        }
-
-        let profile = rawProfile.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !profile.isEmpty else { return nil }
-
-        let injectRequestUserId = resolvedBool(signing["injectRequestUserId"]) ?? false
-        return HostHTTPRequestSigning(
-            profile: profile,
-            injectRequestUserId: injectRequestUserId
-        )
-    }
-
-    private static func resolvedBool(_ any: Any?) -> Bool? {
-        if let value = any as? Bool { return value }
-        if let value = any as? NSNumber { return value.boolValue }
-        if let value = any as? String {
-            switch value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
-            case "true", "1":
-                return true
-            case "false", "0":
-                return false
-            default:
-                return nil
-            }
-        }
-        return nil
     }
 
     private static func resolveTimeout(request: [String: Any], options: [String: Any]) -> TimeInterval {
@@ -769,11 +683,6 @@ private extension JSRuntime {
     }
 
     static func configureHostSession(in context: JSContext) {
-        // Expose the merged cookie header for a given platformId to the plugin JS.
-        // Plugins that need to sign a request themselves (e.g. xiaohongshu's
-        // in-plugin mnsv2 signer) can read the cookie synchronously rather than
-        // routing through authMode: "platform_cookie" which only attaches the
-        // Cookie header on the host side.
         let getCookieHeaderBlock: @convention(block) (String) -> String = { platformId in
             let trimmed = platformId.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { return "" }

@@ -65,7 +65,7 @@ public extension Error {
     }
 
     /// 检查是否是需要登录的错误（通用，适用于所有平台）
-    /// 包括：Bilibili -352 风控、小红书 406、以及任何插件返回的 AUTH_REQUIRED
+    /// 包括：Bilibili -352 风控，以及任何插件返回的 AUTH_REQUIRED
     var isAuthRequired: Bool {
         if let pluginError = self as? LiveParsePluginError {
             switch pluginError {

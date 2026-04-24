@@ -233,48 +233,11 @@ private extension HTTPPollingDanmakuConnection {
             components?.queryItems = queryItems
         }
 
-        // Merge plugin-provided headers first; signing-derived headers override these last.
         var mergedHeaders = headers ?? [:]
         if let pollHeaders = poll.headers {
             for (key, value) in pollHeaders {
                 mergedHeaders[key] = value
             }
-        }
-
-        // Server-side signing injection — plugin cannot reliably sign in its own JSContext,
-        // so it tags polls with `signing:{profile:"xhs_live_web"}` and lets the host attach
-        // cookies + X-s/X-t/x-s-common using the shared XHSSigningService. Mirrors the flow
-        // already used by `Host.http.request` in JSRuntime.
-        if let signing = poll.signing, signing.profile == "xhs_live_web",
-           let pluginId = pluginId,
-           let cookieHeader = LiveParsePlatformSessionVault.mergedCookieHeader(for: pluginId) {
-            // Strip any stale signed headers a caller may have left in mergedHeaders.
-            mergedHeaders.removeValue(forKey: "Cookie")
-            mergedHeaders.removeValue(forKey: "cookie")
-            for key in ["X-s", "X-t", "X-s-common", "x-s", "x-t", "x-s-common"] {
-                mergedHeaders.removeValue(forKey: key)
-            }
-
-            if signing.injectRequestUserId == true,
-               let userId = JSRuntime.sharedXHSSigner?.requestUserId(from: cookieHeader), !userId.isEmpty {
-                var queryItems = components?.queryItems ?? []
-                queryItems.removeAll { $0.name == "request_user_id" }
-                queryItems.append(URLQueryItem(name: "request_user_id", value: userId))
-                components?.queryItems = queryItems
-            }
-
-            let signedURL = components?.url?.absoluteString ?? baseURLText
-            if let signer = JSRuntime.sharedXHSSigner {
-                do {
-                    let signed = try signer.sign(url: signedURL, body: poll.bodyText, cookies: cookieHeader)
-                    for (key, value) in signed {
-                        mergedHeaders[key] = value
-                    }
-                } catch {
-                    print("[HTTPPollingDanmakuConnection] XHS signing failed: \(error)")
-                }
-            }
-            mergedHeaders["Cookie"] = cookieHeader
         }
 
         guard let url = components?.url else { return nil }

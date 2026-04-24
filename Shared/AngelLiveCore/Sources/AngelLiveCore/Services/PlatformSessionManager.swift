@@ -337,7 +337,7 @@ private final class SessionStore {
     }
 
     private static let knownPluginIds = [
-        "bilibili", "douyin", "ks", "soop", "kick", "twitch", "xiaohongshu", "panda"
+        "bilibili", "douyin", "ks", "soop", "kick", "twitch", "panda"
     ]
 
     /// 旧版本 PlatformSessionID rawValue → 新版 pluginId 映射（kuaishou → ks）

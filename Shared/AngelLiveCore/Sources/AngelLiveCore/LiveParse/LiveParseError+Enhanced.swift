@@ -291,17 +291,6 @@ public enum BusinessError: Error {
                 }
             }
 
-            if platform.contains("小红书") || platform.lowercased().contains("xiaohongshu") || platform.lowercased().contains("xhs") {
-                switch code {
-                case 406:
-                    result += "\n\n⚠️ 访问受限，请登录小红书账号后重试"
-                case -1:
-                    result += "\n\n⚠️ 请求异常，请检查网络或稍后重试"
-                default:
-                    break
-                }
-            }
-
             if let request = request {
                 result += request.formattedString
             }

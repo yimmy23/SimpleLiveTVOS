@@ -208,10 +208,4 @@ struct LiveParseDanmakuPollRequest: Decodable, Sendable {
     let query: [String: String]?
     let bodyText: String?
     let bodyBase64: String?
-    let signing: LiveParseDanmakuPollSigning?
-}
-
-struct LiveParseDanmakuPollSigning: Decodable, Sendable {
-    let profile: String
-    let injectRequestUserId: Bool?
 }

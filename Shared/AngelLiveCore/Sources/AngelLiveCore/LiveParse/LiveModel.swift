@@ -170,11 +170,10 @@ public struct LiveType: RawRepresentable, Hashable, Codable, Sendable, Expressib
     public static let soop: LiveType = .init(rawValue: "8")!
     public static let twitch: LiveType = .init(rawValue: "9")!
     public static let kick: LiveType = .init(rawValue: "10")!
-    public static let xiaohongshu: LiveType = .init(rawValue: "11")!
     public static let panda: LiveType = .init(rawValue: "12")!
 
     public static let builtIn: [LiveType] = [
-        .bilibili, .huya, .douyin, .douyu, .cc, .ks, .yy, .youtube, .soop, .twitch, .kick, .xiaohongshu, .panda
+        .bilibili, .huya, .douyin, .douyu, .cc, .ks, .yy, .youtube, .soop, .twitch, .kick, .panda
     ]
 }
 

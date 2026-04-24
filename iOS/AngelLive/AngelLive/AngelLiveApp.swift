@@ -70,7 +70,6 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             await PlatformSessionLiveParseBridge.syncFromPersistedSessionsOnLaunch()
             #if IOS_DEVELOPER_MODE
             await logKuaishouCookieOnLaunch()
-            await logXiaohongshuCookieOnLaunch()
             #endif
         }
 
@@ -108,15 +107,6 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             print("[iOS] 快手 Cookie: \(cookie)")
         } else {
             print("[iOS] 快手 Cookie: <empty>")
-        }
-    }
-
-    private func logXiaohongshuCookieOnLaunch() async {
-        let session = await PlatformSessionManager.shared.getSession(pluginId: "xiaohongshu")
-        if let cookie = session?.cookie, !cookie.isEmpty {
-            print("[iOS] 小红书 Cookie: \(cookie)")
-        } else {
-            print("[iOS] 小红书 Cookie: <empty>")
         }
     }
 
