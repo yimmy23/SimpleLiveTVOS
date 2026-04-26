@@ -64,6 +64,9 @@ final class RoomInfoViewModel {
     var danmuServerIsLoading = false
     var danmuCoordinator = DanmuView.Coordinator() // 屏幕弹幕协调器
     var danmuSettings = DanmuSettingModel() // 弹幕设置模型
+    var supportsDanmu: Bool {
+        PlatformCapability.supports(.danmaku, for: currentRoom.liveType)
+    }
 
     init(room: LiveModel) {
         self.currentRoom = room
@@ -428,7 +431,7 @@ final class RoomInfoViewModel {
 
     /// 检查平台是否支持弹幕
     func platformSupportsDanmu() -> Bool {
-        SandboxPluginCatalog.platform(for: currentRoom.liveType) != nil
+        supportsDanmu
     }
 
     /// 添加系统消息到聊天列表
@@ -548,6 +551,7 @@ final class RoomInfoViewModel {
     /// 切换弹幕显示状态
     @MainActor
     func toggleDanmuDisplay() {
+        guard supportsDanmu else { return }
         setDanmuDisplay(!danmuSettings.showDanmu)
     }
 

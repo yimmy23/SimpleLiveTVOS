@@ -246,32 +246,34 @@ struct PlayerControlView: View {
                     HStack {
                         Spacer()
                         HStack(spacing: 16) {
-                            // 弹幕开关
-                            Button {
-                                viewModel.toggleDanmuDisplay()
-                            } label: {
-                                Image(systemName: viewModel.danmuSettings.showDanmu ? "captions.bubble.fill" : "captions.bubble")
-                                    .frame(width: 30, height: 30)
-                                    .font(.system(size: 18, weight: .semibold))
-                                    .foregroundStyle(.white)
-                                    .contentShape(Rectangle())
-                            }
-                            .contentTransition(.symbolEffect(.replace))
-                            .buttonStyle(.plain)
-                            .contentShape(Rectangle())
+                            if viewModel.supportsDanmu {
+                                // 弹幕开关
+                                Button {
+                                    viewModel.toggleDanmuDisplay()
+                                } label: {
+                                    Image(systemName: viewModel.danmuSettings.showDanmu ? "captions.bubble.fill" : "captions.bubble")
+                                        .frame(width: 30, height: 30)
+                                        .font(.system(size: 18, weight: .semibold))
+                                        .foregroundStyle(.white)
+                                        .contentShape(Rectangle())
+                                }
+                                .contentTransition(.symbolEffect(.replace))
+                                .buttonStyle(.plain)
+                                .contentShape(Rectangle())
 
-                            // 弹幕设置
-                            Button {
-                                showDanmakuSettings.toggle()
-                            } label: {
-                                Image(systemName: "slider.horizontal.3")
-                                    .frame(width: 30, height: 30)
-                                    .font(.system(size: 18, weight: .semibold))
-                                    .foregroundStyle(.white)
-                                    .contentShape(Rectangle())
+                                // 弹幕设置
+                                Button {
+                                    showDanmakuSettings.toggle()
+                                } label: {
+                                    Image(systemName: "slider.horizontal.3")
+                                        .frame(width: 30, height: 30)
+                                        .font(.system(size: 18, weight: .semibold))
+                                        .foregroundStyle(.white)
+                                        .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                .contentShape(Rectangle())
                             }
-                            .buttonStyle(.plain)
-                            .contentShape(Rectangle())
 
                             // 清晰度设置菜单
                             if let playArgs = viewModel.currentRoomPlayArgs, !playArgs.isEmpty {

@@ -52,6 +52,15 @@ public enum FeatureStatus: Sendable {
     case available
     case partial(String)
     case unavailable
+
+    public var isSupported: Bool {
+        switch self {
+        case .available, .partial:
+            true
+        case .unavailable:
+            false
+        }
+    }
 }
 
 // MARK: - 平台功能可用性配置
@@ -134,6 +143,16 @@ public enum PlatformCapability {
 
         cache.set(cacheKey, value: result)
         return result
+    }
+
+    public static func status(for feature: PlatformFeature, liveType: LiveType) -> FeatureStatus {
+        features(for: liveType)
+            .first(where: { $0.0 == feature })?
+            .1 ?? .unavailable
+    }
+
+    public static func supports(_ feature: PlatformFeature, for liveType: LiveType) -> Bool {
+        status(for: feature, liveType: liveType).isSupported
     }
 
     /// 清除缓存，在插件 reload 后调用

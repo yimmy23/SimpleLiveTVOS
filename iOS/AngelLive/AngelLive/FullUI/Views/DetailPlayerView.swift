@@ -421,11 +421,31 @@ struct DetailPlayerView: View {
     }
 
     private var chatListView: some View {
-        ChatTableView(
-            messages: viewModel.danmuMessages,
-            showJumpToLatest: $showJumpToLatest,
-            scrollToBottomRequest: $scrollToBottomRequest
-        )
+        VStack(spacing: 0) {
+            if !viewModel.supportsDanmu {
+                unsupportedDanmuNotice
+            }
+
+            ChatTableView(
+                messages: viewModel.danmuMessages,
+                showJumpToLatest: $showJumpToLatest,
+                scrollToBottomRequest: $scrollToBottomRequest
+            )
+        }
+    }
+
+    private var unsupportedDanmuNotice: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "info.circle")
+                .font(.footnote.weight(.semibold))
+            Text("当前平台不支持弹幕/评论显示")
+                .font(.footnote)
+        }
+        .foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(.ultraThinMaterial)
     }
 
     private var jumpToLatestButton: some View {

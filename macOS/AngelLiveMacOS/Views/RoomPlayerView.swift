@@ -232,7 +232,7 @@ private extension RoomPlayerView {
     @ViewBuilder
     func danmuOverlay(for containerSize: CGSize) -> some View {
         let settings = viewModel.danmuSettings
-        if settings.showDanmu, viewModel.currentPlayURL != nil {
+        if viewModel.supportsDanmu, settings.showDanmu, viewModel.currentPlayURL != nil {
             let config = danmuConfig(for: containerSize.height, index: settings.danmuAreaIndex)
             VStack(spacing: 0) {
                 if config.position == .bottom {

@@ -425,8 +425,10 @@ struct VideoControllerView: View {
                             HStack {
                                 Spacer()
                                 HStack(spacing: 16) {
-                                    // 弹幕开关按钮
-                                    KSVideoPlayerViewBuilder.danmakuButton(showDanmu: $viewModel.danmuSettings.showDanmu)
+                                    if viewModel.supportsDanmu {
+                                        // 弹幕开关按钮
+                                        KSVideoPlayerViewBuilder.danmakuButton(showDanmu: $viewModel.danmuSettings.showDanmu)
+                                    }
 
                                     // 清晰度设置菜单
                                     KSVideoPlayerViewBuilder.qualityMenuButton(viewModel: viewModel, showQualitySheet: $showQualityPanel)

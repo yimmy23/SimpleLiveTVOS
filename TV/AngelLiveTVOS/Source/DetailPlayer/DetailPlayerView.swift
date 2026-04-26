@@ -103,19 +103,21 @@ struct DetailPlayerView: View {
                     .safeAreaPadding(.all)
                     .environment(roomInfoViewModel)
                     .environment(appViewModel)
-                VStack {
-                    if appViewModel.danmuSettingsViewModel.danmuAreaIndex >= 3 {
-                        Spacer()
+                if roomInfoViewModel.supportsDanmu {
+                    VStack {
+                        if appViewModel.danmuSettingsViewModel.danmuAreaIndex >= 3 {
+                            Spacer()
+                        }
+                        DanmuView(coordinator: roomInfoViewModel.danmuCoordinator, height: appViewModel.danmuSettingsViewModel.getDanmuArea().0)
+                            .frame(width: 1920, height: appViewModel.danmuSettingsViewModel.getDanmuArea().0)
+                            .opacity(appViewModel.danmuSettingsViewModel.showDanmu ? 1 : 0)
+                            .environment(appViewModel)
+                        if appViewModel.danmuSettingsViewModel.danmuAreaIndex < 3 {
+                            Spacer()
+                        }
                     }
-                    DanmuView(coordinator: roomInfoViewModel.danmuCoordinator, height: appViewModel.danmuSettingsViewModel.getDanmuArea().0)
-                        .frame(width: 1920, height: appViewModel.danmuSettingsViewModel.getDanmuArea().0)
-                        .opacity(appViewModel.danmuSettingsViewModel.showDanmu ? 1 : 0)
-                        .environment(appViewModel)
-                    if appViewModel.danmuSettingsViewModel.danmuAreaIndex < 3 {
-                        Spacer()
-                    }
+                    .zIndex(2)
                 }
-                .zIndex(2)
             }
             .onReceive(NotificationCenter.default.publisher(for: SimpleLiveNotificationNames.playerEndPlay)) { _ in
                 endPlay()

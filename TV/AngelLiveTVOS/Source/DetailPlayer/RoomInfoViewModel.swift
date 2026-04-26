@@ -116,6 +116,9 @@ final class RoomInfoViewModel {
     var liveFlagTimer: Timer? = nil
     var danmuServerIsConnected = false
     var danmuServerIsLoading = false
+    var supportsDanmu: Bool {
+        PlatformCapability.supports(.danmaku, for: currentRoom.liveType)
+    }
     
     @MainActor
     init(currentRoom: LiveModel, appViewModel: AppState, enterFromLive: Bool, roomType: LiveRoomListType) {
@@ -474,6 +477,11 @@ final class RoomInfoViewModel {
     }
     
     func getDanmuInfo() {
+        guard supportsDanmu else {
+            danmuServerIsConnected = false
+            danmuServerIsLoading = false
+            return
+        }
         if danmuServerIsConnected == true || danmuServerIsLoading == true {
             return
         }

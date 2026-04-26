@@ -374,33 +374,34 @@ struct PlayerControlView: View {
 //                                    // 点击 Tip 后关闭
 //                                }
 
-                                Text("")
-                                    .frame(width: 15)
+                                if roomInfoViewModel.supportsDanmu {
+                                    Text("")
+                                        .frame(width: 15)
 
-                                Button(action: {
-                                    guard ensureControlVisible() else { return }
-                                    roomInfoModel.showDanmuSettingView = true
-                                    roomInfoModel.showControl = false
-                                    showDanmuSetting = true
-                                    state = .danmuSetting
-                                }, label: {
-                                    Image("icon-danmu-setting-focus")
-                                        .resizable()
-                                        .frame(width: 40, height: 40)
-                                })
-                                .clipShape(.circle)
-                                .focused($state, equals: .danmuSetting)
-                                
-                                
-                                Button(action: {
-                                    danmuAction()
-                                }, label: {
-                                    Image(appViewModel.danmuSettingsViewModel.showDanmu ? "icon-danmu-open-focus" : "icon-danmu-close-focus")
-                                        .resizable()
-                                        .frame(width: 40, height: 40)
-                                })
-                                .clipShape(.circle)
-                                .focused($state, equals: .danmu)
+                                    Button(action: {
+                                        guard ensureControlVisible() else { return }
+                                        roomInfoModel.showDanmuSettingView = true
+                                        roomInfoModel.showControl = false
+                                        showDanmuSetting = true
+                                        state = .danmuSetting
+                                    }, label: {
+                                        Image("icon-danmu-setting-focus")
+                                            .resizable()
+                                            .frame(width: 40, height: 40)
+                                    })
+                                    .clipShape(.circle)
+                                    .focused($state, equals: .danmuSetting)
+
+                                    Button(action: {
+                                        danmuAction()
+                                    }, label: {
+                                        Image(appViewModel.danmuSettingsViewModel.showDanmu ? "icon-danmu-open-focus" : "icon-danmu-close-focus")
+                                            .resizable()
+                                            .frame(width: 40, height: 40)
+                                    })
+                                    .clipShape(.circle)
+                                    .focused($state, equals: .danmu)
+                                }
                             }
                             .padding(.leading, 15)
                             .padding(.vertical, 10)
@@ -786,6 +787,7 @@ struct PlayerControlView: View {
     
     func danmuAction() {
         guard ensureControlVisible() else { return }
+        guard roomInfoViewModel.supportsDanmu else { return }
         appViewModel.danmuSettingsViewModel.showDanmu.toggle()
         if appViewModel.danmuSettingsViewModel.showDanmu == false {
             roomInfoViewModel.disConnectSocket()

@@ -56,8 +56,10 @@ struct SettingsButton: View {
             }
         }
         .confirmationDialog("播放器设置", isPresented: $showActionSheet, titleVisibility: .visible) {
-            Button("弹幕设置") {
-                showDanmakuSettings = true
+            if viewModel.supportsDanmu {
+                Button("弹幕设置") {
+                    showDanmakuSettings = true
+                }
             }
 
             // 仅在 HLS 流时显示投屏选项（FLV 投屏只有音频）

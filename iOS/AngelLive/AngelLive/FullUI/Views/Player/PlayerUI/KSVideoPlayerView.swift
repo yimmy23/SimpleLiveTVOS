@@ -104,7 +104,7 @@ public struct KSVideoPlayerView: View {
                 .opacity(!model.config.isMaskShow ? 1 : 0)
 
                 // 弹幕层（在控制层下方）
-                if viewModel.danmuSettings.showDanmu && !isVerticalLiveMode {
+                if viewModel.supportsDanmu && viewModel.danmuSettings.showDanmu && !isVerticalLiveMode {
                     GeometryReader { geometry in
                         let playerHeight = geometry.size.height
                         let config = danmuAreaConfiguration(
