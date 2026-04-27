@@ -25,6 +25,11 @@ struct LiveRoomCard: View {
     let showsCoverBadge: Bool
     /// 可选的删除回调（用于历史记录）
     var onDelete: (() -> Void)? = nil
+    /// 是否禁用 SwiftUI 自身的 tap gesture(由 cell 设置为 true)。
+    /// hostingView 内的 SwiftUI gesture recognizer 跟 UICollectionView 自己的 tap recognizer 会竞争,
+    /// 在 UIHostingController-in-cell 这种场景下 SwiftUI 经常输,导致两个都不触发。
+    /// cell-based 路径(RoomList/Favorite/History)由 UICollectionView 的 didSelectItemAt 接管 tap。
+    var disableTapGesture: Bool = false
     /// 本地导航状态 - 仅在没有外部导航状态时使用
     @State private var localShowPlayer = false
     /// 本地 Namespace - 仅在没有外部 Namespace 时使用
@@ -126,76 +131,86 @@ struct LiveRoomCard: View {
 
     var body: some View {
         Group {
-            let baseButton = Button {
-                switch liveCheckMode {
-                case .none:
-                    // 房间列表：直接进入，不判断
-                    showPlayerBinding.wrappedValue = true
-                case .local:
-                    // 收藏/搜索：用本地 liveState 判断
-                    if isLive {
-                        showPlayerBinding.wrappedValue = true
-                    } else {
-                        presentToast(ToastValue(icon: Image(systemName: "tv.slash"), message: "主播已下播"))
-                    }
-                case .remote:
-                    // 历史记录：异步请求 API 查询直播状态
-                    guard !isCheckingLiveState else { return }
-                    Task {
-                        isCheckingLiveState = true
-                        defer { isCheckingLiveState = false }
-                        do {
-                            let state = try await ApiManager.getCurrentRoomLiveState(
-                                roomId: room.roomId,
-                                userId: room.userId,
-                                liveType: room.liveType
-                            )
-                            if state == .live {
-                                showPlayerBinding.wrappedValue = true
-                            } else {
-                                presentToast(ToastValue(icon: Image(systemName: "tv.slash"), message: "主播已下播"))
-                            }
-                        } catch {
-                            // 查询失败仍放行，让播放页自行处理
-                            showPlayerBinding.wrappedValue = true
+            // disableTapGesture=true 时不挂 onTapGesture,把 tap 让给外层 UICollectionView 的 didSelectItemAt
+            // (cell-based 场景 SwiftUI gesture 跟 UICollectionView tap 抢路会两边都不触发)。
+            let baseContent = cardContent
+                .overlay {
+                    if isCheckingLiveState {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: AppConstants.CornerRadius.lg)
+                                .fill(.black.opacity(0.3))
+                            ProgressView()
+                                .tint(.white)
                         }
                     }
                 }
-            } label: {
-                cardContent
-                    .overlay {
-                        if isCheckingLiveState {
-                            ZStack {
-                                RoundedRectangle(cornerRadius: AppConstants.CornerRadius.lg)
-                                    .fill(.black.opacity(0.3))
-                                ProgressView()
-                                    .tint(.white)
-                            }
-                        }
-                    }
+                .contentShape(Rectangle())
+
+            let baseTappable = Group {
+                if disableTapGesture {
+                    baseContent
+                } else {
+                    baseContent.onTapGesture { handleTap() }
+                }
             }
-            .buttonStyle(LiveRoomCardButtonStyle())
             .contextMenu {
                 favoriteContextMenu
             }
 
             if useExternalNavigation {
-                baseButton
+                baseTappable
             } else {
                 if #available(iOS 18.0, *) {
-                    baseButton
+                    baseTappable
                         .fullScreenCover(isPresented: showPlayerBinding) {
                             DetailPlayerView(viewModel: RoomInfoViewModel(room: room))
                                 .modifier(ZoomTransitionModifier(sourceID: room.roomId, namespace: namespace))
                                 .toolbar(.hidden, for: .tabBar)
                         }
                 } else {
-                    baseButton
+                    baseTappable
                         .navigationDestination(isPresented: showPlayerBinding) {
                             DetailPlayerView(viewModel: RoomInfoViewModel(room: room))
                                 .modifier(ZoomTransitionModifier(sourceID: room.roomId, namespace: namespace))
                                 .toolbar(.hidden, for: .tabBar)
                         }
+                }
+            }
+        }
+    }
+
+    private func handleTap() {
+        switch liveCheckMode {
+        case .none:
+            // 房间列表：直接进入，不判断
+            showPlayerBinding.wrappedValue = true
+        case .local:
+            // 收藏/搜索：用本地 liveState 判断
+            if isLive {
+                showPlayerBinding.wrappedValue = true
+            } else {
+                presentToast(ToastValue(icon: Image(systemName: "tv.slash"), message: "主播已下播"))
+            }
+        case .remote:
+            // 历史记录：异步请求 API 查询直播状态
+            guard !isCheckingLiveState else { return }
+            Task {
+                isCheckingLiveState = true
+                defer { isCheckingLiveState = false }
+                do {
+                    let state = try await ApiManager.getCurrentRoomLiveState(
+                        roomId: room.roomId,
+                        userId: room.userId,
+                        liveType: room.liveType
+                    )
+                    if state == .live {
+                        showPlayerBinding.wrappedValue = true
+                    } else {
+                        presentToast(ToastValue(icon: Image(systemName: "tv.slash"), message: "主播已下播"))
+                    }
+                } catch {
+                    // 查询失败仍放行，让播放页自行处理
+                    showPlayerBinding.wrappedValue = true
                 }
             }
         }

@@ -27,6 +27,10 @@ class HistoryListViewController: UIViewController {
         cv.dataSource = self
         cv.register(LiveRoomCollectionViewCell.self, forCellWithReuseIdentifier: LiveRoomCollectionViewCell.reuseIdentifier)
         cv.translatesAutoresizingMaskIntoConstraints = false
+        // 见 RoomListViewController:同样的 SwiftUI Button 卡 tap 修复(iOS 专属,macOS 不需要)
+        cv.delaysContentTouches = false
+        cv.panGestureRecognizer.delaysTouchesBegan = false
+        cv.alwaysBounceVertical = true
         return cv
     }()
 
@@ -215,6 +219,7 @@ extension HistoryListViewController: UICollectionViewDataSource {
             self?.historyModel.removeHistory(room: room)
             self?.updateViewState()
         }, showsCoverBadge: true)
+        cell.attachHostingController(to: self)
 
         return cell
     }
@@ -224,7 +229,34 @@ extension HistoryListViewController: UICollectionViewDataSource {
 
 extension HistoryListViewController: UICollectionViewDelegate {
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
-        // 导航由 LiveRoomCard 内部通过外部导航状态处理
+        let watchList = historyModel.watchList
+        guard indexPath.item < watchList.count else {
+            collectionView.deselectItem(at: indexPath, animated: true)
+            return
+        }
+        let room = watchList[indexPath.item]
+        // mode = .remote:异步请求 API 查询直播状态
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            do {
+                let state = try await ApiManager.getCurrentRoomLiveState(
+                    roomId: room.roomId,
+                    userId: room.userId,
+                    liveType: room.liveType
+                )
+                if state == .live {
+                    self.navigationState.navigate(to: room)
+                } else {
+                    let alert = UIAlertController(title: "主播已下播", message: nil, preferredStyle: .alert)
+                    alert.addAction(UIAlertAction(title: "好的", style: .default))
+                    self.present(alert, animated: true)
+                }
+            } catch {
+                // 查询失败仍放行,让播放页自行处理
+                self.navigationState.navigate(to: room)
+            }
+            collectionView.deselectItem(at: indexPath, animated: true)
+        }
     }
 }
 

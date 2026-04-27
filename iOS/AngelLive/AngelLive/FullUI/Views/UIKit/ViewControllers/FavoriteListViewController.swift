@@ -32,6 +32,10 @@ class FavoriteListViewController: UIViewController {
         cv.register(FavoriteSectionHeaderView.self, forSupplementaryViewOfKind: UICollectionView.elementKindSectionHeader, withReuseIdentifier: FavoriteSectionHeaderView.reuseIdentifier)
         cv.refreshControl = refreshControl
         cv.translatesAutoresizingMaskIntoConstraints = false
+        // 见 RoomListViewController:同样的 SwiftUI Button 卡 tap 修复(iOS 专属,macOS 不需要)
+        cv.delaysContentTouches = false
+        cv.panGestureRecognizer.delaysTouchesBegan = false
+        cv.alwaysBounceVertical = true
         return cv
     }()
 
@@ -412,6 +416,7 @@ extension FavoriteListViewController: UICollectionViewDataSource {
         }
         let room = rooms[indexPath.item]
         cell.configure(with: room, navigationState: navigationState, namespace: namespace, showsCoverBadge: true)
+        cell.attachHostingController(to: self)
 
         return cell
     }
@@ -438,8 +443,25 @@ extension FavoriteListViewController: UICollectionViewDataSource {
 
 extension FavoriteListViewController: UICollectionViewDelegate {
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
-        // 导航由 LiveRoomCard 内部通过外部导航状态处理
-        // 此处保留 delegate 以便将来扩展（如统计分析等）
+        defer { collectionView.deselectItem(at: indexPath, animated: true) }
+        let sections = filteredSections
+        guard indexPath.section < sections.count else { return }
+        let rooms = sections[indexPath.section].roomList
+        guard indexPath.item < rooms.count else { return }
+        let room = rooms[indexPath.item]
+        // mode = .local:用本地 liveState 判断
+        // liveState 为 nil 或非 close 视为在播
+        let isLive: Bool = {
+            guard let raw = room.liveState, let state = LiveState(rawValue: raw) else { return true }
+            return state != .close
+        }()
+        if isLive {
+            navigationState.navigate(to: room)
+        } else {
+            let alert = UIAlertController(title: "主播已下播", message: nil, preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "好的", style: .default))
+            present(alert, animated: true)
+        }
     }
 }
 

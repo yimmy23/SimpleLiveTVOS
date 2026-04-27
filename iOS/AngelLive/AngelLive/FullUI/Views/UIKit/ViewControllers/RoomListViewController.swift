@@ -31,6 +31,13 @@ class RoomListViewController: UIViewController {
         cv.register(LiveRoomCollectionViewCell.self, forCellWithReuseIdentifier: LiveRoomCollectionViewCell.reuseIdentifier)
         cv.refreshControl = refreshControl
         cv.translatesAutoresizingMaskIntoConstraints = false
+        // iOS UIScrollView 默认 delaysContentTouches=true 会让 SwiftUI Button 的 gesture 卡 150ms,
+        // 在 UIHostingController-in-cell 这种场景下会导致 tap 经常被吞。macOS Catalyst 不存在这个机制,所以那边都正常。
+        cv.delaysContentTouches = false
+        cv.panGestureRecognizer.delaysTouchesBegan = false
+        // 关键修复:内容不足时强制可垂直滚,锁定 gesture 优先级。
+        // 否则当 contentSize.height <= bounds.height,JX 外层横向 pan 会把内层 tap 吞掉(场次少时点不动的根因)。
+        cv.alwaysBounceVertical = true
         return cv
     }()
 
@@ -84,6 +91,7 @@ class RoomListViewController: UIViewController {
             self?.collectionView.collectionViewLayout.invalidateLayout()
         }, completion: { [weak self] _ in
             self?.collectionView.reloadData()
+            self?.collectionView.layoutIfNeeded()
         })
     }
 
@@ -235,6 +243,9 @@ class RoomListViewController: UIViewController {
         }
 
         collectionView.reloadData()
+        // reloadData 后立刻 layoutIfNeeded,把 cells 注册进 visibleCells,
+        // 否则 cv 在内容不足 + JX 嵌套场景下可能直到下次 layout pass 才注册,didSelectItemAt 失效。
+        collectionView.layoutIfNeeded()
     }
 
     // MARK: - Error Handling
@@ -326,6 +337,7 @@ extension RoomListViewController: UICollectionViewDataSource {
         } else {
             cell.configure(with: room, liveCheckMode: .none)
         }
+        cell.attachHostingController(to: self)
 
         return cell
     }
@@ -341,6 +353,15 @@ extension RoomListViewController: UICollectionViewDelegate {
             loadMore()
         }
     }
+
+    func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
+        defer { collectionView.deselectItem(at: indexPath, animated: true) }
+        let currentRooms = rooms
+        guard indexPath.item < currentRooms.count else { return }
+        let room = currentRooms[indexPath.item]
+        // mode = .none(房间列表):直接进入,不判断在播状态
+        navigationState?.navigate(to: room)
+    }
 }
 
 // MARK: - UICollectionViewDelegateFlowLayout
@@ -354,5 +375,19 @@ extension RoomListViewController: UICollectionViewDelegateFlowLayout {
 extension RoomListViewController: JXSegmentedListContainerViewListDelegate {
     func listView() -> UIView {
         return view
+    }
+
+    /// 关键修复:JX 在 scrollView 模式下让 listVC.view 进入 page 后,不会主动触发 cv 的 layout closeloop。
+    /// 表现:cells 已经 dequeue 进 subviews 且 frame 正确,但 cv.visibleCells = 0,
+    /// 导致 didSelectItemAt 永远不派发(场次少时点不动的真凶)。
+    /// 在 listDidAppear / listWillAppear 主动 layoutIfNeeded 把 visibleCells 注册起来即可。
+    func listWillAppear() {
+        collectionView.setNeedsLayout()
+        collectionView.layoutIfNeeded()
+    }
+
+    func listDidAppear() {
+        collectionView.setNeedsLayout()
+        collectionView.layoutIfNeeded()
     }
 }
