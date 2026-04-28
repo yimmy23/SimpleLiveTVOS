@@ -5,17 +5,20 @@ public struct LiveParseJSPlatform: Hashable, Codable, Sendable {
     public let liveTypes: [LiveType]
     public let platformName: String?
     public let platformDescription: String?
+    public let shareResolve: ManifestShareResolve?
 
     public init(
         pluginId: String,
         liveTypes: [LiveType],
         platformName: String? = nil,
-        platformDescription: String? = nil
+        platformDescription: String? = nil,
+        shareResolve: ManifestShareResolve? = nil
     ) {
         self.pluginId = pluginId
         self.liveTypes = liveTypes
         self.platformName = platformName
         self.platformDescription = platformDescription
+        self.shareResolve = shareResolve
     }
 
     /// 兼容旧调用：取首个 liveType 作为主类型。
@@ -400,7 +403,8 @@ public enum LiveParseJSPlatformManager {
             pluginId: manifest.pluginId,
             liveTypes: liveTypes,
             platformName: manifest.displayName,
-            platformDescription: manifest.platformDescription
+            platformDescription: manifest.platformDescription,
+            shareResolve: manifest.shareResolve
         )
         return ManifestCandidate(platform: platform, version: manifest.version, sourcePriority: sourcePriority)
     }
@@ -413,16 +417,40 @@ public enum LiveParseJSPlatformManager {
 
         let versionCompare = semverCompare(candidate.version, existing.version)
         if versionCompare > 0 {
-            storage[candidate.platform.pluginId] = candidate
+            storage[candidate.platform.pluginId] = candidateWithShareResolveFallback(candidate, fallback: existing)
             return
         }
         if versionCompare < 0 {
+            storage[candidate.platform.pluginId] = candidateWithShareResolveFallback(existing, fallback: candidate)
             return
         }
 
         if candidate.sourcePriority > existing.sourcePriority {
-            storage[candidate.platform.pluginId] = candidate
+            storage[candidate.platform.pluginId] = candidateWithShareResolveFallback(candidate, fallback: existing)
+        } else {
+            storage[candidate.platform.pluginId] = candidateWithShareResolveFallback(existing, fallback: candidate)
         }
+    }
+
+    private static func candidateWithShareResolveFallback(
+        _ primary: ManifestCandidate,
+        fallback: ManifestCandidate
+    ) -> ManifestCandidate {
+        guard primary.platform.shareResolve == nil, let shareResolve = fallback.platform.shareResolve else {
+            return primary
+        }
+
+        return ManifestCandidate(
+            platform: LiveParseJSPlatform(
+                pluginId: primary.platform.pluginId,
+                liveTypes: primary.platform.liveTypes,
+                platformName: primary.platform.platformName,
+                platformDescription: primary.platform.platformDescription,
+                shareResolve: shareResolve
+            ),
+            version: primary.version,
+            sourcePriority: primary.sourcePriority
+        )
     }
 
     private static func discoverSandboxManifestURLs() -> [URL] {

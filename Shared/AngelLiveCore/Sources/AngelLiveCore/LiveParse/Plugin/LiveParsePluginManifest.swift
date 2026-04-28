@@ -18,6 +18,8 @@ public struct LiveParsePluginManifest: Codable, Equatable, Sendable {
     public let auth: ManifestAuth?
     /// 登录流程声明（可选）。未声明的插件不会出现在宿主的平台登录列表中。
     public let loginFlow: ManifestLoginFlow?
+    /// 分享链接候选匹配规则（可选）。宿主只用它筛选候选平台，最终解析仍由插件完成。
+    public let shareResolve: ManifestShareResolve?
 
     public init(
         pluginId: String,
@@ -31,7 +33,8 @@ public struct LiveParsePluginManifest: Codable, Equatable, Sendable {
         minHostVersion: String? = nil,
         preloadScripts: [String]? = nil,
         auth: ManifestAuth? = nil,
-        loginFlow: ManifestLoginFlow? = nil
+        loginFlow: ManifestLoginFlow? = nil,
+        shareResolve: ManifestShareResolve? = nil
     ) {
         self.pluginId = pluginId
         self.version = version
@@ -45,6 +48,19 @@ public struct LiveParsePluginManifest: Codable, Equatable, Sendable {
         self.preloadScripts = preloadScripts
         self.auth = auth
         self.loginFlow = loginFlow
+        self.shareResolve = shareResolve
+    }
+}
+
+public struct ManifestShareResolve: Codable, Equatable, Hashable, Sendable {
+    /// 可识别的 URL host，如 ["live.example.com", "short.example"]。
+    public let hosts: [String]?
+    /// 非 URL 文本兜底关键词，如 App scheme、口令前缀等。
+    public let keywords: [String]?
+
+    public init(hosts: [String]? = nil, keywords: [String]? = nil) {
+        self.hosts = hosts
+        self.keywords = keywords
     }
 }
 

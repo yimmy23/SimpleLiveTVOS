@@ -80,32 +80,74 @@ public enum ApiManager {
     }
 
     public static func fetchSearchWithShareCode(shareCode: String) async throws -> LiveModel? {
-
-        // 确定平台类型
-        let liveType: LiveType? = {
-            if shareCode.contains("b23.tv") || shareCode.contains("bilibili") { return .bilibili }
-            if shareCode.contains("douyin") { return .douyin }
-            if shareCode.contains("huya") { return .huya }
-            if shareCode.contains("hy.fan") { return .huya }
-            if shareCode.contains("douyu") { return .douyu }
-            if shareCode.contains("cc.163.com") { return .cc }
-            if shareCode.contains("kuaishou.com") { return .ks }
-            if shareCode.contains("yy.com") { return .yy }
-            if shareCode.contains("sooplive") || shareCode.contains("afreecatv") { return .soop }
-            return nil
-        }()
-
-        if let liveType = liveType {
-            return try await handlePlatformSearch(shareCode, liveType: liveType)
-        } else {
+        let platforms = matchedShareResolvePlatforms(for: shareCode)
+        guard !platforms.isEmpty else {
             throw NSError(domain: "解析房间号失败，请检查分享码/分享链接是否正确", code: -10000, userInfo: ["desc": "解析房间号失败，请检查分享码/分享链接是否正确"])
+        }
+
+        var lastError: Error?
+        for platform in platforms {
+            do {
+                return try await LiveParseJSPlatformManager.getRoomInfoFromShareCode(platform: platform, shareCode: shareCode)
+            } catch {
+                lastError = error
+            }
+        }
+
+        throw lastError ?? NSError(domain: "解析房间号失败，请检查分享码/分享链接是否正确", code: -10000, userInfo: ["desc": "解析房间号失败，请检查分享码/分享链接是否正确"])
+    }
+
+    private static func matchedShareResolvePlatforms(for text: String) -> [LiveParseJSPlatform] {
+        let normalizedText = text.lowercased()
+        let inputHosts = extractHosts(from: normalizedText)
+
+        return SandboxPluginCatalog.availablePlatforms().filter { platform in
+            guard PlatformCapability.supports(.shareResolve, for: platform.liveType),
+                  let rule = platform.shareResolve else {
+                return false
+            }
+
+            let hostMatched = normalizedValues(rule.hosts).contains { ruleHost in
+                inputHosts.contains { inputHost in
+                    inputHost == ruleHost || inputHost.hasSuffix(".\(ruleHost)")
+                }
+            }
+
+            if hostMatched {
+                return true
+            }
+
+            return normalizedValues(rule.keywords).contains { keyword in
+                normalizedText.contains(keyword)
+            }
         }
     }
 
-    private static func handlePlatformSearch(_ text: String, liveType: LiveType) async throws -> LiveModel? {
-        guard let platform = SandboxPluginCatalog.platform(for: liveType) else {
-            return nil
+    private static func normalizedValues(_ values: [String]?) -> [String] {
+        values?
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+            .filter { !$0.isEmpty } ?? []
+    }
+
+    private static func extractHosts(from text: String) -> [String] {
+        let pattern = #"(?:(?:[a-z][a-z0-9+\-.]*):\/\/)?(?:www\.)?([a-z0-9-]+(?:\.[a-z0-9-]+)+)"#
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
+            return []
         }
-        return try await LiveParseJSPlatformManager.getRoomInfoFromShareCode(platform: platform, shareCode: text)
+
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        let matches = regex.matches(in: text, options: [], range: range)
+        var hosts: [String] = []
+        var seen = Set<String>()
+
+        for match in matches where match.numberOfRanges > 1 {
+            guard let hostRange = Range(match.range(at: 1), in: text) else { continue }
+            let host = String(text[hostRange]).trimmingCharacters(in: CharacterSet(charactersIn: "."))
+            guard !host.isEmpty, !seen.contains(host) else { continue }
+            seen.insert(host)
+            hosts.append(host)
+        }
+
+        return hosts
     }
 }
