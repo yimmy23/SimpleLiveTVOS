@@ -249,14 +249,13 @@ public enum LiveParseJSPlatformManager {
                 "userId": userId
             ])
         )
-        let normalized = normalizeDanmakuPlan(result, for: platform, roomId: roomId)
-        guard normalized.usesPluginRuntimeDriver else {
+        guard result.usesPluginRuntimeDriver else {
             throw LiveParseError.danmuArgsParseError(
                 "弹幕驱动不受支持",
                 "插件 \(platform.pluginId) 未声明 runtime.driver = plugin_js_v1"
             )
         }
-        return normalized
+        return result
     }
 
     public static func getDanmukuArgs(
@@ -272,42 +271,6 @@ public enum LiveParseJSPlatformManager {
             context: context
         )
         return (plan.legacyParameters, plan.headers)
-    }
-
-    private static func normalizeDanmakuPlan(
-        _ result: LiveParseDanmakuPlan,
-        for platform: LiveParseJSPlatform,
-        roomId: String
-    ) -> LiveParseDanmakuPlan {
-        if platform.pluginId == "yy" {
-            var args = result.args
-            let fallbackRoomId = roomId.trimmingCharacters(in: .whitespacesAndNewlines)
-
-            if (args["roomId"]?.isEmpty ?? true), !fallbackRoomId.isEmpty {
-                args["roomId"] = fallbackRoomId
-            }
-            if (args["sid"]?.isEmpty ?? true), let rid = args["roomId"], !rid.isEmpty {
-                args["sid"] = rid
-            }
-            if (args["ssid"]?.isEmpty ?? true), let sid = args["sid"], !sid.isEmpty {
-                args["ssid"] = sid
-            }
-
-            let wsUUID: String
-            if let existingUUID = args["ws_uuid"], !existingUUID.isEmpty {
-                wsUUID = existingUUID
-            } else {
-                wsUUID = UUID().uuidString.replacingOccurrences(of: "-", with: "")
-                args["ws_uuid"] = wsUUID
-            }
-
-            if args["ws_url"]?.isEmpty ?? true {
-                args["ws_url"] = "wss://h5-sinchl.yy.com/websocket?appid=yymwebh5&version=3.2.10&uuid=\(wsUUID)&sign=a8d7eef2"
-            }
-
-            return result.updating(args: args)
-        }
-        return result
     }
 
     // MARK: - Internal

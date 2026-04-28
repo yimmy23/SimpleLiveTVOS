@@ -30,7 +30,7 @@ public final class JSRuntime: @unchecked Sendable {
             Self.configureHostSession(in: context)
             Self.configureHostRuntime(in: context)
             Self.configureHostBootstrap(in: context)
-            Self.configureHostYY(in: context, queue: queue)
+            Self.configureHostNativeStream(in: context, queue: queue, pluginId: pluginId)
         }
     }
 
@@ -250,6 +250,32 @@ private extension JSRuntime {
           Host.runtime.loadBuiltinScript = function (name) {
             return !!__lp_host_load_builtin_script(String(name || ""));
           };
+
+          Host.nativeStream = Host.nativeStream || {};
+          Host.nativeStream.resolve = function (options) {
+            var request = options && typeof options === "object" ? options : {};
+            return new Promise(function (resolve, reject) {
+              __lp_host_native_stream_resolve(
+                JSON.stringify(request),
+                function (resultJSON) {
+                  try {
+                    resolve(JSON.parse(resultJSON || "{}"));
+                  } catch (err) {
+                    reject(Host.makeError("PARSE", String(err || "native stream parse failed"), {}));
+                  }
+                },
+                function (err) {
+                  reject(Host.makeError("UPSTREAM", String(err || "native stream request failed"), {
+                    provider: request.provider || request.providerId || request.platformId || ""
+                  }));
+                }
+              );
+            });
+          };
+
+          Host.stream = Host.stream || {};
+          Host.stream.resolve = Host.nativeStream.resolve;
+          Host.stream.getInfo = Host.nativeStream.resolve;
 
         })();
         """
@@ -750,48 +776,29 @@ private extension JSRuntime {
         return try JSONSerialization.jsonObject(with: data)
     }
 
-    // MARK: - YY Platform Specific
+    // MARK: - Native Stream Bridge
 
-    static func configureHostYY(in context: JSContext, queue: DispatchQueue) {
-        func parseInt(_ value: Any?) -> Int? {
-            if let number = value as? NSNumber {
-                return number.intValue
-            }
-            if let string = value as? String {
-                return Int(string.trimmingCharacters(in: .whitespacesAndNewlines))
-            }
-            return nil
-        }
-
-        let requestStreamInfo: (String, [String: Any], JSValue, JSValue) -> Void = { roomId, options, resolve, reject in
+    static func configureHostNativeStream(in context: JSContext, queue: DispatchQueue, pluginId: String) {
+        let resolveNativeStream: @convention(block) (String, JSValue, JSValue) -> Void = { optionsJSON, resolve, reject in
             nonisolated(unsafe) let resolve = resolve
             nonisolated(unsafe) let reject = reject
-            let requestedGear = parseInt(options["qn"]) ?? parseInt(options["gear"])
-            let requestedLineSeq = parseInt(options["lineSeq"]) ?? parseInt(options["line_seq"])
+            let data = optionsJSON.data(using: .utf8) ?? Data()
+            let options = (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
+
             Task {
                 do {
-                    let client = YYWebSocketClient(
-                        roomId: roomId,
-                        requestedLineSeq: requestedLineSeq,
-                        requestedGear: requestedGear
+                    let streamInfo = try await NativeStreamBridge.resolve(
+                        options: options,
+                        defaultProviderId: pluginId
                     )
-                    let streamInfo = try await client.getStreamInfo()
 
                     queue.async {
                         do {
-                            guard JSONSerialization.isValidJSONObject(streamInfo) else {
-                                throw NSError(
-                                    domain: "LiveParse.JSRuntime",
-                                    code: -1,
-                                    userInfo: [NSLocalizedDescriptionKey: "streamInfo is not JSON serializable"]
-                                )
-                            }
-                            let jsonData = try JSONSerialization.data(withJSONObject: streamInfo)
-                            let jsonString = String(data: jsonData, encoding: .utf8) ?? "{}"
+                            let jsonString = try Self.jsonString(from: streamInfo)
                             resolve.call(withArguments: [jsonString])
                             context.evaluateScript("void(0)")
                         } catch {
-                            reject.call(withArguments: ["YY serialize stream info failed: \(error.localizedDescription)"])
+                            reject.call(withArguments: ["Native stream serialize failed: \(error.localizedDescription)"])
                             context.evaluateScript("void(0)")
                         }
                     }
@@ -804,22 +811,18 @@ private extension JSRuntime {
             }
         }
 
-        let yyGetStreamInfoBlock: @convention(block) (String, JSValue, JSValue) -> Void = { roomId, resolve, reject in
-            requestStreamInfo(roomId, [:], resolve, reject)
-        }
+        context.setObject(resolveNativeStream, forKeyedSubscript: "__lp_host_native_stream_resolve" as NSString)
+    }
 
-        let yyGetStreamInfoExBlock: @convention(block) (String, JSValue, JSValue, JSValue) -> Void = { roomId, optionsValue, resolve, reject in
-            var options: [String: Any] = [:]
-            if let dict = optionsValue.toDictionary() {
-                options = Dictionary(uniqueKeysWithValues: dict.compactMap { key, value in
-                    guard let keyString = key as? String else { return nil }
-                    return (keyString, value)
-                })
-            }
-            requestStreamInfo(roomId, options, resolve, reject)
+    static func jsonString(from object: Any) throws -> String {
+        guard JSONSerialization.isValidJSONObject(object) else {
+            throw NSError(
+                domain: "LiveParse.JSRuntime",
+                code: -1,
+                userInfo: [NSLocalizedDescriptionKey: "object is not JSON serializable"]
+            )
         }
-
-        context.setObject(yyGetStreamInfoBlock, forKeyedSubscript: "__lp_yy_get_stream_info" as NSString)
-        context.setObject(yyGetStreamInfoExBlock, forKeyedSubscript: "__lp_yy_get_stream_info_ex" as NSString)
+        let jsonData = try JSONSerialization.data(withJSONObject: object)
+        return String(data: jsonData, encoding: .utf8) ?? "{}"
     }
 }
