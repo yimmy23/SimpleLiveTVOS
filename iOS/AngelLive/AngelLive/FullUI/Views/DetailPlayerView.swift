@@ -59,7 +59,7 @@ struct DetailPlayerView: View {
         return viewModel.playErrorMessage ?? "播放失败"
     }
 
-    private var shouldShowBilibiliLoginPrompt: Bool {
+    private var shouldShowPlatformLoginPrompt: Bool {
         currentPlaybackError?.isAuthRequired == true
     }
 
@@ -163,7 +163,7 @@ struct DetailPlayerView: View {
                         curlCommand: currentPlaybackError?.liveParseCurl,
                         showDismiss: true,
                         showRetry: true,
-                        showLoginButton: shouldShowBilibiliLoginPrompt,
+                        showLoginButton: shouldShowPlatformLoginPrompt,
                         showDetailButton: currentPlaybackError?.liveParseDetail?.isEmpty == false,
                         onDismiss: {
                             dismiss()
@@ -173,7 +173,7 @@ struct DetailPlayerView: View {
                                 await viewModel.loadPlayURL(force: true)
                             }
                         },
-                        onLogin: shouldShowBilibiliLoginPrompt ? {
+                        onLogin: shouldShowPlatformLoginPrompt ? {
                             dismiss()
                             NotificationCenter.default.post(name: .switchToSettings, object: nil)
                         } : nil

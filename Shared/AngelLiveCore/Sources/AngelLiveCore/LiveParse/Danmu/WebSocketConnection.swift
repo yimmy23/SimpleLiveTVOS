@@ -340,7 +340,7 @@ private extension WebSocketConnection {
     func effectiveWebSocketHeaders() -> [String: String] {
         guard let headers else { return [:] }
 
-        if pluginId == "panda" || danmakuPlan?.runtime?.protocolId == "panda_centrifuge_json" {
+        if danmakuPlan?.runtime?.webSocketHeaderMode == .minimalNoCookie {
             var effective: [String: String] = [:]
 
             if let userAgent = headerValue(named: "User-Agent", in: headers) {
@@ -353,7 +353,7 @@ private extension WebSocketConnection {
                 effective["Host"] = host
             }
 
-            // Match the working Python probe handshake and stop Starscream from auto-injecting cookies.
+            // Some transports require a minimal handshake and no auto-injected cookies.
             effective["Cookie"] = ""
             return effective
         }

@@ -20,6 +20,12 @@ public struct LiveParsePluginManifest: Codable, Equatable, Sendable {
     public let loginFlow: ManifestLoginFlow?
     /// 分享链接候选匹配规则（可选）。宿主只用它筛选候选平台，最终解析仍由插件完成。
     public let shareResolve: ManifestShareResolve?
+    /// 原生流能力声明（可选）。插件声明后才允许调用 Host.stream / Host.nativeStream。
+    public let nativeStream: ManifestNativeStream?
+    /// 宿主运行时行为声明（可选）。用于把收藏、状态轮询等宿主策略从平台枚举分支迁到资源声明。
+    public let hostBehavior: ManifestHostBehavior?
+    /// 旧版本凭证/session 迁移声明（可选）。宿主只按声明迁移，不内置平台映射。
+    public let sessionMigration: ManifestSessionMigration?
 
     public init(
         pluginId: String,
@@ -34,7 +40,10 @@ public struct LiveParsePluginManifest: Codable, Equatable, Sendable {
         preloadScripts: [String]? = nil,
         auth: ManifestAuth? = nil,
         loginFlow: ManifestLoginFlow? = nil,
-        shareResolve: ManifestShareResolve? = nil
+        shareResolve: ManifestShareResolve? = nil,
+        nativeStream: ManifestNativeStream? = nil,
+        hostBehavior: ManifestHostBehavior? = nil,
+        sessionMigration: ManifestSessionMigration? = nil
     ) {
         self.pluginId = pluginId
         self.version = version
@@ -49,6 +58,99 @@ public struct LiveParsePluginManifest: Codable, Equatable, Sendable {
         self.auth = auth
         self.loginFlow = loginFlow
         self.shareResolve = shareResolve
+        self.nativeStream = nativeStream
+        self.hostBehavior = hostBehavior
+        self.sessionMigration = sessionMigration
+    }
+}
+
+public struct ManifestNativeStream: Codable, Equatable, Hashable, Sendable {
+    /// 未显式传 provider 时使用的原生能力 ID。
+    public let defaultProviderId: String?
+    /// 允许调用的原生能力 ID 列表。为空时仅允许 defaultProviderId。
+    public let allowedProviderIds: [String]?
+
+    public init(defaultProviderId: String? = nil, allowedProviderIds: [String]? = nil) {
+        self.defaultProviderId = defaultProviderId
+        self.allowedProviderIds = allowedProviderIds
+    }
+}
+
+public struct ManifestHostBehavior: Codable, Equatable, Hashable, Sendable {
+    /// 收藏记录的主匹配键。默认 roomId；当房间号会变动时可声明为 userId。
+    public let favoriteIdentityKey: String?
+    /// 收藏刷新成功后是否保留原收藏元信息，仅合并最新状态。
+    public let preserveFavoriteRoomInfoOnRefresh: Bool?
+    /// 收藏刷新失败时回填的直播状态 rawValue。默认 unknown。
+    public let liveStateFailureFallback: String?
+    /// 是否允许宿主定时轮询下播状态。默认跟随 liveState 能力。
+    public let supportsLiveEndPolling: Bool?
+    /// 允许进入播放页的直播状态 rawValue。默认仅 live。
+    public let playableLiveStates: [String]?
+    /// 外部打开直播间的 URL 模板，支持 {roomId}/{userId} 占位符。
+    public let externalRoomURLTemplate: String?
+    /// 展示用主题色，格式如 #RRGGBB 或 #AARRGGBB。
+    public let themeColor: String?
+
+    public init(
+        favoriteIdentityKey: String? = nil,
+        preserveFavoriteRoomInfoOnRefresh: Bool? = nil,
+        liveStateFailureFallback: String? = nil,
+        supportsLiveEndPolling: Bool? = nil,
+        playableLiveStates: [String]? = nil,
+        externalRoomURLTemplate: String? = nil,
+        themeColor: String? = nil
+    ) {
+        self.favoriteIdentityKey = favoriteIdentityKey
+        self.preserveFavoriteRoomInfoOnRefresh = preserveFavoriteRoomInfoOnRefresh
+        self.liveStateFailureFallback = liveStateFailureFallback
+        self.supportsLiveEndPolling = supportsLiveEndPolling
+        self.playableLiveStates = playableLiveStates
+        self.externalRoomURLTemplate = externalRoomURLTemplate
+        self.themeColor = themeColor
+    }
+}
+
+public struct ManifestSessionMigration: Codable, Equatable, Hashable, Sendable {
+    /// 旧 session/keychain 使用过的 pluginId/rawValue，迁移到当前 pluginId。
+    public let legacyPluginIds: [String]?
+    /// 旧 UserDefaults Cookie 键名列表，按顺序取第一个非空值。
+    public let userDefaultsCookieKeys: [String]?
+    /// 旧 UserDefaults UID 键名列表，按顺序取第一个非空值。
+    public let userDefaultsUIDKeys: [String]?
+    /// 迁移完成后需要清理的旧 UserDefaults 键名。
+    public let cleanupUserDefaultsKeys: [String]?
+    /// 旧 CloudKit recordName 列表，迁移到通用 recordName。
+    public let legacyCloudRecordNames: [String]?
+    /// 用于粗略判断旧 Cookie 是否已认证的关键片段。
+    public let authCookieMarkers: [String]?
+    /// 旧同步开关键名列表。
+    public let legacyICloudSyncEnabledKeys: [String]?
+    /// 旧同步时间键名列表。
+    public let legacyICloudSyncTimeKeys: [String]?
+    /// 无登录态时仍需附带的默认 Cookie。
+    public let defaultCookie: String?
+
+    public init(
+        legacyPluginIds: [String]? = nil,
+        userDefaultsCookieKeys: [String]? = nil,
+        userDefaultsUIDKeys: [String]? = nil,
+        cleanupUserDefaultsKeys: [String]? = nil,
+        legacyCloudRecordNames: [String]? = nil,
+        authCookieMarkers: [String]? = nil,
+        legacyICloudSyncEnabledKeys: [String]? = nil,
+        legacyICloudSyncTimeKeys: [String]? = nil,
+        defaultCookie: String? = nil
+    ) {
+        self.legacyPluginIds = legacyPluginIds
+        self.userDefaultsCookieKeys = userDefaultsCookieKeys
+        self.userDefaultsUIDKeys = userDefaultsUIDKeys
+        self.cleanupUserDefaultsKeys = cleanupUserDefaultsKeys
+        self.legacyCloudRecordNames = legacyCloudRecordNames
+        self.authCookieMarkers = authCookieMarkers
+        self.legacyICloudSyncEnabledKeys = legacyICloudSyncEnabledKeys
+        self.legacyICloudSyncTimeKeys = legacyICloudSyncTimeKeys
+        self.defaultCookie = defaultCookie
     }
 }
 

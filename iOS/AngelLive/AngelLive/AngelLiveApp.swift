@@ -36,7 +36,7 @@ struct AngelLiveApp: App {
                 .environment(playerManager)
                 .environment(welcomeManager)
                 .installToast(position: .top)
-                // 旧 BilibiliCookieManager 已删除，凭证同步由 PlatformCredentialSyncService 管理
+                // 旧单平台凭证管理已删除，凭证同步由 PlatformCredentialSyncService 管理
                 .onAppear {
                     GeneralSettingModel().globalGeneralSettingFavoriteStyle = AngelLiveFavoriteStyle.liveState.rawValue
                 }
@@ -68,9 +68,6 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 
         Task {
             await PlatformSessionLiveParseBridge.syncFromPersistedSessionsOnLaunch()
-            #if IOS_DEVELOPER_MODE
-            await logKuaishouCookieOnLaunch()
-            #endif
         }
 
         // 初始化屏幕方向设置
@@ -99,15 +96,6 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         let storage = LiveParsePlugins.shared.storage
         print("[iOS] 插件根目录: \(storage.pluginsRootDirectory.path)")
         print("[iOS] 插件状态文件: \(storage.stateFileURL.path)")
-    }
-
-    private func logKuaishouCookieOnLaunch() async {
-        let session = await PlatformSessionManager.shared.getSession(pluginId: "ks")
-        if let cookie = session?.cookie, !cookie.isEmpty {
-            print("[iOS] 快手 Cookie: \(cookie)")
-        } else {
-            print("[iOS] 快手 Cookie: <empty>")
-        }
     }
 
     // MARK: - Orientation Support

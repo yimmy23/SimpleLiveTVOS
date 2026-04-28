@@ -25,7 +25,7 @@ struct ErrorView: View {
     @ObservedObject private var syncService = PlatformCredentialSyncService.shared
 
     /// 是否有任何平台已登录
-    private var isBilibiliLoggedIn: Bool {
+    private var isAnyPlatformLoggedIn: Bool {
         syncService.loggedInByPluginId.values.contains(true)
     }
 
@@ -75,8 +75,8 @@ struct ErrorView: View {
                         .font(.system(size: 24, weight: .medium))
                         .lineSpacing(6)
 
-                    // 需要登录且已登录B站时显示额外提示
-                    if showLoginButton && isBilibiliLoggedIn {
+                    // 需要登录且已有平台登录时显示额外提示
+                    if showLoginButton && isAnyPlatformLoggedIn {
                         Text("tvOS 用户如已经登录依旧报错，请等待几分钟后重试")
                             .font(.system(size: 20, weight: .medium))
                             .foregroundColor(.yellow)
@@ -99,8 +99,8 @@ struct ErrorView: View {
                             }
                         }
 
-                        // 需要登录时，只有未登录B站才显示登录按钮（其他平台始终显示）
-                        if showLoginButton && !isBilibiliLoggedIn {
+                        // 需要登录时，已有任一平台登录时不重复显示登录按钮
+                        if showLoginButton && !isAnyPlatformLoggedIn {
                             Button(action: {
                                 onDismiss()
                                 NotificationCenter.default.post(name: SimpleLiveNotificationNames.navigateToSettings, object: nil)

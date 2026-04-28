@@ -61,12 +61,12 @@ struct SearchRoomView: View {
             // 搜索结果区域（占满全宽）
             if liveViewModel.hasError, let error = liveViewModel.currentError {
                 ErrorView(
-                    title: error.isBilibiliAuthRequired ? "搜索失败-请登录B站账号并检查官方页面" : "搜索失败",
+                    title: error.isAuthRequired ? "搜索失败-请登录相关账号并检查官方页面" : "搜索失败",
                     message: error.liveParseMessage,
                     detailMessage: error.liveParseDetail,
                     curlCommand: error.liveParseCurl,
                     showRetry: true,
-                    showLoginButton: error.isBilibiliAuthRequired,
+                    showLoginButton: error.isAuthRequired,
                     onDismiss: {
                         liveViewModel.hasError = false
                         liveViewModel.currentError = nil

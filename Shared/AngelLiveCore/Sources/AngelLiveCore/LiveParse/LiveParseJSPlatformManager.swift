@@ -6,24 +6,33 @@ public struct LiveParseJSPlatform: Hashable, Codable, Sendable {
     public let platformName: String?
     public let platformDescription: String?
     public let shareResolve: ManifestShareResolve?
+    public let nativeStream: ManifestNativeStream?
+    public let hostBehavior: ManifestHostBehavior?
+    public let sessionMigration: ManifestSessionMigration?
 
     public init(
         pluginId: String,
         liveTypes: [LiveType],
         platformName: String? = nil,
         platformDescription: String? = nil,
-        shareResolve: ManifestShareResolve? = nil
+        shareResolve: ManifestShareResolve? = nil,
+        nativeStream: ManifestNativeStream? = nil,
+        hostBehavior: ManifestHostBehavior? = nil,
+        sessionMigration: ManifestSessionMigration? = nil
     ) {
         self.pluginId = pluginId
         self.liveTypes = liveTypes
         self.platformName = platformName
         self.platformDescription = platformDescription
         self.shareResolve = shareResolve
+        self.nativeStream = nativeStream
+        self.hostBehavior = hostBehavior
+        self.sessionMigration = sessionMigration
     }
 
     /// 兼容旧调用：取首个 liveType 作为主类型。
     public var liveType: LiveType {
-        liveTypes.first ?? .bilibili
+        liveTypes.first ?? LiveType(rawValue: pluginId) ?? .placeholder
     }
 
     public var displayName: String {
@@ -157,6 +166,25 @@ public enum LiveParseJSPlatformManager {
                 "roomId": roomId,
                 "userId": userId
             ])
+        )
+    }
+
+    public static func refreshPlayback(
+        platform: LiveParseJSPlatform,
+        roomId: String,
+        cdn: LiveQualityModel,
+        quality: LiveQualityDetail
+    ) async throws -> LiveQualityDetail {
+        let cdnPayload = try encodePayload(cdn)
+        let qualityPayload = try encodePayload(quality)
+        return try await callDecodable(
+            platform: platform,
+            function: "refreshPlayback",
+            payload: [
+                "roomId": roomId,
+                "cdn": cdnPayload,
+                "quality": qualityPayload
+            ]
         )
     }
 
@@ -329,6 +357,14 @@ public enum LiveParseJSPlatformManager {
         return payload
     }
 
+    private static func encodePayload<T: Encodable>(_ value: T) throws -> [String: Any] {
+        let data = try JSONEncoder().encode(value)
+        guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw LiveParsePluginError.invalidReturnValue("Failed to encode \(String(describing: T.self)) as plugin payload")
+        }
+        return object
+    }
+
     private static func parseLiveState(_ payload: PluginLiveStatePayload) -> LiveState? {
         if let state = payload.liveState {
             return normalizeLiveState(state)
@@ -404,7 +440,10 @@ public enum LiveParseJSPlatformManager {
             liveTypes: liveTypes,
             platformName: manifest.displayName,
             platformDescription: manifest.platformDescription,
-            shareResolve: manifest.shareResolve
+            shareResolve: manifest.shareResolve,
+            nativeStream: manifest.nativeStream,
+            hostBehavior: manifest.hostBehavior,
+            sessionMigration: manifest.sessionMigration
         )
         return ManifestCandidate(platform: platform, version: manifest.version, sourcePriority: sourcePriority)
     }
@@ -417,26 +456,33 @@ public enum LiveParseJSPlatformManager {
 
         let versionCompare = semverCompare(candidate.version, existing.version)
         if versionCompare > 0 {
-            storage[candidate.platform.pluginId] = candidateWithShareResolveFallback(candidate, fallback: existing)
+            storage[candidate.platform.pluginId] = candidateWithManifestFallbacks(candidate, fallback: existing)
             return
         }
         if versionCompare < 0 {
-            storage[candidate.platform.pluginId] = candidateWithShareResolveFallback(existing, fallback: candidate)
+            storage[candidate.platform.pluginId] = candidateWithManifestFallbacks(existing, fallback: candidate)
             return
         }
 
         if candidate.sourcePriority > existing.sourcePriority {
-            storage[candidate.platform.pluginId] = candidateWithShareResolveFallback(candidate, fallback: existing)
+            storage[candidate.platform.pluginId] = candidateWithManifestFallbacks(candidate, fallback: existing)
         } else {
-            storage[candidate.platform.pluginId] = candidateWithShareResolveFallback(existing, fallback: candidate)
+            storage[candidate.platform.pluginId] = candidateWithManifestFallbacks(existing, fallback: candidate)
         }
     }
 
-    private static func candidateWithShareResolveFallback(
+    private static func candidateWithManifestFallbacks(
         _ primary: ManifestCandidate,
         fallback: ManifestCandidate
     ) -> ManifestCandidate {
-        guard primary.platform.shareResolve == nil, let shareResolve = fallback.platform.shareResolve else {
+        let shareResolve = primary.platform.shareResolve ?? fallback.platform.shareResolve
+        let nativeStream = primary.platform.nativeStream ?? fallback.platform.nativeStream
+        let hostBehavior = primary.platform.hostBehavior ?? fallback.platform.hostBehavior
+        let sessionMigration = primary.platform.sessionMigration ?? fallback.platform.sessionMigration
+        guard shareResolve != primary.platform.shareResolve ||
+                nativeStream != primary.platform.nativeStream ||
+                hostBehavior != primary.platform.hostBehavior ||
+                sessionMigration != primary.platform.sessionMigration else {
             return primary
         }
 
@@ -446,7 +492,10 @@ public enum LiveParseJSPlatformManager {
                 liveTypes: primary.platform.liveTypes,
                 platformName: primary.platform.platformName,
                 platformDescription: primary.platform.platformDescription,
-                shareResolve: shareResolve
+                shareResolve: shareResolve,
+                nativeStream: nativeStream,
+                hostBehavior: hostBehavior,
+                sessionMigration: sessionMigration
             ),
             version: primary.version,
             sourcePriority: primary.sourcePriority

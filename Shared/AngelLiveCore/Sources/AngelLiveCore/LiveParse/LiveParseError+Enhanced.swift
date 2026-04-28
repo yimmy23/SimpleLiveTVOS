@@ -273,23 +273,7 @@ public enum BusinessError: Error {
             result += "错误代码: \(code)\n"
             result += "错误信息: \(message)"
 
-            // 特殊错误码提示
-            if platform.contains("Bilibili") || platform.contains("哔哩") {
-                switch code {
-                case 352:
-                    result += "\n\n⚠️ 风控验证失败，请登录 B站 账号后重试"
-                case 412:
-                    result += "\n\n⚠️ 请求被拦截，可能需要人机验证"
-                case -101:
-                    result += "\n\n⚠️ 账号未登录"
-                case -400:
-                    result += "\n\n⚠️ 请求错误"
-                case -404:
-                    result += "\n\n⚠️ 无此项"
-                default:
-                    break
-                }
-            }
+            result += genericAPIHint(for: code)
 
             if let request = request {
                 result += request.formattedString
@@ -526,7 +510,22 @@ func logError(_ message: String, file: String = #file, function: String = #funct
 
 // MARK: - 辅助函数
 
-/// 格式化位置信息，去掉文件路径和行号，只保留平台和函数名
+private func genericAPIHint(for code: Int) -> String {
+    switch code {
+    case 352, 412:
+        return "\n\n⚠️ 请求被风控或拦截，可能需要登录或完成验证"
+    case -101:
+        return "\n\n⚠️ 登录凭证缺失或已失效"
+    case -400:
+        return "\n\n⚠️ 请求参数错误"
+    case -404:
+        return "\n\n⚠️ 资源不存在"
+    default:
+        return ""
+    }
+}
+
+/// 格式化位置信息，去掉文件路径和行号，只保留资源和函数名
 /// - Parameter location: 原始位置信息，可能包含文件路径和行号（如 "/path/to/file.swift:123"）或函数名（如 "Platform.functionName"）
 /// - Returns: 格式化后的位置信息（如 "Platform.functionName"）
 private func formatLocation(_ location: String) -> String {
@@ -535,7 +534,7 @@ private func formatLocation(_ location: String) -> String {
         return location
     }
 
-    // 如果包含文件路径（如 "/path/to/Bilibili.swift:123"），提取文件名（去掉路径和行号）
+    // 如果包含文件路径，提取文件名（去掉路径和行号）
     if location.contains("/") {
         // 提取文件名（去掉路径）
         let fileName = (location as NSString).lastPathComponent

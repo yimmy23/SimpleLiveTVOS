@@ -100,20 +100,29 @@ enum LiveParsePlatformSessionVault {
 
     static func canonicalPlatformId(_ platformId: String) -> String {
         let raw = platformId.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        switch raw {
-        case "kuaishou":
-            return "ks"
-        default:
-            return raw
+        guard !raw.isEmpty else { return "" }
+        if let platform = LiveParseJSPlatformManager.platform(forPluginId: raw) {
+            return platform.pluginId
         }
+        if let platform = LiveParseJSPlatformManager.availablePlatforms.first(where: {
+            $0.sessionMigration?.legacyPluginIds?.contains(raw) == true
+        }) {
+            return platform.pluginId
+        }
+        return raw
     }
 
     private static func defaultCookie(for platformId: String) -> String? {
-        switch platformId {
-        case "soop":
-            return "AbroadChk=OK"
-        default:
-            return nil
-        }
+        LiveParseJSPlatformManager.platform(forPluginId: platformId)?
+            .sessionMigration?
+            .defaultCookie?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .nilIfEmpty
+    }
+}
+
+private extension String {
+    var nilIfEmpty: String? {
+        isEmpty ? nil : self
     }
 }

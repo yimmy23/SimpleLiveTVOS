@@ -4,6 +4,10 @@ import Cache
 public enum LiveService {
 
     public static func fetchCategoryList(liveType: LiveType) async throws -> [LiveMainListModel] {
+        guard let platform = SandboxPluginCatalog.platform(for: liveType) else {
+            return []
+        }
+
         let diskConfig = DiskConfig(name: "Simple_Live_TV")
         let memoryConfig = MemoryConfig(expiry: .never, countLimit: 50, totalCostLimit: 50)
         let storage: Storage<String, [LiveMainListModel]> = try Storage<String, [LiveMainListModel]>(
@@ -13,35 +17,42 @@ public enum LiveService {
           transformer: TransformerFactory.forCodable(ofType: [LiveMainListModel].self)
         )
 
-        var categories: [LiveMainListModel] = []
-        var hasKsCache = false
-        if liveType == .ks {
-            do {
-                categories = try storage.object(forKey: "ks_categories")
-                hasKsCache = true
-            } catch {
-                categories = []
-            }
+        let version = SandboxPluginCatalog.installedPluginMap()[platform.pluginId]?.version ?? "unknown"
+        let cacheKey = "categories_\(platform.pluginId)_\(version)_\(liveType.rawValue)"
+
+        if let categories = try? storage.object(forKey: cacheKey), !categories.isEmpty {
+            return categories
         }
 
-        if categories.isEmpty && hasKsCache == false {
-            categories = try await ApiManager.fetchCategoryList(liveType: liveType)
-        }
+        let categories = try await ApiManager.fetchCategoryList(liveType: liveType)
 
-        if liveType == .ks && hasKsCache == false {
-            try storage.setObject(categories, forKey: "ks_categories")
+        if !categories.isEmpty {
+            try storage.setObject(categories, forKey: cacheKey)
         }
 
         return categories
     }
 
     public static func fetchRoomList(liveType: LiveType, category: LiveCategoryModel, parentBiz: String?, page: Int) async throws -> [LiveModel] {
-        var finalCategory = category
-        if liveType == .yy {
-            finalCategory.id = parentBiz ?? ""
-            finalCategory.parentId = category.biz ?? ""
+        var context: [String: Any] = [
+            "category": [
+                "id": category.id,
+                "parentId": category.parentId,
+                "title": category.title,
+                "icon": category.icon,
+                "biz": category.biz ?? ""
+            ]
+        ]
+        if let parentBiz {
+            context["parentBiz"] = parentBiz
         }
-        let roomList = try await ApiManager.fetchRoomList(liveCategory: finalCategory, page: page, liveType: liveType)
+
+        let roomList = try await ApiManager.fetchRoomList(
+            liveCategory: category,
+            page: page,
+            liveType: liveType,
+            context: context
+        )
         return roomList
     }
 

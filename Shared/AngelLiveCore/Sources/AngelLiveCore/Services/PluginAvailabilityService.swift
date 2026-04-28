@@ -16,7 +16,7 @@ public final class PluginAvailabilityService: @unchecked Sendable {
     /// sandbox 中是否有已安装的插件
     public private(set) var hasAvailablePlugins: Bool = false
 
-    /// 已安装插件的 pluginId 列表（如 ["bilibili", "douyu", "huya"]）
+    /// 已安装资源扩展的 pluginId 列表
     public private(set) var installedPluginIds: [String] = []
 
     /// 当前正在检测中

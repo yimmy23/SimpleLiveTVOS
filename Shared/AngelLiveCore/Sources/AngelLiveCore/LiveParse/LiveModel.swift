@@ -18,8 +18,8 @@ public struct LiveModel: Identifiable, Codable, Equatable, Hashable, Sendable {
     public let userHeadImg: String
     public let liveType: LiveType
     public var liveState: String?
-    public let userId: String //B站 userId 抖音id_str
-    public let roomId: String //B站 roomId 抖音web_rid
+    public let userId: String
+    public let roomId: String
     public let liveWatchedCount: String?
 
     public init(userName: String, roomTitle: String, roomCover: String, userHeadImg: String, liveType: LiveType, liveState: String?, userId: String, roomId: String, liveWatchedCount: String?) {
@@ -64,22 +64,64 @@ public struct LiveModel: Identifiable, Codable, Equatable, Hashable, Sendable {
 
 public struct LiveQualityModel: Codable, Sendable {
     public var cdn: String
-    public var douyuCdnName: String? = ""
-    public var yyLineSeq: String? = ""
+    public var displayName: String?
+    public var requestContext: [String: String]?
     public var qualitys: [LiveQualityDetail]
     
-    init(cdn: String, douyuCdnName: String? = nil, yyLineSeq: String? = nil, qualitys: [LiveQualityDetail]) {
+    init(
+        cdn: String,
+        displayName: String? = nil,
+        requestContext: [String: String]? = nil,
+        qualitys: [LiveQualityDetail]
+    ) {
         self.cdn = cdn
-        self.douyuCdnName = douyuCdnName
-        self.yyLineSeq = yyLineSeq
+        self.displayName = displayName
+        self.requestContext = requestContext
         self.qualitys = qualitys
+    }
+}
+
+public enum LivePlaybackStreamFormat: String, Codable, Sendable {
+    case flv
+    case hlsLive
+    case hlsVod
+    case dash
+    case unknown
+}
+
+public enum LivePlaybackSelectionBehavior: String, Codable, Sendable {
+    case direct
+    case refreshOnSelect
+}
+
+public struct LivePlaybackHints: Codable, Sendable {
+    /// 描述流本身的格式/语义，资源侧不需要知道宿主有哪些播放器。
+    public var streamFormat: LivePlaybackStreamFormat?
+    /// 流需要自定义分片/加载管线时置 true，由宿主映射到合适的播放器能力。
+    public var requiresCustomSegmentLoader: Bool?
+    /// 用户选中该项时是否需要重新请求真实播放地址。
+    public var selectionBehavior: LivePlaybackSelectionBehavior?
+    /// 开播后需要跳转到的初始时间点（秒），用于回放/轮播类切片流。
+    public var startPositionSeconds: Double?
+
+    public init(
+        streamFormat: LivePlaybackStreamFormat? = nil,
+        requiresCustomSegmentLoader: Bool? = nil,
+        selectionBehavior: LivePlaybackSelectionBehavior? = nil,
+        startPositionSeconds: Double? = nil
+    ) {
+        self.streamFormat = streamFormat
+        self.requiresCustomSegmentLoader = requiresCustomSegmentLoader
+        self.selectionBehavior = selectionBehavior
+        self.startPositionSeconds = startPositionSeconds
     }
 }
 
 public struct LiveQualityDetail: Codable, Sendable {
     public var roomId: String
     public var title: String
-    public var qn: Int //bilibili用qn请求地址
+    /// 资源侧用于标识清晰度或重取流参数的通用数值。
+    public var qn: Int
     public var url: String
     public var liveCodeType: LiveCodeType
     public var liveType: LiveType
@@ -87,14 +129,21 @@ public struct LiveQualityDetail: Codable, Sendable {
     public var userAgent: String?
     /// 播放该线路时建议附带的请求头（可选）
     public var headers: [String: String]?
+    /// 重新取流或切换线路时透传给资源侧的通用上下文。
+    public var requestContext: [String: String]?
+    /// 资源侧声明的流特性/能力需求，宿主据此映射播放计划。
+    public var playbackHints: LivePlaybackHints?
 }
 
 public struct LiveCategoryModel: Codable {
-    public var id: String //B站: id; Douyu:cid2; Huya: gid; Douyin: partitionId
-    public var parentId: String //B站: parent_id; Douyu: 不需要; Huya: 不需要; Douyin: partitionType
+    /// 资源侧分类 ID，宿主仅透传。
+    public var id: String
+    /// 资源侧父分类 ID，宿主仅透传。
+    public var parentId: String
     public let title: String
     public let icon: String
-    public var biz: String? //YY请求子分类房间的biz，其他平台为空
+    /// 资源侧分类附加参数，宿主仅透传。
+    public var biz: String?
     
     init(id: String, parentId: String, title: String, icon: String, biz: String? = "") {
         self.id = id
@@ -109,7 +158,8 @@ public struct LiveMainListModel: Codable {
     public let id: String
     public let title: String
     public let icon: String
-    public let biz: String? //YY请求分类房间的biz，其他平台为空
+    /// 资源侧分类附加参数，宿主仅透传。
+    public let biz: String?
     public var subList: [LiveCategoryModel]
     
     init(id: String, title: String, icon: String, biz: String? = "", subList: [LiveCategoryModel]) {
@@ -159,22 +209,7 @@ public struct LiveType: RawRepresentable, Hashable, Codable, Sendable, Expressib
 
     public var description: String { rawValue }
 
-    public static let bilibili: LiveType = .init(rawValue: "0")!
-    public static let huya: LiveType = .init(rawValue: "1")!
-    public static let douyin: LiveType = .init(rawValue: "2")!
-    public static let douyu: LiveType = .init(rawValue: "3")!
-    public static let cc: LiveType = .init(rawValue: "4")!
-    public static let ks: LiveType = .init(rawValue: "5")!
-    public static let yy: LiveType = .init(rawValue: "6")!
-    public static let youtube: LiveType = .init(rawValue: "7")!
-    public static let soop: LiveType = .init(rawValue: "8")!
-    public static let twitch: LiveType = .init(rawValue: "9")!
-    public static let kick: LiveType = .init(rawValue: "10")!
-    public static let panda: LiveType = .init(rawValue: "12")!
-
-    public static let builtIn: [LiveType] = [
-        .bilibili, .huya, .douyin, .douyu, .cc, .ks, .yy, .youtube, .soop, .twitch, .kick, .panda
-    ]
+    public static let placeholder: LiveType = .init(rawValue: "__placeholder__")!
 }
 
 public enum LiveState: String, Codable {

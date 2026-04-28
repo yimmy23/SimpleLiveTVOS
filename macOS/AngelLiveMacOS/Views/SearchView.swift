@@ -16,7 +16,6 @@ struct SearchView: View {
     @State private var searchResults: [LiveModel] = []
     @State private var isSearching = false
     @State private var searchError: Error?
-    @State private var showBilibiliLogin = false
     @State private var hasSearched = false
 
     var body: some View {
@@ -72,10 +71,6 @@ struct SearchView: View {
                 searchError = nil
                 hasSearched = false
             }
-        }
-        .sheet(isPresented: $showBilibiliLogin) {
-            MacPlatformLoginWebSheet(pluginId: "bilibili")
-                .frame(minWidth: 800, minHeight: 600)
         }
     }
 
@@ -162,16 +157,14 @@ struct SearchView: View {
     @ViewBuilder
     private func searchErrorState(error: Error) -> some View {
         ErrorView(
-            title: error.isBilibiliAuthRequired ? "搜索失败-请登录B站账号并检查官方页面" : "搜索失败",
+            title: error.isAuthRequired ? "搜索失败-请登录相关账号并检查官方页面" : "搜索失败",
             message: error.liveParseMessage,
             detailMessage: error.liveParseDetail,
             curlCommand: error.liveParseCurl,
             showRetry: true,
-            showLoginButton: error.isBilibiliAuthRequired,
+            showLoginButton: false,
             onRetry: { performSearch() },
-            onLogin: error.isBilibiliAuthRequired ? {
-                showBilibiliLogin = true
-            } : nil
+            onLogin: nil
         )
     }
 

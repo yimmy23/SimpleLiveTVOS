@@ -20,33 +20,48 @@ public enum ApiManager {
         return try await LiveParseJSPlatformManager.getLiveState(platform: platform, roomId: roomId, userId: userId)
     }
 
-    public static func fetchRoomList(liveCategory: LiveCategoryModel, page: Int, liveType: LiveType) async throws -> [LiveModel] {
+    public static func fetchRoomList(
+        liveCategory: LiveCategoryModel,
+        page: Int,
+        liveType: LiveType,
+        context: [String: Any] = [:]
+    ) async throws -> [LiveModel] {
         guard let platform = SandboxPluginCatalog.platform(for: liveType) else {
             return []
         }
-        if liveType == .bilibili {
-            return try await fetchBilibiliRoomListWithRetry(platform: platform, id: liveCategory.id, parentId: liveCategory.parentId, page: page)
+        return try await withRetry(maxRetries: 3, delayNanoseconds: 500_000_000) {
+            try await LiveParseJSPlatformManager.getRoomList(
+                platform: platform,
+                id: liveCategory.id,
+                parentId: liveCategory.parentId,
+                page: page,
+                context: context
+            )
         }
-        return try await LiveParseJSPlatformManager.getRoomList(platform: platform, id: liveCategory.id, parentId: liveCategory.parentId, page: page)
     }
 
-    /// B站请求带重试
-    private static func fetchBilibiliRoomListWithRetry(platform: LiveParseJSPlatform, id: String, parentId: String?, page: Int, maxRetries: Int = 3) async throws -> [LiveModel] {
+    private static func withRetry<T: Sendable>(
+        maxRetries: Int,
+        delayNanoseconds: UInt64,
+        operation: () async throws -> T
+    ) async throws -> T {
         var lastError: Error?
+        let attempts = max(maxRetries, 1)
 
-        for attempt in 1...maxRetries {
+        for attempt in 1...attempts {
             do {
-                return try await LiveParseJSPlatformManager.getRoomList(platform: platform, id: id, parentId: parentId, page: page)
+                return try await operation()
+            } catch is CancellationError {
+                throw CancellationError()
             } catch {
                 lastError = error
-
-                if attempt < maxRetries {
-                    try? await Task.sleep(nanoseconds: 500_000_000) // 0.5秒
+                if attempt < attempts {
+                    try await Task.sleep(nanoseconds: delayNanoseconds)
                 }
             }
         }
 
-        throw lastError ?? LiveParseError.liveParseError("B站请求失败", "连续 \(maxRetries) 次请求失败")
+        throw lastError ?? LiveParseError.liveParseError("房间列表请求失败", "连续 \(attempts) 次请求失败")
     }
 
     public static func fetchCategoryList(liveType: LiveType) async throws -> [LiveMainListModel] {

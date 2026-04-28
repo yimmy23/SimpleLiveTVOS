@@ -50,10 +50,8 @@ final class RoomInfoViewModel {
     var currentQualityIndex = 0  // 当前选中的清晰度索引
     var isPlaying = false
     var isHLSStream = false  // 当前是否为 HLS 流
-    var douyuFirstLoad = true
-    var yyFirstLoad = true
 
-    /// 斗鱼/YY 清晰度切换任务，用于取消之前的请求
+    /// 需要重新取流的清晰度切换任务，用于取消之前的请求
     private var qualitySwitchTask: Task<Void, Never>?
 
     // 弹幕相关属性
@@ -145,16 +143,6 @@ final class RoomInfoViewModel {
         }
     }
 
-    /// 构建 YY 请求上下文，兼容新版 WebSocket 拉流（qn）和旧版参数（gear/lineSeq）
-    private func yyPlaybackContext(cdn: LiveQualityModel, quality: LiveQualityDetail) -> [String: Any] {
-        RoomPlaybackResolver.yyPlaybackContext(cdn: cdn, quality: quality)
-    }
-
-    /// 从播放参数中提取首个可用 URL（YY WebSocket 返回通常只有一个清晰度）
-    private func firstPlayableURL(from playArgs: [LiveQualityModel]) -> URL? {
-        RoomPlaybackResolver.firstPlayableURL(from: playArgs)
-    }
-
     /// 按插件返回的播放配置应用 UA / Headers，保证三端行为一致
     private func applyPlaybackRequestOptions(for quality: LiveQualityDetail) {
         let requestOptions = RoomPlaybackResolver.requestOptions(
@@ -204,6 +192,28 @@ final class RoomInfoViewModel {
             qualityIndex: urlIndex
         )
         let currentQuality = currentCdn.qualitys[urlIndex]
+        if RoomPlaybackResolver.requiresRefreshOnSelect(currentQuality) {
+            let debugContext = RoomPlaybackDebugContext(
+                tappedSelection: tappedSelection,
+                effectiveSelection: tappedSelection
+            )
+            currentPlayQualityString = RoomPlaybackResolver.qualityDisplayTitle(
+                in: playArgs,
+                selection: tappedSelection
+            )
+            currentPlayQualityQn = currentQuality.qn
+            self.currentCdnIndex = cdnIndex
+            self.currentQualityIndex = urlIndex
+            applyPlayURL(
+                quality: currentQuality,
+                cdn: currentCdn,
+                cdnIndex: cdnIndex,
+                urlIndex: urlIndex,
+                debugContext: debugContext
+            )
+            return
+        }
+
         let resolved = resolvePlayerTypes(quality: currentQuality, cdnIndex: cdnIndex, urlIndex: urlIndex)
         let effectiveSelection = resolved.resolvedSelection ?? tappedSelection
         let effectiveQuality = effectiveSelection?.quality ?? currentQuality
@@ -247,21 +257,14 @@ final class RoomInfoViewModel {
     private struct PlayerTypeResult {
         let playerTypes: [MediaPlayerProtocol.Type]
         let isHLS: Bool
-        /// 某些分支会直接确定播放地址（如 B站/抖音 HLS 查找）
+        /// 某些分支会直接确定播放地址（如 HLS 资源查找）
         var overrideURL: URL?
         var overrideTitle: String?
         var resolvedSelection: RoomPlaybackSelection?
     }
 
     private func resolvePlayerTypes(quality: LiveQualityDetail, cdnIndex: Int, urlIndex: Int) -> PlayerTypeResult {
-        let plan = RoomPlaybackResolver.resolvePlan(
-            liveType: currentRoom.liveType,
-            liveState: currentRoom.liveState,
-            selectedQuality: quality,
-            playArgs: currentRoomPlayArgs,
-            cdnIndex: cdnIndex,
-            urlIndex: urlIndex
-        )
+        let plan = RoomPlaybackResolver.resolvePlan(selectedQuality: quality)
 
         return PlayerTypeResult(
             playerTypes: plan.playerKinds.map(playerType(for:)),
@@ -342,56 +345,33 @@ final class RoomInfoViewModel {
         urlIndex: Int,
         debugContext: RoomPlaybackDebugContext
     ) {
-        let platform = currentRoom.liveType
-
-        // 斗鱼/YY 切换清晰度时需要重新请求播放地址
-        if platform == .douyu && !douyuFirstLoad {
-            let context: [String: Any] = ["rate": quality.qn, "cdn": cdn.douyuCdnName ?? ""]
-            fetchPlayURL(platform: .douyu, context: context, debugContext: debugContext) { newPlayArgs in
-                newPlayArgs.first?.qualitys.first.flatMap { URL(string: $0.url) }
-            }
-            return
-        } else if platform == .douyu {
-            douyuFirstLoad = false
-        }
-
-        if platform == .douyin && currentPlayURL != nil {
-            let context = RoomPlaybackResolver.douyinPlaybackContext(cdn: cdn, quality: quality)
-            fetchPlayURL(platform: .douyin, context: context, debugContext: debugContext) { newPlayArgs in
-                if let selection = RoomPlaybackResolver.matchingSelection(in: newPlayArgs, preferredQuality: quality) {
-                    return URL(string: selection.quality.url)
-                }
-                return RoomPlaybackResolver.firstPlayableURL(from: newPlayArgs)
-            }
+        if RoomPlaybackResolver.shouldRefreshPlaybackOnSelection(quality, currentPlayURL: currentPlayURL) {
+            fetchRefreshedPlayURL(
+                quality: quality,
+                cdn: cdn,
+                cdnIndex: cdnIndex,
+                urlIndex: urlIndex,
+                debugContext: debugContext
+            )
             return
         }
 
-        if platform == .yy && !yyFirstLoad {
-            let context = yyPlaybackContext(cdn: cdn, quality: quality)
-            fetchPlayURL(platform: .yy, context: context, debugContext: debugContext) { [weak self] newPlayArgs in
-                guard let self else { return nil }
-                return firstPlayableURL(from: newPlayArgs)
-            }
-            return
-        } else if platform == .yy {
-            yyFirstLoad = false
-        }
-
-        // 通用：直接使用 URL
-        if let url = URL(string: quality.url) {
+        // 通用：直接使用资源侧返回的 URL。
+        if let url = RoomPlaybackResolver.playableURL(for: quality) {
             setPlayURL(url, source: "direct", debugContext: debugContext)
         }
         isLoading = false
     }
 
-    /// 异步请求新的播放地址（斗鱼/YY 切换清晰度时使用）
-    private func fetchPlayURL(
-        platform: LiveType,
-        context: [String: Any],
-        debugContext: RoomPlaybackDebugContext,
-        extractURL: @escaping @Sendable ([LiveQualityModel]) -> URL?
+    /// 异步请求新的播放地址（资源声明需要重新取流时使用）
+    private func fetchRefreshedPlayURL(
+        quality: LiveQualityDetail,
+        cdn: LiveQualityModel,
+        cdnIndex: Int,
+        urlIndex: Int,
+        debugContext: RoomPlaybackDebugContext
     ) {
-        guard let parsePlatform = SandboxPluginCatalog.platform(for: platform) else {
+        guard let parsePlatform = SandboxPluginCatalog.platform(for: currentRoom.liveType) else {
             isLoading = false
             return
         }
@@ -403,22 +383,61 @@ final class RoomInfoViewModel {
             guard let self else { return }
             do {
                 try Task.checkCancellation()
-                let newPlayArgs = try await LiveParseJSPlatformManager.getPlayArgs(
-                    platform: parsePlatform, roomId: roomId, userId: nil, context: context
+                let preparedQuality = try await RoomPlaybackPreparer.prepare(
+                    roomId: roomId,
+                    cdn: cdn,
+                    quality: quality,
+                    plugin: parsePlatform
                 )
                 try Task.checkCancellation()
                 await MainActor.run {
-                    if let url = extractURL(newPlayArgs) {
-                        self.setPlayURL(url, source: "refetch", debugContext: debugContext)
-                    }
-                    self.isLoading = false
+                    self.applyPreparedPlayURL(
+                        preparedQuality,
+                        cdnIndex: cdnIndex,
+                        urlIndex: urlIndex,
+                        source: "refreshPlayback",
+                        debugContext: debugContext
+                    )
                 }
             } catch is CancellationError {
                 // 任务被取消，不做处理
             } catch {
-                await MainActor.run { self.isLoading = false }
+                await MainActor.run {
+                    self.applyPreparedPlayURL(
+                        quality,
+                        cdnIndex: cdnIndex,
+                        urlIndex: urlIndex,
+                        source: "direct-fallback",
+                        debugContext: debugContext
+                    )
+                }
             }
         }
+    }
+
+    @MainActor
+    private func applyPreparedPlayURL(
+        _ quality: LiveQualityDetail,
+        cdnIndex: Int,
+        urlIndex: Int,
+        source: String,
+        debugContext: RoomPlaybackDebugContext
+    ) {
+        let resolved = resolvePlayerTypes(quality: quality, cdnIndex: cdnIndex, urlIndex: urlIndex)
+        let displayTitle = RoomPlaybackResolver.qualityDisplayTitle(quality, in: currentRoomPlayArgs)
+
+        currentPlayQualityString = resolved.overrideTitle ?? displayTitle
+        currentPlayQualityQn = quality.qn
+        applyPlaybackRequestOptions(for: quality)
+        playerOption.playerTypes = resolved.playerTypes
+        isHLSStream = resolved.isHLS
+
+        if let resolvedURL = resolved.overrideURL {
+            setPlayURL(resolvedURL, source: source, debugContext: debugContext)
+        } else if let url = RoomPlaybackResolver.playableURL(for: quality) {
+            setPlayURL(url, source: source, debugContext: debugContext)
+        }
+        isLoading = false
     }
 
     @MainActor

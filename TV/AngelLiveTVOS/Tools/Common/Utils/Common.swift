@@ -108,17 +108,9 @@ class Common {
     }
 
     class func getImage(_ liveType: LiveType) -> String {
-        let imageByType: [String: String] = [
-            LiveType.bilibili.rawValue: "live_card_bili",
-            LiveType.douyu.rawValue: "live_card_douyu",
-            LiveType.huya.rawValue: "live_card_huya",
-            LiveType.douyin.rawValue: "live_card_douyin",
-            LiveType.yy.rawValue: "live_card_yy",
-            LiveType.cc.rawValue: "live_card_cc",
-            LiveType.ks.rawValue: "live_card_ks",
-            LiveType.soop.rawValue: "live_card_soop",
-            LiveType.youtube.rawValue: "live_card_yy"
-        ]
-        return imageByType[liveType.rawValue] ?? "live_card_yy"
+        guard let platform = SandboxPluginCatalog.platform(for: liveType) else {
+            return "live_card_default"
+        }
+        return "live_card_\(platform.pluginId)"
     }
 }

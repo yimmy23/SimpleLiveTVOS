@@ -170,14 +170,18 @@ struct StreamerInfoSheet: View {
             }
             .buttonStyle(.borderedProminent)
             .tint(room.liveType.platformColor)
+            .disabled(room.liveType.roomURL(roomId: room.roomId, userId: room.userId) == nil)
         }
     }
 
     // MARK: - Actions
 
     private func copyLink() {
-        let link = room.liveType.getRoomURL(roomId: room.roomId, userId: room.userId)
-        UIPasteboard.general.string = link
+        guard let url = room.liveType.roomURL(roomId: room.roomId, userId: room.userId) else {
+            presentToast(ToastValue(icon: Image(systemName: "exclamationmark.triangle.fill"), message: "当前资源未提供外部链接"))
+            return
+        }
+        UIPasteboard.general.string = url.absoluteString
 
         let toast = ToastValue(
             icon: Image(systemName: "checkmark.circle.fill"),
@@ -187,8 +191,7 @@ struct StreamerInfoSheet: View {
     }
 
     private func openInBrowser() {
-        let link = room.liveType.getRoomURL(roomId: room.roomId, userId: room.userId)
-        if let url = URL(string: link) {
+        if let url = room.liveType.roomURL(roomId: room.roomId, userId: room.userId) {
             openURL(url)
         }
     }
@@ -204,44 +207,50 @@ extension LiveType {
 
     /// 平台主题色
     var platformColor: Color {
-        let colorByType: [String: Color] = [
-            LiveType.bilibili.rawValue: Color(red: 0.98, green: 0.45, blue: 0.55),
-            LiveType.huya.rawValue: Color(red: 1.0, green: 0.6, blue: 0.0),
-            LiveType.douyin.rawValue: Color(red: 0.0, green: 0.0, blue: 0.0),
-            LiveType.douyu.rawValue: Color(red: 1.0, green: 0.5, blue: 0.0),
-            LiveType.cc.rawValue: Color(red: 0.98, green: 0.75, blue: 0.18),
-            LiveType.ks.rawValue: Color(red: 1.0, green: 0.35, blue: 0.0),
-            LiveType.yy.rawValue: Color(red: 1.0, green: 0.8, blue: 0.0),
-            LiveType.soop.rawValue: Color(red: 0.0, green: 0.47, blue: 0.95),
-            LiveType.youtube.rawValue: Color(red: 1.0, green: 0.0, blue: 0.0)
-        ]
-        return colorByType[self.rawValue] ?? .secondary
+        if let hex = PlatformHostBehavior.themeColorHex(for: self),
+           let color = Color(hex: hex) {
+            return color
+        }
+        return Color.generated(from: rawValue)
     }
 
     /// 获取原平台直播间链接
-    func getRoomURL(roomId: String, userId: String) -> String {
-        switch self.rawValue {
-        case LiveType.bilibili.rawValue:
-            return "https://live.bilibili.com/\(roomId)"
-        case LiveType.huya.rawValue:
-            return "https://www.huya.com/\(roomId)"
-        case LiveType.douyin.rawValue:
-            return "https://live.douyin.com/\(roomId)"
-        case LiveType.douyu.rawValue:
-            return "https://www.douyu.com/\(roomId)"
-        case LiveType.cc.rawValue:
-            return "https://cc.163.com/\(roomId)"
-        case LiveType.ks.rawValue:
-            return "https://live.kuaishou.com/u/\(userId)"
-        case LiveType.yy.rawValue:
-            return "https://www.yy.com/\(roomId)"
-        case LiveType.soop.rawValue:
-            return "https://play.sooplive.co.kr/\(userId)"
-        case LiveType.youtube.rawValue:
-            return "https://www.youtube.com/watch?v=\(roomId)"
-        default:
-            return ""
+    func roomURL(roomId: String, userId: String) -> URL? {
+        PlatformHostBehavior.externalRoomURL(for: self, roomId: roomId, userId: userId)
+    }
+}
+
+private extension Color {
+    init?(hex: String) {
+        var normalized = hex.trimmingCharacters(in: .whitespacesAndNewlines)
+        if normalized.hasPrefix("#") {
+            normalized.removeFirst()
         }
+        guard let value = UInt64(normalized, radix: 16) else { return nil }
+        switch normalized.count {
+        case 6:
+            self.init(
+                red: Double((value >> 16) & 0xff) / 255,
+                green: Double((value >> 8) & 0xff) / 255,
+                blue: Double(value & 0xff) / 255
+            )
+        case 8:
+            self.init(
+                red: Double((value >> 16) & 0xff) / 255,
+                green: Double((value >> 8) & 0xff) / 255,
+                blue: Double(value & 0xff) / 255,
+                opacity: Double((value >> 24) & 0xff) / 255
+            )
+        default:
+            return nil
+        }
+    }
+
+    static func generated(from seed: String) -> Color {
+        let scalars = seed.unicodeScalars.map(\.value)
+        let hash = scalars.reduce(UInt32(2166136261)) { ($0 ^ $1) &* 16777619 }
+        let hue = Double(hash % 360) / 360.0
+        return Color(hue: hue, saturation: 0.62, brightness: 0.78)
     }
 }
 
@@ -252,7 +261,7 @@ extension LiveType {
             roomTitle: "今天来玩游戏！",
             roomCover: "",
             userHeadImg: "",
-            liveType: .bilibili,
+            liveType: .placeholder,
             liveState: "1",
             userId: "12345",
             roomId: "67890",

@@ -19,32 +19,6 @@ public final class LiveParsePlatformInfo: Codable {
 }
 
 public final class LiveParseTools {
-    private static let builtInNames: [String: String] = [
-        LiveType.bilibili.rawValue: "哔哩哔哩",
-        LiveType.huya.rawValue: "虎牙",
-        LiveType.douyin.rawValue: "抖音",
-        LiveType.douyu.rawValue: "斗鱼",
-        LiveType.cc.rawValue: "网易CC",
-        LiveType.ks.rawValue: "快手",
-        LiveType.yy.rawValue: "YY直播",
-        LiveType.youtube.rawValue: "YouTube",
-        LiveType.soop.rawValue: "SOOP",
-        LiveType.kick.rawValue: "Kick"
-    ]
-
-    private static let builtInDescriptions: [String: String] = [
-        LiveType.bilibili.rawValue: "列表返回352、超清直播须在设置扫码",
-        LiveType.huya.rawValue: "竞技由我，玩在虎牙",
-        LiveType.douyin.rawValue: "抖音 - 记录美好生活",
-        LiveType.douyu.rawValue: "每个人的直播平台",
-        LiveType.cc.rawValue: "网易游戏直播",
-        LiveType.ks.rawValue: "无法播放请手动打开任意直播间通过滑块验证码",
-        LiveType.yy.rawValue: "全民娱乐的互动直播平台",
-        LiveType.youtube.rawValue: "全球视频平台直播",
-        LiveType.soop.rawValue: "韩国直播平台(原AfreecaTV)",
-        LiveType.kick.rawValue: "国际互动直播平台"
-    ]
-
     private static func normalizedText(_ value: String?) -> String? {
         let normalized = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return normalized.isEmpty ? nil : normalized
@@ -53,9 +27,6 @@ public final class LiveParseTools {
     public class func getLivePlatformName(_ liveType: LiveType) -> String {
         if let platform = LiveParseJSPlatformManager.platform(for: liveType),
            let name = normalizedText(platform.platformName) {
-            return name
-        }
-        if let name = builtInNames[liveType.rawValue] {
             return name
         }
         if let platform = LiveParseJSPlatformManager.platform(for: liveType) {
@@ -69,10 +40,7 @@ public final class LiveParseTools {
            let description = normalizedText(platform.platformDescription) {
             return description
         }
-        if let description = builtInDescriptions[liveType.rawValue] {
-            return description
-        }
-        return "由沙盒插件提供"
+        return "由资源扩展提供"
     }
 
     public class func getAllSupportPlatform() -> [LiveParsePlatformInfo] {

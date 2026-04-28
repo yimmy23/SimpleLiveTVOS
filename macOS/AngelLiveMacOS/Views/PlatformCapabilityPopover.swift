@@ -82,6 +82,6 @@ struct PlatformCapabilityPopover: View {
 }
 
 #Preview {
-    PlatformCapabilityPopover(liveType: .ks)
+    PlatformCapabilityPopover(liveType: .placeholder)
         .padding()
 }

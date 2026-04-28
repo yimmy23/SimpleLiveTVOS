@@ -228,5 +228,5 @@ struct TVPlatformCapabilitySheet: View {
 }
 
 #Preview {
-    TVPlatformCapabilitySheet(liveType: .ks)
+    TVPlatformCapabilitySheet(liveType: .placeholder)
 }

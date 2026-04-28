@@ -154,14 +154,26 @@ public struct LiveParseDanmakuRuntimePlan: Decodable, Sendable {
         case pluginJSV1 = "plugin_js_v1"
     }
 
+    public enum WebSocketHeaderMode: String, Decodable, Sendable {
+        case defaultHeaders = "default"
+        case minimalNoCookie = "minimal_no_cookie"
+    }
+
     public let driver: Driver
     public let protocolId: String?
     public let protocolVersion: String?
+    public let webSocketHeaderMode: WebSocketHeaderMode?
 
-    public init(driver: Driver, protocolId: String? = nil, protocolVersion: String? = nil) {
+    public init(
+        driver: Driver,
+        protocolId: String? = nil,
+        protocolVersion: String? = nil,
+        webSocketHeaderMode: WebSocketHeaderMode? = nil
+    ) {
         self.driver = driver
         self.protocolId = protocolId
         self.protocolVersion = protocolVersion
+        self.webSocketHeaderMode = webSocketHeaderMode
     }
 }
 

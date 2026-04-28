@@ -43,10 +43,10 @@ class QRCodeViewModel {
     var progress = 0.0
     var desc = ""
     var qrCodeKey = ""
-    var isBilibiliLogin = false
+    var isPlatformLogin = false
     var qrcodeUrl = "" {
         didSet {
-            if isBilibiliLogin == false {
+            if isPlatformLogin == false {
                 Task {
                     // 创建一个异步任务来处理进度更新
                     progressTask = Task { @MainActor in

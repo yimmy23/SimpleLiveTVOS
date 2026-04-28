@@ -67,12 +67,41 @@ public enum RoomPlaybackResolver {
         quality.liveCodeType == .hls || quality.url.lowercased().contains(".m3u8")
     }
 
+    public static func streamFormat(for quality: LiveQualityDetail) -> LivePlaybackStreamFormat {
+        if let format = quality.playbackHints?.streamFormat, format != .unknown {
+            return format
+        }
+        if isHLSQuality(quality) {
+            return .hlsLive
+        }
+        if quality.liveCodeType == .flv {
+            return .flv
+        }
+        return .unknown
+    }
+
     public static func streamTypeIdentifier(for quality: LiveQualityDetail) -> String {
-        isHLSQuality(quality) ? "hls" : "flv"
+        switch streamFormat(for: quality) {
+        case .hlsLive, .hlsVod:
+            return "hls"
+        case .dash:
+            return "dash"
+        case .flv, .unknown:
+            return "flv"
+        }
     }
 
     public static func streamTypeDisplayName(for quality: LiveQualityDetail) -> String {
-        isHLSQuality(quality) ? "HLS" : "FLV"
+        switch streamFormat(for: quality) {
+        case .hlsLive:
+            return "HLS"
+        case .hlsVod:
+            return "HLS VOD"
+        case .dash:
+            return "DASH"
+        case .flv, .unknown:
+            return "FLV"
+        }
     }
 
     public static func selection(
@@ -127,7 +156,7 @@ public enum RoomPlaybackResolver {
     public static func firstPlayableURL(from playArgs: [LiveQualityModel]) -> URL? {
         for cdn in playArgs {
             for quality in cdn.qualitys {
-                if let url = URL(string: quality.url) {
+                if let url = playableURL(for: quality) {
                     return url
                 }
             }
@@ -135,15 +164,71 @@ public enum RoomPlaybackResolver {
         return nil
     }
 
-    public static func yyPlaybackContext(cdn: LiveQualityModel, quality: LiveQualityDetail) -> [String: Any] {
-        let rawLineSeq = (cdn.yyLineSeq ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        let lineSeq: Any = Int(rawLineSeq) ?? (rawLineSeq.isEmpty ? -1 : rawLineSeq)
+    public static func playableURL(for quality: LiveQualityDetail) -> URL? {
+        let normalizedURL = quality.url.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedURL.isEmpty else { return nil }
+        return URL(string: normalizedURL)
+    }
 
-        return [
-            "lineSeq": lineSeq,
-            "gear": quality.qn,
-            "qn": quality.qn
-        ]
+    public static func playbackContext(cdn: LiveQualityModel, quality: LiveQualityDetail) -> [String: Any] {
+        var context: [String: Any] = [:]
+
+        for (key, value) in cdn.requestContext ?? [:] {
+            context[key] = value
+        }
+        for (key, value) in quality.requestContext ?? [:] {
+            context[key] = value
+        }
+
+        if context["qn"] == nil {
+            context["qn"] = quality.qn
+        }
+        if context["rate"] == nil {
+            context["rate"] = quality.qn
+        }
+        if context["quality"] == nil {
+            context["quality"] = quality.title
+        }
+        if context["title"] == nil {
+            context["title"] = quality.title
+        }
+        if context["liveCodeType"] == nil {
+            context["liveCodeType"] = quality.liveCodeType.rawValue
+        }
+
+        let streamType = streamTypeIdentifier(for: quality)
+        if context["streamType"] == nil {
+            context["streamType"] = streamType
+        }
+        if context["format"] == nil {
+            context["format"] = streamType
+        }
+
+        let normalizedCDN = cdn.cdn.trimmingCharacters(in: .whitespacesAndNewlines)
+        if context["cdn"] == nil, !normalizedCDN.isEmpty {
+            context["cdn"] = normalizedCDN
+        }
+
+        if context["gear"] == nil {
+            context["gear"] = quality.qn
+        }
+        return context
+    }
+
+    public static func selectionBehavior(for quality: LiveQualityDetail) -> LivePlaybackSelectionBehavior {
+        quality.playbackHints?.selectionBehavior ?? .direct
+    }
+
+    public static func requiresRefreshOnSelect(_ quality: LiveQualityDetail) -> Bool {
+        selectionBehavior(for: quality) == .refreshOnSelect
+    }
+
+    public static func shouldRefreshPlaybackOnSelection(
+        _ quality: LiveQualityDetail,
+        currentPlayURL: URL?
+    ) -> Bool {
+        guard requiresRefreshOnSelect(quality) else { return false }
+        return currentPlayURL != nil || playableURL(for: quality) == nil
     }
 
     public static func requestOptions(
@@ -162,14 +247,9 @@ public enum RoomPlaybackResolver {
     }
 
     public static func cdnDisplayName(for cdn: LiveQualityModel) -> String {
-        let douyuName = cdn.douyuCdnName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if !douyuName.isEmpty {
-            return douyuName
-        }
-
-        let yyLineSeq = cdn.yyLineSeq?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if !yyLineSeq.isEmpty {
-            return yyLineSeq
+        let displayName = cdn.displayName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !displayName.isEmpty {
+            return displayName
         }
 
         let normalizedCDN = cdn.cdn.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -229,30 +309,6 @@ public enum RoomPlaybackResolver {
         let streamType = streamTypeIdentifier(for: selection.quality)
 
         return "cdn[\(selection.cdnIndex)]=\(cdnName), quality[\(selection.qualityIndex)]=\(displayTitle)(qn=\(selection.quality.qn), type=\(streamType))"
-    }
-
-    public static func douyinPlaybackContext(
-        cdn: LiveQualityModel,
-        quality: LiveQualityDetail
-    ) -> [String: Any] {
-        var context: [String: Any] = [
-            "rate": quality.qn,
-            "qn": quality.qn,
-            "quality": quality.title,
-            "title": quality.title
-        ]
-
-        let normalizedCDN = cdn.cdn.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !normalizedCDN.isEmpty {
-            context["cdn"] = normalizedCDN
-        }
-
-        let streamType = streamTypeIdentifier(for: quality)
-        context["liveCodeType"] = quality.liveCodeType.rawValue
-        context["streamType"] = streamType
-        context["format"] = streamType
-
-        return context
     }
 
     public static func matchingSelection(
@@ -324,45 +380,27 @@ public enum RoomPlaybackResolver {
     }
 
     public static func resolvePlan(
-        liveType: LiveType,
-        liveState: String?,
-        selectedQuality: LiveQualityDetail,
-        playArgs: [LiveQualityModel]?,
-        cdnIndex: Int,
-        urlIndex: Int
+        selectedQuality: LiveQualityDetail
     ) -> RoomPlaybackPlan {
-        if liveType == .bilibili && cdnIndex == 0 && urlIndex == 0 {
-            if let selection = firstSelection(in: playArgs, where: isHLSQuality),
-               let url = URL(string: selection.quality.url) {
-                return RoomPlaybackPlan(
-                    playerKinds: [.mePlayer],
-                    isHLS: true,
-                    overrideURL: url,
-                    overrideTitle: qualityDisplayTitle(in: playArgs, selection: selection),
-                    resolvedSelection: selection
-                )
-            }
+        let hints = selectedQuality.playbackHints
+        let format = streamFormat(for: selectedQuality)
+        let requiresCustomSegmentLoader = hints?.requiresCustomSegmentLoader == true
+
+        if requiresCustomSegmentLoader {
+            return RoomPlaybackPlan(
+                playerKinds: [.mePlayer],
+                isHLS: format == .hlsLive
+            )
         }
 
-        if liveType == .ks {
-            return RoomPlaybackPlan(playerKinds: [.mePlayer], isHLS: false)
-        }
-
-        if isHLSQuality(selectedQuality), liveType == .bilibili {
-            return RoomPlaybackPlan(playerKinds: [.mePlayer], isHLS: true)
-        }
-
-        if isHLSQuality(selectedQuality),
-           liveType == .huya,
-           LiveState(rawValue: liveState ?? "unknow") == .video {
-            return RoomPlaybackPlan(playerKinds: [.mePlayer], isHLS: false)
-        }
-
-        if isHLSQuality(selectedQuality), liveType != .youtube {
+        switch format {
+        case .hlsLive:
             return RoomPlaybackPlan(playerKinds: [.avPlayer], isHLS: true)
+        case .hlsVod:
+            return RoomPlaybackPlan(playerKinds: [.mePlayer], isHLS: false)
+        case .flv, .dash, .unknown:
+            return RoomPlaybackPlan(playerKinds: [.mePlayer], isHLS: false)
         }
-
-        return RoomPlaybackPlan(playerKinds: [.mePlayer], isHLS: false)
     }
 
     private static func hasDuplicateTitleWithDifferentStreamType(

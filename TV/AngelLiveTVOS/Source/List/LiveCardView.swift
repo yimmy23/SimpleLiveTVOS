@@ -355,11 +355,9 @@ struct LiveCardView: View {
         liveViewModel.currentRoom = currentLiveModel ?? liveViewModel.roomList[index]
         liveViewModel.selectedRoomListIndex = index
 
-        let currentState = LiveState(rawValue: liveViewModel.currentRoom?.liveState ?? "unknow")
-        let isLiveOrVideo = currentState == .live ||
-            ((liveViewModel.currentRoom?.liveType == .huya || liveViewModel.currentRoom?.liveType == .douyu) && currentState == .video)
+        let isPlayableRoom = liveViewModel.currentRoom.map(PlatformHostBehavior.isPlayableRoom) ?? false
 
-        if isLiveOrVideo || liveViewModel.roomListType == .live {
+        if isPlayableRoom || liveViewModel.roomListType == .live {
             if !appViewModel.historyViewModel.watchList.contains(where: { liveViewModel.currentRoom!.roomId == $0.roomId }) {
                 appViewModel.historyViewModel.watchList.insert(liveViewModel.currentRoom!, at: 0)
             }

@@ -13,7 +13,7 @@ import AngelLiveCore
 import AngelLiveDependencies
 
 /// 竖屏直播专用控制层
-/// 设计参考抖音/快手竖屏直播布局
+/// 设计参考沉浸式竖屏直播布局
 struct VerticalLiveControllerView: View {
     @ObservedObject private var model: KSVideoPlayerModel
     @Environment(RoomInfoViewModel.self) private var viewModel

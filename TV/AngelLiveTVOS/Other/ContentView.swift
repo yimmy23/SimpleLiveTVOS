@@ -23,8 +23,8 @@ struct ContentView: View {
 
     init(appViewModel: AppState) {
         self.appViewModel = appViewModel
-        self.searchLiveViewModel = LiveViewModel(roomListType: .search, liveType: .bilibili, appViewModel: appViewModel)
-        self.favoriteLiveViewModel = LiveViewModel(roomListType: .favorite, liveType: .bilibili, appViewModel: appViewModel)
+        self.searchLiveViewModel = LiveViewModel(roomListType: .search, liveType: .placeholder, appViewModel: appViewModel)
+        self.favoriteLiveViewModel = LiveViewModel(roomListType: .favorite, liveType: .placeholder, appViewModel: appViewModel)
     }
     
     var body: some View {

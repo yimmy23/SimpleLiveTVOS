@@ -114,7 +114,7 @@ public extension Array where Element == LiveModel {
             var section = FavoriteLiveSectionModel()
             section.roomList = roomsForState
             section.title = roomsForState.first?.liveStateFormat() ?? LiveStateDisplayName.unknown
-            section.type = roomsForState.first?.liveType ?? .bilibili
+            section.type = roomsForState.first?.liveType ?? .placeholder
             sections.append(section)
         }
         

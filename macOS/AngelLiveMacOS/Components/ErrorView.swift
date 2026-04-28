@@ -326,7 +326,7 @@ extension ErrorView {
         detailMessage: """
 网络请求超时
 ==================== 网络请求详情 ====================
-URL: https://api.live.bilibili.com/...
+URL: https://api.example.com/...
 方法: GET
 """,
         onRetry: {}

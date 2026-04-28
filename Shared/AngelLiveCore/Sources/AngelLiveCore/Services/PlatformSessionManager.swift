@@ -330,21 +330,6 @@ private final class SessionStore {
         let refreshToken: String?
     }
 
-    private struct LegacyKeys {
-        static let bilibiliCookie = "SimpleLive.Setting.BilibiliCookie"
-        static let bilibiliUid = "LiveParse.Bilibili.uid"
-        static let bilibiliCookieSnapshot = "BilibiliCookieSyncService.sessionSnapshot"
-    }
-
-    private static let knownPluginIds = [
-        "bilibili", "douyin", "ks", "soop", "kick", "twitch", "panda"
-    ]
-
-    /// 旧版本 PlatformSessionID rawValue → 新版 pluginId 映射（kuaishou → ks）
-    private static let legacyRawToPluginId: [String: String] = [
-        "kuaishou": "ks"
-    ]
-
     private let defaults = UserDefaults.standard
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
@@ -374,8 +359,9 @@ private final class SessionStore {
     }
 
     func loadAllSessions() -> [PlatformSession] {
-        // 遍历已安装插件 + 历史已知平台（防止插件暂时卸载时会话丢失）
-        let pluginIds = Set(SandboxPluginCatalog.installedPluginIds() + SessionStore.knownPluginIds)
+        // 遍历已安装插件 + manifest 可发现插件（防止插件暂时卸载时会话丢失）
+        let manifestPluginIds = LiveParseJSPlatformManager.availablePlatforms.map(\.pluginId)
+        let pluginIds = Set(SandboxPluginCatalog.installedPluginIds() + manifestPluginIds)
         return pluginIds.compactMap { loadSession(for: $0) }
     }
 
@@ -413,14 +399,15 @@ private final class SessionStore {
         guard !defaults.bool(forKey: migrationKey(for: pluginId)) else { return }
         defer { defaults.set(true, forKey: migrationKey(for: pluginId)) }
 
-        // 1. 旧 PlatformSessionID.rawValue 与 pluginId 不同的情况（kuaishou → ks）
-        if let legacyRaw = SessionStore.legacyRawToPluginId.first(where: { $0.value == pluginId })?.key {
+        guard let platform = LiveParseJSPlatformManager.platform(forPluginId: pluginId) else { return }
+        let migration = platform.sessionMigration
+
+        for legacyRaw in migration?.legacyPluginIds ?? [] where !legacyRaw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             migrateLegacyRawKeyed(from: legacyRaw, to: pluginId)
         }
 
-        // 2. Bilibili 专属遗留键
-        if pluginId == "bilibili" {
-            migrateBilibiliLegacy()
+        if let migration {
+            migrateLegacyUserDefaults(for: platform, migration: migration)
         }
     }
 
@@ -439,23 +426,32 @@ private final class SessionStore {
         }
     }
 
-    private func migrateBilibiliLegacy() {
-        let legacyCookie = defaults.string(forKey: LegacyKeys.bilibiliCookie) ?? ""
-        let legacyUid = defaults.string(forKey: LegacyKeys.bilibiliUid)
+    private func migrateLegacyUserDefaults(for platform: LiveParseJSPlatform, migration: ManifestSessionMigration) {
+        let legacyCookie = firstString(forKeys: migration.userDefaultsCookieKeys) ?? ""
+        let legacyUid = firstString(forKeys: migration.userDefaultsUIDKeys)
         guard !legacyCookie.isEmpty else {
             return
         }
 
         let migrated = PlatformSession(
-            pluginId: "bilibili",
-            liveType: "0",
+            pluginId: platform.pluginId,
+            liveType: platform.liveType.rawValue,
             cookie: legacyCookie,
             uid: legacyUid,
             source: .legacy,
-            state: legacyCookie.contains("SESSDATA") ? .authenticated : .invalid,
+            state: legacyCookie.matchesAnyMarker(migration.authCookieMarkers) ? .authenticated : .invalid,
             updatedAt: Date()
         )
         saveSession(migrated)
+    }
+
+    private func firstString(forKeys keys: [String]?) -> String? {
+        keys?
+            .lazy
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .compactMap { self.defaults.string(forKey: $0) }
+            .first { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     }
 
     private func loadSensitivePayload(for pluginId: String) -> SessionSensitivePayload? {
@@ -473,6 +469,18 @@ private final class SessionStore {
 
     private func keychainAccount(for pluginId: String) -> String {
         "session.\(pluginId)"
+    }
+}
+
+private extension String {
+    func matchesAnyMarker(_ markers: [String]?) -> Bool {
+        guard let markers, !markers.isEmpty else {
+            return !trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+        return markers.contains { marker in
+            let normalized = marker.trimmingCharacters(in: .whitespacesAndNewlines)
+            return !normalized.isEmpty && localizedCaseInsensitiveContains(normalized)
+        }
     }
 }
 

@@ -4,8 +4,29 @@ import Foundation
 /// stateful native transport/protocol support that cannot be expressed with
 /// Host.http alone.
 enum NativeStreamBridge {
-    static func resolve(options: [String: Any], defaultProviderId: String) async throws -> [String: Any] {
-        let providerId = normalizedProviderId(from: options, defaultProviderId: defaultProviderId)
+    static func resolve(options: [String: Any], declaration: ManifestNativeStream?) async throws -> [String: Any] {
+        guard let declaration else {
+            throw LiveParsePluginError.standardized(
+                .init(
+                    code: .invalidArgs,
+                    message: "Native stream is not declared by manifest",
+                    context: [:]
+                )
+            )
+        }
+
+        let providerId = try normalizedProviderId(from: options, declaration: declaration)
+        let allowedProviderIds = normalizedAllowedProviderIds(from: declaration)
+        if !allowedProviderIds.isEmpty, !allowedProviderIds.contains(providerId) {
+            throw LiveParsePluginError.standardized(
+                .init(
+                    code: .invalidArgs,
+                    message: "Native stream provider is not allowed by manifest",
+                    context: ["provider": providerId]
+                )
+            )
+        }
+
         guard let provider = NativeStreamProviderRegistry.provider(for: providerId) else {
             throw LiveParsePluginError.standardized(
                 .init(
@@ -18,14 +39,35 @@ enum NativeStreamBridge {
         return try await provider.resolve(options: options)
     }
 
-    private static func normalizedProviderId(from options: [String: Any], defaultProviderId: String) -> String {
+    private static func normalizedProviderId(from options: [String: Any], declaration: ManifestNativeStream) throws -> String {
         let raw = stringValue(options["provider"])
             ?? stringValue(options["providerId"])
             ?? stringValue(options["platformId"])
             ?? stringValue(options["protocolId"])
-            ?? defaultProviderId
+            ?? stringValue(declaration.defaultProviderId)
+
+        guard let raw else {
+            throw LiveParsePluginError.standardized(
+                .init(
+                    code: .invalidArgs,
+                    message: "Native stream provider is required",
+                    context: [:]
+                )
+            )
+        }
 
         return raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    private static func normalizedAllowedProviderIds(from declaration: ManifestNativeStream) -> Set<String> {
+        var values = declaration.allowedProviderIds ?? []
+        if let defaultProviderId = declaration.defaultProviderId {
+            values.append(defaultProviderId)
+        }
+        return Set(values.compactMap { value in
+            let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            return normalized.isEmpty ? nil : normalized
+        })
     }
 
     static func intValue(_ value: Any?) -> Int? {

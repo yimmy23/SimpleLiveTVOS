@@ -214,17 +214,17 @@ struct SearchView: View {
     @ViewBuilder
     private func searchErrorState(error: Error) -> some View {
         ErrorView(
-            title: error.isBilibiliAuthRequired ? "搜索失败-请登录B站账号并检查官方页面" : "搜索失败",
+            title: error.isAuthRequired ? "搜索失败-请登录相关账号并检查官方页面" : "搜索失败",
             message: error.liveParseMessage,
             detailMessage: error.liveParseDetail,
             curlCommand: error.liveParseCurl,
             showDismiss: false,
             showRetry: true,
-            showLoginButton: error.isBilibiliAuthRequired,
+            showLoginButton: error.isAuthRequired,
             showDetailButton: error.liveParseDetail != nil && !error.liveParseDetail!.isEmpty,
             onDismiss: nil,
             onRetry: { performSearch() },
-            onLogin: error.isBilibiliAuthRequired ? {
+            onLogin: error.isAuthRequired ? {
                 NotificationCenter.default.post(name: .switchToSettings, object: nil)
             } : nil
         )

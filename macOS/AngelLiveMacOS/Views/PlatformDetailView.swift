@@ -611,9 +611,10 @@ struct LiveRoomCard: View {
     PlatformDetailView()
         .environment(PlatformDetailViewModel(platform: Platformdescription(
             title: "测试平台",
+            pluginId: "preview",
             bigPic: "test",
             smallPic: "test",
             descripiton: "测试描述",
-            liveType: .bilibili
+            liveType: .placeholder
         )))
 }

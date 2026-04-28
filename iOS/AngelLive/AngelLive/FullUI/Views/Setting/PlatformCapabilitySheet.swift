@@ -179,5 +179,5 @@ struct PlatformCapabilitySheet: View {
 }
 
 #Preview {
-    PlatformCapabilitySheet(liveType: .huya)
+    PlatformCapabilitySheet(liveType: .placeholder)
 }

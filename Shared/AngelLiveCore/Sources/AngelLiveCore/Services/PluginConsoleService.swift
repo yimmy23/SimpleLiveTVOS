@@ -56,7 +56,7 @@ public enum PluginConsoleEntryStatus: Sendable {
 
 public struct PluginConsoleEntry: Identifiable, Sendable {
     public let id: UUID
-    public let tag: String       // 插件 ID（如 bilibili）
+    public let tag: String       // 插件 ID
     public let method: String    // 调用方法名（如 getCategories）
     public let timestamp: Date
     public var status: PluginConsoleEntryStatus

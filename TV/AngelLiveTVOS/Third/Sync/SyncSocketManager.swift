@@ -16,14 +16,14 @@ enum SimpleSyncType: CustomStringConvertible {
         case .favorite: return "收藏同步"
         case .history: return "观看历史同步"
         case .danmuBlockWords: return "弹幕屏蔽词同步"
-        case .bilibiliCookie: return "Bilibili登录信息同步"
+        case .platformCredential: return "平台登录信息同步"
         }
     }
     
     case favorite
     case history
     case danmuBlockWords
-    case bilibiliCookie
+    case platformCredential
 }
 
 let httpPort = 23234
@@ -194,7 +194,7 @@ final class HTTPHandler: ChannelInboundHandler {
                     // 重置为下一个请求
                     requestBody = nil
                 }
-                if requestHeaderT?.uri.contains("account/bilibili") == true {
+                if requestHeaderT?.uri.contains("account/") == true {
                     let resp = jsonString(["status": false, "message": "Apple TV 端暂不支持此功能"])
                     responseBody = HTTPServerResponsePart.body(.byteBuffer(ByteBuffer(string: resp ?? "")))
                     response = .head(HTTPResponseHead(version: requestHeaderT!.version, status: .ok, headers: headers))
@@ -236,23 +236,26 @@ final class HTTPHandler: ChannelInboundHandler {
         if let data = bodyString.data(using: .utf8),
            let respFollowList = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
             for item in respFollowList {
-                var liveType = LiveType.bilibili
-                switch item["siteId"] as? String ?? "" {
-                    case "bilibili":
-                        liveType = .bilibili
-                    case "huya":
-                        liveType = .huya
-                    case "douyu":
-                        liveType = .douyu
-                    case "douyin":
-                        liveType = .douyin
-                    default:
-                        liveType = .bilibili
-                }
+                guard let liveType = liveType(forSiteId: item["siteId"] as? String) else { continue }
                 tempArray.append(LiveModel(userName: item["userName"] as? String ?? "", roomTitle: "", roomCover: "", userHeadImg: item["face"] as? String ?? "", liveType: liveType, liveState: nil, userId: "", roomId: item["roomId"] as? String ?? "", liveWatchedCount: nil))
             }
         }
         return tempArray
+    }
+
+    func liveType(forSiteId siteId: String?) -> LiveType? {
+        let normalized = siteId?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !normalized.isEmpty else { return nil }
+        if let platform = LiveParseJSPlatformManager.platform(forPluginId: normalized) {
+            return platform.liveType
+        }
+        if let liveType = LiveType(rawValue: normalized),
+           LiveParseJSPlatformManager.platform(for: liveType) != nil {
+            return liveType
+        }
+        return LiveParseJSPlatformManager.availablePlatforms.first { platform in
+            platform.sessionMigration?.legacyPluginIds?.contains(normalized) == true
+        }?.liveType
     }
         
         func getOverlayFormat(url: String) -> Bool {

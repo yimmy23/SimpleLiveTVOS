@@ -320,7 +320,7 @@ private final class WindowReferenceView: NSView {
         roomTitle: "测试直播间",
         roomCover: "",
         userHeadImg: "",
-        liveType: .bilibili,
+        liveType: .placeholder,
         liveState: "live",
         userId: "",
         roomId: "12345",

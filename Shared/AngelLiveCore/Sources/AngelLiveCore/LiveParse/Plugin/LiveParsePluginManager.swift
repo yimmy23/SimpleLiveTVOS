@@ -83,6 +83,7 @@ public final class LiveParsePluginManager: @unchecked Sendable {
             runtime: JSRuntime(
                 pluginId: selected.manifest.pluginId,
                 session: session,
+                nativeStream: selected.manifest.nativeStream,
                 logHandler: logHandler
             )
         )

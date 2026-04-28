@@ -22,7 +22,7 @@ struct HistoryListView: View {
 
     init(appViewModel: AppState) {
         self.appViewModel = appViewModel
-        self.liveViewModel = LiveViewModel(roomListType: .history, liveType: .bilibili, appViewModel: appViewModel)
+        self.liveViewModel = LiveViewModel(roomListType: .history, liveType: .placeholder, appViewModel: appViewModel)
     }
 
     var body: some View {

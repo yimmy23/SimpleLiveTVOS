@@ -3,7 +3,7 @@
 //  AngelLiveCore
 //
 //  通用凭证同步服务：iCloud (CloudKit) + Bonjour 局域网同步。
-//  替代旧 BilibiliCookieSyncService，全部平台统一走 PlatformSessionManager。
+//  全部平台统一走 PlatformSessionManager。
 //
 
 import Foundation
@@ -21,9 +21,6 @@ private enum CloudCookieFields {
     static let cookieDataField = "cookie_data"
     static let platformIdField = "platform_id"
     static let updatedAtField = "updated_at"
-
-    /// 旧 Bilibili 专属 recordName（仅用于启动迁移）
-    static let legacyBilibiliRecordName = "bilibili_cookie_sync"
 
     /// 通用 recordName 前缀
     static func sessionRecordName(for pluginId: String) -> String {
@@ -106,13 +103,6 @@ public final class PlatformCredentialSyncService: ObservableObject {
         static let lastICloudSyncTime = "PlatformCredentialSyncService.lastICloudSyncTime"
         static let migrationDone = "AngelLive.Migration.pluginIdSessionV2"
 
-        // 旧 keys（一次性迁移后清理）
-        static let legacyCookieKey = "SimpleLive.Setting.BilibiliCookie"
-        static let legacyUidKey = "LiveParse.Bilibili.uid"
-        static let legacySessionSnapshot = "BilibiliCookieSyncService.sessionSnapshot"
-        static let legacyLastSyncedData = "BilibiliCookieSyncService.lastSyncedData"
-        static let legacyICloudSyncEnabled = "BilibiliCookieSyncService.iCloudSyncEnabled"
-        static let legacyICloudSyncTime = "BilibiliCookieSyncService.lastICloudSyncTime"
     }
 
     private var bonjourListener: NWListener?
@@ -121,10 +111,11 @@ public final class PlatformCredentialSyncService: ObservableObject {
     // MARK: - Init
 
     private init() {
-        // 先尝试读旧 key 迁移
+        // 先尝试读 manifest 声明的旧 key 迁移
         if UserDefaults.standard.object(forKey: Keys.iCloudSyncEnabled) == nil,
-           UserDefaults.standard.object(forKey: Keys.legacyICloudSyncEnabled) != nil {
-            let oldValue = UserDefaults.standard.bool(forKey: Keys.legacyICloudSyncEnabled)
+           let legacyEnabledKey = Self.legacyMigrationKey(\.legacyICloudSyncEnabledKeys),
+           UserDefaults.standard.object(forKey: legacyEnabledKey) != nil {
+            let oldValue = UserDefaults.standard.bool(forKey: legacyEnabledKey)
             UserDefaults.standard.set(oldValue, forKey: Keys.iCloudSyncEnabled)
         }
         self.iCloudSyncEnabled = UserDefaults.standard.bool(forKey: Keys.iCloudSyncEnabled)
@@ -132,7 +123,8 @@ public final class PlatformCredentialSyncService: ObservableObject {
         // 恢复 iCloud 同步时间（兼容旧 key）
         if let timeInterval = UserDefaults.standard.object(forKey: Keys.lastICloudSyncTime) as? Double {
             self.lastICloudSyncTime = Date(timeIntervalSince1970: timeInterval)
-        } else if let oldTime = UserDefaults.standard.object(forKey: Keys.legacyICloudSyncTime) as? Double {
+        } else if let legacyTimeKey = Self.legacyMigrationKey(\.legacyICloudSyncTimeKeys),
+                  let oldTime = UserDefaults.standard.object(forKey: legacyTimeKey) as? Double {
             self.lastICloudSyncTime = Date(timeIntervalSince1970: oldTime)
             UserDefaults.standard.set(oldTime, forKey: Keys.lastICloudSyncTime)
         }
@@ -233,8 +225,7 @@ public final class PlatformCredentialSyncService: ObservableObject {
         let container = CKContainer(identifier: CloudCookieFields.containerIdentifier)
         let database = container.privateCloudDatabase
 
-        // 也检查旧 bilibili 专属 record（兼容期）
-        await migrateLegacyBilibiliCloudRecord(database: database)
+        await migrateLegacyCloudRecords(database: database)
 
         // 查询所有 cookie_sessions 记录
         let knownIds = await knownCloudPluginIds()
@@ -330,7 +321,9 @@ public final class PlatformCredentialSyncService: ObservableObject {
             let recordName = CloudCookieFields.sessionRecordName(for: pluginId)
             recordIDsByName[recordName] = CKRecord.ID(recordName: recordName)
         }
-        recordIDsByName[CloudCookieFields.legacyBilibiliRecordName] = CKRecord.ID(recordName: CloudCookieFields.legacyBilibiliRecordName)
+        for recordName in legacyCloudRecordNames() {
+            recordIDsByName[recordName] = CKRecord.ID(recordName: recordName)
+        }
 
         var deletedCount = 0
         for recordID in recordIDsByName.values {
@@ -537,7 +530,7 @@ public final class PlatformCredentialSyncService: ObservableObject {
 
         // 兼容旧格式：单个 SyncedCookieData
         if let syncedData = try? JSONDecoder().decode(SyncedCookieData.self, from: data) {
-            let pluginId = syncedData.platformId ?? "bilibili"
+            guard let pluginId = syncedData.platformId ?? defaultLegacyPluginId() else { return }
             let result = await PlatformSessionManager.shared.loginWithCookie(
                 pluginId: pluginId,
                 cookie: syncedData.cookie,
@@ -720,9 +713,8 @@ public final class PlatformCredentialSyncService: ObservableObject {
         if let liveType = LiveType(rawValue: pluginId) {
             return LiveParseTools.getLivePlatformName(liveType)
         }
-        // kuaishou → ks 的反向映射
-        if pluginId == "ks", let liveType = LiveType(rawValue: "ks") {
-            return LiveParseTools.getLivePlatformName(liveType)
+        if let platform = LiveParseJSPlatformManager.platform(forPluginId: pluginId) {
+            return LiveParseTools.getLivePlatformName(platform.liveType)
         }
         return pluginId
     }
@@ -741,46 +733,55 @@ public final class PlatformCredentialSyncService: ObservableObject {
 
     // MARK: - 旧数据迁移
 
-    /// 一次性迁移：旧 BilibiliCookieSyncService 数据 → 新服务
+    /// 一次性迁移：manifest 声明的旧凭证数据 → 新服务
     private func performLegacyMigrationIfNeeded() async {
         guard !UserDefaults.standard.bool(forKey: Keys.migrationDone) else { return }
 
-        // 1. 迁移旧 Bilibili Cookie（UserDefaults → PlatformSessionManager）
-        let legacyCookie = UserDefaults.standard.string(forKey: Keys.legacyCookieKey) ?? ""
-        let legacyUid = UserDefaults.standard.string(forKey: Keys.legacyUidKey)
-
-        if !legacyCookie.isEmpty {
-            // 如果 PlatformSessionManager 中尚无 bilibili session，写入
-            if let existing = await PlatformSessionManager.shared.getSession(pluginId: "bilibili"),
+        for platform in LiveParseJSPlatformManager.availablePlatforms {
+            guard let migration = platform.sessionMigration,
+                  let legacyCookie = firstLegacyString(forKeys: migration.userDefaultsCookieKeys),
+                  !legacyCookie.isEmpty else {
+                continue
+            }
+            let legacyUid = firstLegacyString(forKeys: migration.userDefaultsUIDKeys)
+            if let existing = await PlatformSessionManager.shared.getSession(pluginId: platform.pluginId),
                existing.state == .authenticated,
                let cookie = existing.cookie, !cookie.isEmpty {
-                // 已存在有效 session，跳过
-            } else {
-                _ = await PlatformSessionManager.shared.loginWithCookie(
-                    pluginId: "bilibili",
-                    cookie: legacyCookie,
-                    uid: legacyUid,
-                    source: .legacy,
-                    validateBeforeSave: false
-                )
+                continue
             }
+            _ = await PlatformSessionManager.shared.loginWithCookie(
+                pluginId: platform.pluginId,
+                cookie: legacyCookie,
+                uid: legacyUid,
+                source: .legacy,
+                validateBeforeSave: false
+            )
         }
 
-        // 2. 清理旧 keys
-        UserDefaults.standard.removeObject(forKey: Keys.legacyCookieKey)
-        UserDefaults.standard.removeObject(forKey: Keys.legacyUidKey)
-        UserDefaults.standard.removeObject(forKey: Keys.legacySessionSnapshot)
-        UserDefaults.standard.removeObject(forKey: Keys.legacyLastSyncedData)
+        for key in legacyCleanupKeys() {
+            UserDefaults.standard.removeObject(forKey: key)
+        }
 
-        // 3. 标记迁移完成
         UserDefaults.standard.set(true, forKey: Keys.migrationDone)
         Logger.info("旧凭证数据迁移完成", category: .general)
     }
 
-    /// 将旧 bilibili_cookie_sync CloudKit ��录迁移到新命名
-    private func migrateLegacyBilibiliCloudRecord(database: CKDatabase) async {
-        let legacyRecordID = CKRecord.ID(recordName: CloudCookieFields.legacyBilibiliRecordName)
-        let newRecordName = CloudCookieFields.sessionRecordName(for: "bilibili")
+    private func migrateLegacyCloudRecords(database: CKDatabase) async {
+        for platform in LiveParseJSPlatformManager.availablePlatforms {
+            guard let recordNames = platform.sessionMigration?.legacyCloudRecordNames else { continue }
+            for recordName in recordNames {
+                await migrateLegacyCloudRecord(
+                    database: database,
+                    legacyRecordName: recordName,
+                    pluginId: platform.pluginId
+                )
+            }
+        }
+    }
+
+    private func migrateLegacyCloudRecord(database: CKDatabase, legacyRecordName: String, pluginId: String) async {
+        let legacyRecordID = CKRecord.ID(recordName: legacyRecordName)
+        let newRecordName = CloudCookieFields.sessionRecordName(for: pluginId)
         let newRecordID = CKRecord.ID(recordName: newRecordName)
 
         do {
@@ -797,18 +798,59 @@ public final class PlatformCredentialSyncService: ObservableObject {
                 // 复制到新 record
                 let newRecord = CKRecord(recordType: CloudCookieFields.recordType, recordID: newRecordID)
                 newRecord[CloudCookieFields.cookieDataField] = data as NSData
-                newRecord[CloudCookieFields.platformIdField] = "bilibili" as NSString
+                newRecord[CloudCookieFields.platformIdField] = pluginId as NSString
                 newRecord[CloudCookieFields.updatedAtField] = legacyRecord[CloudCookieFields.updatedAtField]
                 try await database.save(newRecord)
             }
 
             // 删除旧记录
             try await database.deleteRecord(withID: legacyRecordID)
-            Logger.info("已迁移旧 Bilibili CloudKit 记录到新命名", category: .general)
+            Logger.info("已迁移旧 CloudKit 记录到新命名", category: .general)
         } catch let error as CKError where error.code == .unknownItem {
             // 旧记录不存在，无需迁移
         } catch {
             Logger.warning("迁移旧 CloudKit 记录失败: \(error.localizedDescription)", category: .general)
         }
+    }
+
+    private static func legacyMigrationKey(_ keyPath: KeyPath<ManifestSessionMigration, [String]?>) -> String? {
+        LiveParseJSPlatformManager.availablePlatforms
+            .lazy
+            .compactMap { $0.sessionMigration?[keyPath: keyPath] }
+            .flatMap { $0 }
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first { !$0.isEmpty }
+    }
+
+    private func legacyCloudRecordNames() -> [String] {
+        LiveParseJSPlatformManager.availablePlatforms
+            .compactMap { $0.sessionMigration?.legacyCloudRecordNames }
+            .flatMap { $0 }
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
+    private func legacyCleanupKeys() -> [String] {
+        LiveParseJSPlatformManager.availablePlatforms
+            .compactMap { $0.sessionMigration?.cleanupUserDefaultsKeys }
+            .flatMap { $0 }
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
+    private func firstLegacyString(forKeys keys: [String]?) -> String? {
+        keys?
+            .lazy
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .compactMap { UserDefaults.standard.string(forKey: $0) }
+            .first { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    }
+
+    private func defaultLegacyPluginId() -> String? {
+        LiveParseJSPlatformManager.availablePlatforms.first { platform in
+            platform.sessionMigration?.userDefaultsCookieKeys?.isEmpty == false ||
+            platform.sessionMigration?.legacyCloudRecordNames?.isEmpty == false
+        }?.pluginId
     }
 }

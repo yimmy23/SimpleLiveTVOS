@@ -10,11 +10,18 @@ public final class JSRuntime: @unchecked Sendable {
     private let context: JSContext
     private let pluginId: String
     private let session: URLSession
+    private let nativeStream: ManifestNativeStream?
 
-    public init(pluginId: String, session: URLSession = .shared, logHandler: LogHandler? = nil) {
+    public init(
+        pluginId: String,
+        session: URLSession = .shared,
+        nativeStream: ManifestNativeStream? = nil,
+        logHandler: LogHandler? = nil
+    ) {
         self.queue = DispatchQueue(label: "liveparse.jsruntime.\(UUID().uuidString)")
         self.pluginId = pluginId
         self.session = session
+        self.nativeStream = nativeStream
 
         var createdContext: JSContext?
         queue.sync {
@@ -30,7 +37,7 @@ public final class JSRuntime: @unchecked Sendable {
             Self.configureHostSession(in: context)
             Self.configureHostRuntime(in: context)
             Self.configureHostBootstrap(in: context)
-            Self.configureHostNativeStream(in: context, queue: queue, pluginId: pluginId)
+            Self.configureHostNativeStream(in: context, queue: queue, nativeStream: nativeStream)
         }
     }
 
@@ -416,7 +423,7 @@ private extension JSRuntime {
                         }
                     }
                     // httpCookieAcceptPolicy=.never 会导致 allHeaderFields 过滤 Set-Cookie，
-                    // 但 JS 插件（如抖音 getCookie）需要读取它，因此单独补回。
+                    // 但部分 JS 插件需要读取它，因此单独补回。
                     if envelope.authMode != .platformCookie,
                        headersDict["Set-Cookie"] == nil,
                        let setCookie = http.value(forHTTPHeaderField: "Set-Cookie") {
@@ -724,7 +731,6 @@ private extension JSRuntime {
     }
 
     func awaitPromise(_ promise: JSValue, functionName: String = "", continuation: CheckedContinuation<Any, Error>) {
-        nonisolated(unsafe) let continuation = continuation
         let pluginId = self.pluginId
         let context = self.context
 
@@ -778,7 +784,7 @@ private extension JSRuntime {
 
     // MARK: - Native Stream Bridge
 
-    static func configureHostNativeStream(in context: JSContext, queue: DispatchQueue, pluginId: String) {
+    static func configureHostNativeStream(in context: JSContext, queue: DispatchQueue, nativeStream: ManifestNativeStream?) {
         let resolveNativeStream: @convention(block) (String, JSValue, JSValue) -> Void = { optionsJSON, resolve, reject in
             nonisolated(unsafe) let resolve = resolve
             nonisolated(unsafe) let reject = reject
@@ -789,7 +795,7 @@ private extension JSRuntime {
                 do {
                     let streamInfo = try await NativeStreamBridge.resolve(
                         options: options,
-                        defaultProviderId: pluginId
+                        declaration: nativeStream
                     )
 
                     queue.async {

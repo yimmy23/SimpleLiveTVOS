@@ -44,11 +44,14 @@ public final class FavoriteService: NSObject {
         let recordArray = try await database.records(matching: query)
         var temp: Array<LiveModel> = []
         for record in recordArray.matchResults.compactMap({ try? $0.1.get() }) {
+            guard let liveType = LiveType(rawValue: record.value(forKey: CloudFavoriteFields.liveType) as? String ?? "") else {
+                continue
+            }
             temp.append(LiveModel(userName: record.value(forKey: CloudFavoriteFields.userName) as? String ?? "",
                                   roomTitle: record.value(forKey: CloudFavoriteFields.roomTitle) as? String ?? "",
                                   roomCover: record.value(forKey: CloudFavoriteFields.roomCover) as? String ?? "",
                                   userHeadImg: record.value(forKey: CloudFavoriteFields.userHeadImage) as? String ?? "",
-                                  liveType: LiveType(rawValue: record.value(forKey: CloudFavoriteFields.liveType) as? String ?? "") ?? .bilibili,
+                                  liveType: liveType,
                                   liveState: record.value(forKey: CloudFavoriteFields.liveState) as? String ?? "",
                                   userId: record.value(forKey: CloudFavoriteFields.userId) as? String ?? "",
                                   roomId: record.value(forKey: CloudFavoriteFields.roomId) as? String ?? "",
@@ -67,7 +70,9 @@ public final class FavoriteService: NSObject {
         var seenKeys: Set<String> = []  // 用于去重
         for record in recordArray.matchResults.compactMap({ try? $0.1.get() }) {
             let roomId = record.value(forKey: CloudFavoriteFields.roomId) as? String ?? ""
-            let liveType = LiveType(rawValue: record.value(forKey: CloudFavoriteFields.liveType) as? String ?? "") ?? .bilibili
+            guard let liveType = LiveType(rawValue: record.value(forKey: CloudFavoriteFields.liveType) as? String ?? "") else {
+                continue
+            }
             let userId = record.value(forKey: CloudFavoriteFields.userId) as? String ?? ""
             let normalizedUserId = userId.trimmingCharacters(in: .whitespacesAndNewlines)
             let normalizedRoomId = roomId.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -98,8 +103,7 @@ public final class FavoriteService: NSObject {
         let database = container.privateCloudDatabase
         let trimmedUserId = liveModel.userId.trimmingCharacters(in: .whitespacesAndNewlines)
         let predicate: NSPredicate
-        if liveModel.liveType == .soop, !trimmedUserId.isEmpty {
-            // SOOP 的 roomId 每次会变，使用 userId 匹配
+        if PlatformHostBehavior.favoriteIdentityKey(for: liveModel.liveType) == .userId, !trimmedUserId.isEmpty {
             predicate = NSPredicate(
                 format: "%K = %@ AND %K = %@",
                 CloudFavoriteFields.userId, trimmedUserId,

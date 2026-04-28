@@ -40,6 +40,7 @@ public final class PlatformViewModel {
 
             return Platformdescription(
                 title: title,
+                pluginId: platform.pluginId,
                 bigPic: "\(title)-big",
                 smallPic: "\(title)-small",
                 descripiton: description,
@@ -52,13 +53,15 @@ public final class PlatformViewModel {
 
 public struct Platformdescription: Hashable {
     public let title: String
+    public let pluginId: String
     public let bigPic: String
     public let smallPic: String
     public let descripiton: String
     public let liveType: LiveType
 
-    public init(title: String, bigPic: String, smallPic: String, descripiton: String, liveType: LiveType) {
+    public init(title: String, pluginId: String, bigPic: String, smallPic: String, descripiton: String, liveType: LiveType) {
         self.title = title
+        self.pluginId = pluginId
         self.bigPic = bigPic
         self.smallPic = smallPic
         self.descripiton = descripiton

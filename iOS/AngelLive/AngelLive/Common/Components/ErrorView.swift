@@ -35,7 +35,7 @@ struct ErrorView: View {
     @ObservedObject private var syncService = PlatformCredentialSyncService.shared
 
     /// 是否有任何平台已登录
-    private var isBilibiliLoggedIn: Bool {
+    private var isAnyPlatformLoggedIn: Bool {
         syncService.loggedInByPluginId.values.contains(true)
     }
 
@@ -407,7 +407,7 @@ private extension ErrorView {
         }
 
         if showLoginButton {
-            if isBilibiliLoggedIn {
+            if isAnyPlatformLoggedIn {
                 // 已登录：显示查看官方页面按钮
                 Button(action: {
                     showingCookieDebugView = true

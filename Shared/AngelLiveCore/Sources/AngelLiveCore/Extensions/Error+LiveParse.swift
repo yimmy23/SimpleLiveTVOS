@@ -18,7 +18,6 @@ public extension Error {
             let detail = liveParseError.detail
 
             // 提取详情的第一行作为更详细的错误消息
-            // 例如：从 "返回结果为空 [Bilibili.getRoomList]" 提取出来
             if let firstLine = detail.components(separatedBy: "\n").first, !firstLine.isEmpty {
                 return firstLine
             }
@@ -65,7 +64,6 @@ public extension Error {
     }
 
     /// 检查是否是需要登录的错误（通用，适用于所有平台）
-    /// 包括：Bilibili -352 风控，以及任何插件返回的 AUTH_REQUIRED
     var isAuthRequired: Bool {
         if let pluginError = self as? LiveParsePluginError {
             switch pluginError {
@@ -107,10 +105,5 @@ public extension Error {
                 options: [.regularExpression, .caseInsensitive]
             ) != nil
         }
-    }
-
-    /// 向后兼容：检查是否是 Bilibili -352 风控错误（需要登录）
-    var isBilibiliAuthRequired: Bool {
-        isAuthRequired
     }
 }

@@ -7,9 +7,7 @@ protocol NativeStreamProvider {
 }
 
 enum NativeStreamProviderRegistry {
-    private static let providers: [NativeStreamProvider] = [
-        NativeYYStreamProvider()
-    ]
+    private static let providers: [NativeStreamProvider] = []
 
     private static let providersById: [String: NativeStreamProvider] = {
         var result: [String: NativeStreamProvider] = [:]

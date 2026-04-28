@@ -92,7 +92,7 @@ struct MoreActionsButton: View {
         roomTitle: "测试直播间",
         roomCover: "",
         userHeadImg: "",
-        liveType: .bilibili,
+        liveType: .placeholder,
         liveState: "1",
         userId: "123",
         roomId: "456",

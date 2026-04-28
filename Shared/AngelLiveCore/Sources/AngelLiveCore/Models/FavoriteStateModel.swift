@@ -11,7 +11,7 @@ public struct FavoriteLiveSectionModel: Identifiable, Sendable {
     public var id = UUID()
     public var roomList: [LiveModel] = []
     public var title: String = ""
-    public var type: LiveType = .bilibili
+    public var type: LiveType = .placeholder
 
     public init() {}
 }
@@ -64,7 +64,7 @@ public actor FavoriteStateModel {
                     do {
                         let dataReq = try await ApiManager.fetchLastestLiveInfoFast(liveModel: liveModel)
                         let duration = CFAbsoluteTimeGetCurrent() - taskStart
-                        if liveModel.liveType == .ks {
+                        if PlatformHostBehavior.shouldPreserveFavoriteRoomInfoOnRefresh(for: liveModel.liveType) {
                             var finalLiveModel = liveModel
                             finalLiveModel.liveState = dataReq.liveState
                             return (index, finalLiveModel, liveModel.userName, LiveParseTools.getLivePlatformName(liveModel.liveType), "成功", liveModel.liveType, duration)
@@ -75,11 +75,7 @@ public actor FavoriteStateModel {
                         let duration = CFAbsoluteTimeGetCurrent() - taskStart
                         favoriteSyncLog("[\(index + 1)/\(roomList.count)] 查询失败 \(platformName) - \(liveModel.userName) 耗时 \(formatSeconds(duration))s 错误: \(error)")
                         var errorModel = liveModel
-                        if errorModel.liveType == .yy {
-                            errorModel.liveState = LiveState.close.rawValue
-                        } else {
-                            errorModel.liveState = LiveState.unknow.rawValue
-                        }
+                        errorModel.liveState = PlatformHostBehavior.liveStateOnFavoriteRefreshFailure(for: errorModel.liveType).rawValue
                         return (index, errorModel, liveModel.userName, LiveParseTools.getLivePlatformName(liveModel.liveType), "失败", liveModel.liveType, duration)
                     }
                 }

@@ -151,8 +151,8 @@ class AppFavoriteModel {
             for array in formatedRoomList {
                 var model = FavoriteLiveSectionModel()
                 model.roomList = array
-                model.title = LiveParseTools.getLivePlatformName(array.first?.liveType ?? .bilibili)
-                model.type = array.first?.liveType ?? .bilibili
+                model.title = LiveParseTools.getLivePlatformName(array.first?.liveType ?? .placeholder)
+                model.type = array.first?.liveType ?? .placeholder
                 groupedRoomList.append(model)
             }
             groupedRoomList = groupedRoomList.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
@@ -166,7 +166,7 @@ class AppFavoriteModel {
                 var model = FavoriteLiveSectionModel()
                 model.roomList = array
                 model.title = array.first?.liveStateFormat() ?? "未知状态"
-                model.type = array.first?.liveType ?? .bilibili
+                model.type = array.first?.liveType ?? .placeholder
                 groupedRoomList.append(model)
             }
             groupedRoomList = groupedRoomList.sorted { model1, model2 in
