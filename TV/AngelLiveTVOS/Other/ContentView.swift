@@ -28,9 +28,10 @@ struct ContentView: View {
     }
     
     var body: some View {
-        
+
         @Bindable var contentVM = appViewModel
-        
+        @Bindable var consent = appViewModel.consentService
+
         NavigationView {
             TabView(selection:$contentVM.selection) {
                 if appViewModel.pluginAvailability.hasAvailablePlugins {
@@ -122,7 +123,8 @@ struct ContentView: View {
                 Task {
                     await appViewModel.pluginSourceSyncService.performOneClickInstall(
                         pluginSourceManager: appViewModel.pluginSourceManager,
-                        pluginAvailability: appViewModel.pluginAvailability
+                        pluginAvailability: appViewModel.pluginAvailability,
+                        consentRequester: appViewModel.consentService
                     )
                 }
             }
@@ -131,6 +133,12 @@ struct ContentView: View {
             }
         } message: {
             Text("检测到您已在其他设备安装过插件，是否一键安装？")
+        }
+        .alert(consent.alertTitle, isPresented: $consent.isPresenting) {
+            Button(consent.continueButtonTitle) { consent.resolve(true) }
+            Button("取消", role: .cancel) { consent.resolve(false) }
+        } message: {
+            Text(consent.alertMessage)
         }
         .overlay {
             if appViewModel.pluginSourceSyncService.isInstalling {

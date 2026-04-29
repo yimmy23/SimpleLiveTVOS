@@ -18,6 +18,7 @@ class PlatformDetailViewController: UIViewController {
     private var viewModel: PlatformDetailViewModel
     private let navigationState: LiveRoomNavigationState
     private let namespace: Namespace.ID
+    private weak var favoriteModel: AppFavoriteModel?
 
     // 骨架屏容器
     private var skeletonHostingController: UIHostingController<PlatformDetailSkeletonView>?
@@ -57,10 +58,11 @@ class PlatformDetailViewController: UIViewController {
 
     // MARK: - Initialization
 
-    init(viewModel: PlatformDetailViewModel, navigationState: LiveRoomNavigationState, namespace: Namespace.ID) {
+    init(viewModel: PlatformDetailViewModel, navigationState: LiveRoomNavigationState, namespace: Namespace.ID, favoriteModel: AppFavoriteModel? = nil) {
         self.viewModel = viewModel
         self.navigationState = navigationState
         self.namespace = namespace
+        self.favoriteModel = favoriteModel
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -301,7 +303,8 @@ extension PlatformDetailViewController: JXSegmentedListContainerViewDataSource {
             viewModel: viewModel,
             mainCategoryIndex: index,
             navigationState: navigationState,
-            namespace: namespace
+            namespace: namespace,
+            favoriteModel: favoriteModel
         )
         return vc
     }

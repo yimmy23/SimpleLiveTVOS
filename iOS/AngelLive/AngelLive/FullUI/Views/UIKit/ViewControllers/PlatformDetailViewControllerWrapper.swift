@@ -13,6 +13,7 @@ import AngelLiveDependencies
 /// 负责管理导航状态和命名空间，解决 PiP 模式下导航状态丢失的问题
 struct PlatformDetailViewControllerWrapper: View {
     @Environment(PlatformDetailViewModel.self) var viewModel
+    @Environment(AppFavoriteModel.self) private var favoriteModel
 
     /// 共享导航状态 - 在 PiP 背景/前台切换时保持稳定
     @State private var navigationState = LiveRoomNavigationState()
@@ -27,7 +28,8 @@ struct PlatformDetailViewControllerWrapper: View {
         PlatformDetailViewControllerRepresentable(
             viewModel: viewModel,
             navigationState: navigationState,
-            namespace: roomTransitionNamespace
+            namespace: roomTransitionNamespace,
+            favoriteModel: favoriteModel
         )
     }
 
@@ -68,12 +70,14 @@ private struct PlatformDetailViewControllerRepresentable: UIViewControllerRepres
     let viewModel: PlatformDetailViewModel
     let navigationState: LiveRoomNavigationState
     let namespace: Namespace.ID
+    let favoriteModel: AppFavoriteModel
 
     func makeUIViewController(context: Context) -> PlatformDetailViewController {
         return PlatformDetailViewController(
             viewModel: viewModel,
             navigationState: navigationState,
-            namespace: namespace
+            namespace: namespace,
+            favoriteModel: favoriteModel
         )
     }
 

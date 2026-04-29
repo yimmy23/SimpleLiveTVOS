@@ -19,6 +19,7 @@ class SubCategoryViewController: UIViewController {
     private let mainCategoryIndex: Int
     private let navigationState: LiveRoomNavigationState
     private let namespace: Namespace.ID
+    private weak var favoriteModel: AppFavoriteModel?
 
     // 子分类 JXSegmentedView
     private lazy var subCategoryDataSource = JXSegmentedTitleDataSource()
@@ -63,11 +64,12 @@ class SubCategoryViewController: UIViewController {
 
     // MARK: - Initialization
 
-    init(viewModel: PlatformDetailViewModel, mainCategoryIndex: Int, navigationState: LiveRoomNavigationState, namespace: Namespace.ID) {
+    init(viewModel: PlatformDetailViewModel, mainCategoryIndex: Int, navigationState: LiveRoomNavigationState, namespace: Namespace.ID, favoriteModel: AppFavoriteModel? = nil) {
         self.viewModel = viewModel
         self.mainCategoryIndex = mainCategoryIndex
         self.navigationState = navigationState
         self.namespace = namespace
+        self.favoriteModel = favoriteModel
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -280,7 +282,8 @@ extension SubCategoryViewController: JXSegmentedListContainerViewDataSource {
             mainCategoryIndex: mainCategoryIndex,
             subCategoryIndex: index,
             navigationState: navigationState,
-            namespace: namespace
+            namespace: namespace,
+            favoriteModel: favoriteModel
         )
         return vc
     }

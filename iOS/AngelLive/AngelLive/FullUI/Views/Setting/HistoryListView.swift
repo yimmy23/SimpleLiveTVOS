@@ -85,6 +85,7 @@ struct HistoryListView: View {
 
 struct HistoryListViewControllerWrapper: UIViewControllerRepresentable {
     @Environment(HistoryModel.self) private var historyModel
+    @Environment(AppFavoriteModel.self) private var favoriteModel
     @Environment(\.scenePhase) private var scenePhase
     let navigationState: LiveRoomNavigationState
     let namespace: Namespace.ID
@@ -93,7 +94,8 @@ struct HistoryListViewControllerWrapper: UIViewControllerRepresentable {
         return HistoryListViewController(
             historyModel: historyModel,
             navigationState: navigationState,
-            namespace: namespace
+            namespace: namespace,
+            favoriteModel: favoriteModel
         )
     }
 

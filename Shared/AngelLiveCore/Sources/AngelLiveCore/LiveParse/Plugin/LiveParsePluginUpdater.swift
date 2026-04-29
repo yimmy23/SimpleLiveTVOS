@@ -121,17 +121,28 @@ public final class LiveParsePluginUpdater: @unchecked Sendable {
 
     /// Install plugin from remote item, run smoke test, and persist `lastGoodVersion`.
     /// If smoke test fails, the newly installed version is removed.
+    ///
+    /// - Parameter afterInstallConsent: 文件落地、smoke test 之前调用的确认钩子。
+    ///   返回 `false` 时立即抛 `PluginInstallConsentError.userDeclined`,已写盘的版本会被回滚。
     @discardableResult
     public func installAndActivate(
         item: LiveParseRemotePluginItem,
         smokeFunction: String = "",
         smokePayload: [String: Any] = [:],
-        manager: LiveParsePluginManager? = nil
+        manager: LiveParsePluginManager? = nil,
+        afterInstallConsent: (@Sendable (LiveParsePluginManifest) async -> Bool)? = nil
     ) async throws -> LiveParsePluginManifest {
         var installedManifest: LiveParsePluginManifest?
         do {
             let manifest = try await install(item: item)
             installedManifest = manifest
+
+            if let afterInstallConsent {
+                let approved = await afterInstallConsent(manifest)
+                if !approved {
+                    throw PluginInstallConsentError.userDeclined
+                }
+            }
 
             try await smokeTestInstalledPlugin(
                 manifest: manifest,

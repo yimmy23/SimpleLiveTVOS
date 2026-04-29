@@ -119,11 +119,25 @@ public final class PluginSourceSyncService {
     // MARK: - 一键安装
 
     /// 一键安装：添加源 → 拉取索引 → 安装全部插件
+    /// - Parameter consentRequester: 启动前的批量确认请求器,nil 时跳过该警告(默认通过)。
     @MainActor
     public func performOneClickInstall(
         pluginSourceManager: PluginSourceManager,
-        pluginAvailability: PluginAvailabilityService
+        pluginAvailability: PluginAvailabilityService,
+        consentRequester: (any PluginInstallConsentRequesting)? = nil
     ) async {
+        // CloudKit 自动安装前先做一次批量确认(凭证泄露风险)
+        if let consentRequester {
+            let approved = await consentRequester.requestConsent(
+                reason: .cloudKitAutoInstall(sourceURLs: syncedSourceURLs)
+            )
+            if !approved {
+                Logger.info("User declined CloudKit auto-install of \(syncedSourceURLs.count) sources", category: .plugin)
+                dismissPrompt()
+                return
+            }
+        }
+
         isInstalling = true
         installStatusMessage = "正在获取插件列表..."
         defer {

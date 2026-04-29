@@ -463,6 +463,38 @@ extension FavoriteListViewController: UICollectionViewDelegate {
             present(alert, animated: true)
         }
     }
+
+    /// 长按弹"取消收藏"菜单(替代 SwiftUI 自带 contextMenu;cell-based 路径下 hostingView
+    /// 关掉了 isUserInteractionEnabled,SwiftUI 长按收不到事件,改由 UICollectionView 接管)。
+    func collectionView(
+        _ collectionView: UICollectionView,
+        contextMenuConfigurationForItemAt indexPath: IndexPath,
+        point: CGPoint
+    ) -> UIContextMenuConfiguration? {
+        let sections = filteredSections
+        guard indexPath.section < sections.count else { return nil }
+        let rooms = sections[indexPath.section].roomList
+        guard indexPath.item < rooms.count else { return nil }
+        let room = rooms[indexPath.item]
+        let viewModel = self.viewModel
+
+        return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { _ in
+            let unfavorite = UIAction(
+                title: "取消收藏",
+                image: UIImage(systemName: "heart.slash.fill"),
+                attributes: .destructive
+            ) { _ in
+                Task { @MainActor in
+                    do {
+                        try await viewModel.removeFavoriteRoom(room: room)
+                    } catch {
+                        print("取消收藏失败: \(error)")
+                    }
+                }
+            }
+            return UIMenu(title: "", children: [unfavorite])
+        }
+    }
 }
 
 // MARK: - Section Header View

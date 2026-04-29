@@ -17,6 +17,7 @@ class HistoryListViewController: UIViewController {
     private var historyModel: HistoryModel
     private let navigationState: LiveRoomNavigationState
     private let namespace: Namespace.ID
+    private weak var favoriteModel: AppFavoriteModel?
     private var lastKnownCollectionWidth: CGFloat = 0
 
     private lazy var collectionView: UICollectionView = {
@@ -38,10 +39,11 @@ class HistoryListViewController: UIViewController {
 
     // MARK: - Initialization
 
-    init(historyModel: HistoryModel, navigationState: LiveRoomNavigationState, namespace: Namespace.ID) {
+    init(historyModel: HistoryModel, navigationState: LiveRoomNavigationState, namespace: Namespace.ID, favoriteModel: AppFavoriteModel? = nil) {
         self.historyModel = historyModel
         self.navigationState = navigationState
         self.namespace = namespace
+        self.favoriteModel = favoriteModel
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -256,6 +258,71 @@ extension HistoryListViewController: UICollectionViewDelegate {
                 self.navigationState.navigate(to: room)
             }
             collectionView.deselectItem(at: indexPath, animated: true)
+        }
+    }
+
+    /// 长按弹"收藏 / 取消收藏 + 删除记录"菜单(UICollectionView 接管,因为 cell-based 路径下
+    /// hostingView 关掉了 isUserInteractionEnabled,SwiftUI .contextMenu 收不到事件)。
+    func collectionView(
+        _ collectionView: UICollectionView,
+        contextMenuConfigurationForItemAt indexPath: IndexPath,
+        point: CGPoint
+    ) -> UIContextMenuConfiguration? {
+        let watchList = historyModel.watchList
+        guard indexPath.item < watchList.count else { return nil }
+        let room = watchList[indexPath.item]
+        let favoriteModel = self.favoriteModel
+        let historyModel = self.historyModel
+
+        return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { [weak self] _ in
+            var actions: [UIAction] = []
+
+            if let favoriteModel {
+                let isFavorited = Self.isFavorited(room: room, in: favoriteModel)
+                if isFavorited {
+                    actions.append(UIAction(
+                        title: "取消收藏",
+                        image: UIImage(systemName: "heart.slash.fill"),
+                        attributes: .destructive
+                    ) { _ in
+                        Task { @MainActor in
+                            try? await favoriteModel.removeFavoriteRoom(room: room)
+                        }
+                    })
+                } else {
+                    actions.append(UIAction(
+                        title: "收藏",
+                        image: UIImage(systemName: "heart.fill")
+                    ) { _ in
+                        Task { @MainActor in
+                            try? await favoriteModel.addFavorite(room: room)
+                        }
+                    })
+                }
+            }
+
+            actions.append(UIAction(
+                title: "删除记录",
+                image: UIImage(systemName: "trash"),
+                attributes: .destructive
+            ) { _ in
+                Task { @MainActor in
+                    historyModel.removeHistory(room: room)
+                    self?.updateViewState()
+                }
+            })
+
+            return UIMenu(title: "", children: actions)
+        }
+    }
+
+    /// 与 LiveRoomCard.isFavorited 同源:优先按 (liveType, userId) 匹配,空 userId 退回 roomId。
+    private static func isFavorited(room: LiveModel, in favoriteModel: AppFavoriteModel) -> Bool {
+        favoriteModel.roomList.contains { item in
+            if !room.userId.isEmpty, !item.userId.isEmpty {
+                return item.liveType == room.liveType && item.userId == room.userId
+            }
+            return item.liveType == room.liveType && item.roomId == room.roomId
         }
     }
 }

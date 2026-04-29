@@ -78,6 +78,11 @@ public final class PluginSourceManager: @unchecked Sendable {
     @ObservationIgnored
     private let fetchTimeoutSeconds: UInt64 = 30
 
+    /// 安装确认请求器:由各端在 app 启动时注入。
+    /// nil 时所有确认默认通过(便于单元测试或纯命令行调用)。
+    @ObservationIgnored
+    public var consentRequester: (any PluginInstallConsentRequesting)?
+
     public init() {
         self.updater = LiveParsePluginUpdater(
             storage: LiveParsePlugins.shared.storage,
@@ -143,6 +148,18 @@ public final class PluginSourceManager: @unchecked Sendable {
 
             do {
                 let index = try await fetchIndexWithTimeout(url: url)
+
+                // 添加订阅源前向用户确认凭证泄露风险(索引不携带 requiresLogin,保守一律警告)
+                if let requester = consentRequester {
+                    let approved = await requester.requestConsent(
+                        reason: .addingSubscriptionSource(url: candidate)
+                    )
+                    if !approved {
+                        Logger.info("User declined subscription source: \(candidate)", category: .plugin)
+                        return []
+                    }
+                }
+
                 persistSourceIfNeeded(candidate)
                 applyFetchedIndex(index, sourceURL: candidate)
                 return [candidate]
@@ -308,13 +325,35 @@ public final class PluginSourceManager: @unchecked Sendable {
     public func installPlugin(_ displayItem: RemotePluginDisplayItem) async -> Bool {
         displayItem.installState = .installing
 
+        // manifest 落地后、smoke test 之前调用,只对真有登录的插件弹确认。
+        let displayName = displayItem.displayName
+        let consentHook: (@Sendable (LiveParsePluginManifest) async -> Bool)?
+        if let requester = consentRequester {
+            consentHook = { @Sendable manifest in
+                guard manifest.requiresLogin else { return true }
+                return await requester.requestConsent(
+                    reason: .installingLoginPlugin(
+                        pluginId: manifest.pluginId,
+                        displayName: displayName
+                    )
+                )
+            }
+        } else {
+            consentHook = nil
+        }
+
         do {
             try await updater.installAndActivate(
                 item: displayItem.item,
-                manager: LiveParsePlugins.shared
+                manager: LiveParsePlugins.shared,
+                afterInstallConsent: consentHook
             )
             displayItem.installState = .installed
             return true
+        } catch is PluginInstallConsentError {
+            Logger.info("User declined login plugin install: \(displayItem.id)", category: .plugin)
+            displayItem.installState = .notInstalled
+            return false
         } catch {
             Logger.error(
                 error,

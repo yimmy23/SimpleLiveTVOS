@@ -17,6 +17,7 @@ class AppState {
     var pluginAvailability = PluginAvailabilityService()
     var pluginSourceManager = PluginSourceManager()
     var pluginSourceSyncService = PluginSourceSyncService()
+    var consentService = PluginInstallConsentService()
     var bookmarkService = StreamBookmarkService()
     var shellHistoryService = ShellHistoryService()
     var remoteInputService: RemoteInputService
@@ -30,6 +31,9 @@ class AppState {
         let service = RemoteInputService()
         service.start()
         self.remoteInputService = service
+
+        // 注入插件安装确认请求器
+        pluginSourceManager.consentRequester = consentService
     }
 
     // MARK: - Deep Link

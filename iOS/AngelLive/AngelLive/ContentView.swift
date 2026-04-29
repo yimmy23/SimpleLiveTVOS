@@ -38,6 +38,9 @@ struct ContentView: View {
     @State private var pluginSourceSyncService = PluginSourceSyncService()
     @State private var showPluginSyncPrompt = false
 
+    // 插件订阅 / 安装确认请求器
+    @State private var consentService = PluginInstallConsentService()
+
     // 创建全局 ViewModels
     @State private var platformViewModel = PlatformViewModel()
     @State private var favoriteViewModel = AppFavoriteModel()
@@ -98,6 +101,9 @@ struct ContentView: View {
             .modifier(WelcomePresentationModifier())
         }
         .task {
+            // 注入插件安装确认请求器
+            pluginSourceManager.consentRequester = consentService
+
             // 启动时拉取 key 映射（后台静默，不阻塞 UI）
             Task { await PluginSourceKeyService.shared.fetchKeys() }
             await pluginAvailability.checkAvailability()
@@ -142,7 +148,8 @@ struct ContentView: View {
                 Task {
                     await pluginSourceSyncService.performOneClickInstall(
                         pluginSourceManager: pluginSourceManager,
-                        pluginAvailability: pluginAvailability
+                        pluginAvailability: pluginAvailability,
+                        consentRequester: consentService
                     )
                 }
             }
@@ -151,6 +158,12 @@ struct ContentView: View {
             }
         } message: {
             Text("检测到您已在其他设备安装过插件，是否一键安装？")
+        }
+        .alert(consentService.alertTitle, isPresented: $consentService.isPresenting) {
+            Button(consentService.continueButtonTitle) { consentService.resolve(true) }
+            Button("取消", role: .cancel) { consentService.resolve(false) }
+        } message: {
+            Text(consentService.alertMessage)
         }
         .overlay {
             if pluginSourceSyncService.isInstalling {

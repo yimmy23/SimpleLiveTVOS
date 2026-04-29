@@ -198,17 +198,6 @@ struct DetailPlayerView: View {
                             DragGesture(minimumDistance: 1)
                                 .onChanged { _ in }
                         )
-                        // FIXME: EdgeSwipeDismissView 的 .overlay 会破坏 PreferenceKey 传递，导致竖屏直播布局错乱
-                        // 左边缘 20pt: UIScreenEdgePanGestureRecognizer 触发返回
-//                        .overlay {
-//                            EdgeSwipeDismissView(edgeWidth: 20) {
-//                                if AppConstants.Device.isIPad && isIPadFullscreen {
-//                                    isIPadFullscreen = false
-//                                } else {
-//                                    dismiss()
-//                                }
-//                            }
-//                        }
                         .onPreferenceChange(PlayerHeightPreferenceKey.self) { height in
                             if !AppConstants.Device.isIPad {
                                 iPhonePlayerHeight = height
@@ -243,6 +232,20 @@ struct DetailPlayerView: View {
                         }
                     }
 
+                    // iOS 18+ interactivePopGesture 被禁用，这里用独立的 20pt 左边缘视图补回返回手势。
+                    // 作为 ZStack 兄弟视图(而非 player 的 .overlay)，避免破坏 PreferenceKey 传递。
+                    if #available(iOS 18.0, *), !iPhoneLandscapeMode {
+                        EdgeSwipeDismissView(edgeWidth: 20) {
+                            if AppConstants.Device.isIPad && isIPadFullscreen {
+                                isIPadFullscreen = false
+                            } else {
+                                dismiss()
+                            }
+                        }
+                        .frame(width: 20)
+                        .frame(maxHeight: .infinity, alignment: .leading)
+                        .ignoresSafeArea()
+                    }
                 }
             }
             .onChange(of: geometry.size) { _, newSize in
@@ -421,31 +424,11 @@ struct DetailPlayerView: View {
     }
 
     private var chatListView: some View {
-        VStack(spacing: 0) {
-            if !viewModel.supportsDanmu {
-                unsupportedDanmuNotice
-            }
-
-            ChatTableView(
-                messages: viewModel.danmuMessages,
-                showJumpToLatest: $showJumpToLatest,
-                scrollToBottomRequest: $scrollToBottomRequest
-            )
-        }
-    }
-
-    private var unsupportedDanmuNotice: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "info.circle")
-                .font(.footnote.weight(.semibold))
-            Text("当前平台不支持弹幕/评论显示")
-                .font(.footnote)
-        }
-        .foregroundStyle(.secondary)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(.ultraThinMaterial)
+        ChatTableView(
+            messages: viewModel.danmuMessages,
+            showJumpToLatest: $showJumpToLatest,
+            scrollToBottomRequest: $scrollToBottomRequest
+        )
     }
 
     private var jumpToLatestButton: some View {

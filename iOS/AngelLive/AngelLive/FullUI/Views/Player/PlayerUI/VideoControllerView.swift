@@ -841,7 +841,7 @@ private extension DynamicInfo {
         log += "Dropped Frames: \(droppedVideoFrameCount)\n"
         log += "Audio Video sync: \(audioVideoSyncDiff)\n"
         log += "Network Speed: \(formatBytes(Int64(networkSpeed)))B/s\n"
-        #if IOS_DEVELOPER_MODE
+        #if DEBUG
         log += "Average Audio Video sync: \(averageAudioVideoSyncDiff)\n"
         #endif
         return log

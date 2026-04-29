@@ -17,7 +17,7 @@ private func resolveFFmpegKitDependency() -> Package.Dependency? {
 private func resolveKSPlayerDependency() -> (package: Package.Dependency, target: Target.Dependency)? {
     guard !useVLC else { return nil }
     return (
-        .package(url: "https://github.com/TracyPlayer/KSPlayer", branch: "lgpl"),
+        .package(url: "https://github.com/TracyPlayer/KSPlayer", exact: "3.0.0-beta"),
         "KSPlayer"
     )
 }
