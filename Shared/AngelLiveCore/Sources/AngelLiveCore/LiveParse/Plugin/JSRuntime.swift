@@ -38,6 +38,7 @@ public final class JSRuntime: @unchecked Sendable {
             Self.configureHostRuntime(in: context)
             Self.configureHostBootstrap(in: context)
             Self.configureHostNativeStream(in: context, queue: queue, nativeStream: nativeStream)
+            Self.configureHostWebSocket(in: context, queue: queue, pluginId: pluginId)
         }
     }
 
@@ -283,6 +284,69 @@ private extension JSRuntime {
           Host.stream = Host.stream || {};
           Host.stream.resolve = Host.nativeStream.resolve;
           Host.stream.getInfo = Host.nativeStream.resolve;
+
+          // 通用 WebSocket 桥:平台特定协议(TARS / 心跳 / 鉴权)全部在 plugin JS 里实现,
+          // 宿主只搬字节,对协议零知识。
+          Host.ws = Host.ws || {};
+          Host.ws.open = function (options) {
+            return new Promise(function (resolve, reject) {
+              var pending = [];
+              var handler = null;
+              var bridgeHandler = function (eventJSON) {
+                var event;
+                try { event = JSON.parse(eventJSON); }
+                catch (e) { event = { type: "error", message: String(e) }; }
+                if (handler) {
+                  try { handler(event); }
+                  catch (err) { /* 用户回调异常不影响传输层 */ }
+                } else {
+                  pending.push(event);
+                }
+              };
+
+              var sessionId;
+              try {
+                sessionId = String(__lp_host_ws_open(JSON.stringify(options || {}), bridgeHandler) || "");
+              } catch (err) {
+                reject(Host.makeError("WS_OPEN", String(err && err.message ? err.message : err), {}));
+                return;
+              }
+              if (!sessionId) {
+                reject(Host.makeError("WS_OPEN", "ws open failed: invalid options", {}));
+                return;
+              }
+
+              var session = {
+                sessionId: sessionId,
+                onMessage: function (cb) {
+                  handler = (typeof cb === "function") ? cb : null;
+                  if (handler) {
+                    while (pending.length) {
+                      var ev = pending.shift();
+                      try { handler(ev); } catch (e) { /* swallow */ }
+                    }
+                  }
+                },
+                send: function (frame) {
+                  return new Promise(function (res, rej) {
+                    __lp_host_ws_send(sessionId, JSON.stringify(frame || {}),
+                      function () { res(); },
+                      function (err) { rej(Host.makeError("WS_SEND", String(err || "ws send failed"), { sessionId: sessionId })); }
+                    );
+                  });
+                },
+                close: function (opts) {
+                  return new Promise(function (res, rej) {
+                    __lp_host_ws_close(sessionId, JSON.stringify(opts || {}),
+                      function () { handler = null; pending.length = 0; res(); },
+                      function (err) { rej(Host.makeError("WS_CLOSE", String(err || "ws close failed"), { sessionId: sessionId })); }
+                    );
+                  });
+                }
+              };
+              resolve(session);
+            });
+          };
 
         })();
         """
