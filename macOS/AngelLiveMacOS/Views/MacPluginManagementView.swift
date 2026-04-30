@@ -73,6 +73,10 @@ struct MacPluginManagementView: View {
                         showsChevron: false
                     ) {
                         pluginIconView(for: pluginId)
+                    } titleAccessory: {
+                        if pluginAvailability.requiresLogin(for: pluginId) {
+                            RequiresLoginTag()
+                        }
                     } trailing: {
                         HStack(spacing: 10) {
                             pluginStatusView(for: pluginId)
@@ -121,6 +125,11 @@ struct MacPluginManagementView: View {
                         Image(systemName: "puzzlepiece.extension.fill")
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(Color.orange.gradient)
+                    } titleAccessory: {
+                        if displayItem.item.auth?.required == true
+                            || pluginAvailability.requiresLogin(for: displayItem.id) {
+                            RequiresLoginTag()
+                        }
                     } trailing: {
                         remotePluginActionView(for: displayItem)
                     }

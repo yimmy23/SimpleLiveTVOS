@@ -19,6 +19,9 @@ public final class PluginAvailabilityService: @unchecked Sendable {
     /// 已安装资源扩展的 pluginId 列表
     public private(set) var installedPluginIds: [String] = []
 
+    /// 已安装插件中需要登录平台账号的 pluginId 集合(由 manifest.requiresLogin 决定)。
+    public private(set) var loginRequiredInstalledPluginIds: Set<String> = []
+
     /// 当前正在检测中
     public private(set) var isChecking: Bool = false
 
@@ -31,14 +34,22 @@ public final class PluginAvailabilityService: @unchecked Sendable {
         defer { isChecking = false }
 
         // 仅认定“可被正确解析的沙盒插件 manifest”，不把空目录/损坏目录算作可用插件。
-        let pluginIds = SandboxPluginCatalog.installedPluginIds()
-        installedPluginIds = pluginIds
-        hasAvailablePlugins = !pluginIds.isEmpty
+        let pluginMap = SandboxPluginCatalog.installedPluginMap()
+        installedPluginIds = pluginMap.keys.sorted()
+        loginRequiredInstalledPluginIds = Set(pluginMap.values
+            .filter { $0.requiresLogin }
+            .map { $0.pluginId })
+        hasAvailablePlugins = !installedPluginIds.isEmpty
     }
 
     /// 检查某个 pluginId 的插件是否已安装
     public func isPluginInstalled(for pluginId: String) -> Bool {
         installedPluginIds.contains(pluginId)
+    }
+
+    /// 已安装的插件是否需要登录(仅基于本地 manifest)。
+    public func requiresLogin(for pluginId: String) -> Bool {
+        loginRequiredInstalledPluginIds.contains(pluginId)
     }
 
     /// 刷新状态（插件安装成功后调用）

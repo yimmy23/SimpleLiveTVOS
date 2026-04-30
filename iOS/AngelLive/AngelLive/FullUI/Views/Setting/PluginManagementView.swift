@@ -61,9 +61,14 @@ struct PluginManagementView: View {
                         pluginIconView(for: pluginId)
 
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(pluginDisplayName(for: pluginId))
-                                .font(.body)
-                                .foregroundStyle(AppConstants.Colors.primaryText)
+                            HStack(spacing: 6) {
+                                Text(pluginDisplayName(for: pluginId))
+                                    .font(.body)
+                                    .foregroundStyle(AppConstants.Colors.primaryText)
+                                if pluginAvailability.requiresLogin(for: pluginId) {
+                                    RequiresLoginTag()
+                                }
+                            }
 
                             versionSubtitleView(for: pluginId)
                         }
@@ -112,9 +117,14 @@ struct PluginManagementView: View {
                         pluginIconView(for: displayItem.id)
 
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(displayItem.displayName)
-                                .font(.body)
-                                .foregroundStyle(AppConstants.Colors.primaryText)
+                            HStack(spacing: 6) {
+                                Text(displayItem.displayName)
+                                    .font(.body)
+                                    .foregroundStyle(AppConstants.Colors.primaryText)
+                                if displayItem.item.auth?.required == true {
+                                    RequiresLoginTag()
+                                }
+                            }
                             Text("版本 \(displayItem.item.version)")
                                 .font(.caption)
                                 .foregroundStyle(AppConstants.Colors.secondaryText)
@@ -315,9 +325,15 @@ struct PluginManagementView: View {
                                 pluginIconView(for: displayItem.id)
 
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(displayItem.displayName)
-                                        .font(.body)
-                                        .foregroundStyle(AppConstants.Colors.primaryText)
+                                    HStack(spacing: 6) {
+                                        Text(displayItem.displayName)
+                                            .font(.body)
+                                            .foregroundStyle(AppConstants.Colors.primaryText)
+                                        if displayItem.item.auth?.required == true
+                                            || pluginAvailability.requiresLogin(for: displayItem.id) {
+                                            RequiresLoginTag()
+                                        }
+                                    }
                                     Text("版本 \(displayItem.item.version)")
                                         .font(.caption)
                                         .foregroundStyle(AppConstants.Colors.secondaryText)

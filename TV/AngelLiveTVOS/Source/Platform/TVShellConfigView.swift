@@ -340,9 +340,15 @@ struct TVPluginManagementView: View {
                     .frame(width: 40)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(item.displayName)
-                        .font(.system(size: 32))
-                        .foregroundColor(.primary)
+                    HStack(spacing: 10) {
+                        Text(item.displayName)
+                            .font(.system(size: 32))
+                            .foregroundColor(.primary)
+                        if item.item.auth?.required == true
+                            || pluginAvailability.requiresLogin(for: item.id) {
+                            RequiresLoginTag(size: .regular)
+                        }
+                    }
                     pluginSubtitle(for: item)
                 }
 

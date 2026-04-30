@@ -187,6 +187,11 @@ private struct MacSubscriptionContentSheet: View {
             Image(systemName: "puzzlepiece.extension.fill")
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(Color.orange.gradient)
+        } titleAccessory: {
+            if item.item.auth?.required == true
+                || pluginAvailability.requiresLogin(for: item.id) {
+                RequiresLoginTag()
+            }
         } trailing: {
             itemStateView(item)
         }

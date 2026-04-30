@@ -44,7 +44,24 @@ struct PanelNavigationRow: View {
     let subtitle: String?
     let showsChevron: Bool
     private let icon: AnyView
+    private let titleAccessory: AnyView
     private let trailingContent: AnyView
+
+    init<Icon: View, TitleAccessory: View, Trailing: View>(
+        title: String,
+        subtitle: String? = nil,
+        showsChevron: Bool = true,
+        @ViewBuilder icon: () -> Icon,
+        @ViewBuilder titleAccessory: () -> TitleAccessory,
+        @ViewBuilder trailing: () -> Trailing
+    ) {
+        self.title = title
+        self.subtitle = subtitle
+        self.showsChevron = showsChevron
+        self.icon = AnyView(icon())
+        self.titleAccessory = AnyView(titleAccessory())
+        self.trailingContent = AnyView(trailing())
+    }
 
     init<Icon: View, Trailing: View>(
         title: String,
@@ -53,11 +70,14 @@ struct PanelNavigationRow: View {
         @ViewBuilder icon: () -> Icon,
         @ViewBuilder trailing: () -> Trailing
     ) {
-        self.title = title
-        self.subtitle = subtitle
-        self.showsChevron = showsChevron
-        self.icon = AnyView(icon())
-        self.trailingContent = AnyView(trailing())
+        self.init(
+            title: title,
+            subtitle: subtitle,
+            showsChevron: showsChevron,
+            icon: icon,
+            titleAccessory: { EmptyView() },
+            trailing: trailing
+        )
     }
 
     init<Icon: View>(
@@ -66,9 +86,14 @@ struct PanelNavigationRow: View {
         showsChevron: Bool = true,
         @ViewBuilder icon: () -> Icon
     ) {
-        self.init(title: title, subtitle: subtitle, showsChevron: showsChevron, icon: icon) {
-            EmptyView()
-        }
+        self.init(
+            title: title,
+            subtitle: subtitle,
+            showsChevron: showsChevron,
+            icon: icon,
+            titleAccessory: { EmptyView() },
+            trailing: { EmptyView() }
+        )
     }
 
     var body: some View {
@@ -78,9 +103,13 @@ struct PanelNavigationRow: View {
             }
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(title)
-                    .font(.body.weight(.medium))
-                    .foregroundStyle(.primary)
+                HStack(spacing: 6) {
+                    Text(title)
+                        .font(.body.weight(.medium))
+                        .foregroundStyle(.primary)
+
+                    titleAccessory
+                }
 
                 if let subtitle, !subtitle.isEmpty {
                     Text(subtitle)

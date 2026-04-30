@@ -198,9 +198,15 @@ struct SubscriptionContentSheet: View {
     private func contentRow(_ item: RemotePluginDisplayItem) -> some View {
         HStack {
             VStack(alignment: .leading, spacing: AppConstants.Spacing.xs) {
-                Text(item.displayName)
-                    .font(.body)
-                    .foregroundStyle(AppConstants.Colors.primaryText)
+                HStack(spacing: 6) {
+                    Text(item.displayName)
+                        .font(.body)
+                        .foregroundStyle(AppConstants.Colors.primaryText)
+                    if item.item.auth?.required == true
+                        || pluginAvailability.requiresLogin(for: item.id) {
+                        RequiresLoginTag()
+                    }
+                }
 
                 Text("v\(item.item.version)")
                     .font(.caption)

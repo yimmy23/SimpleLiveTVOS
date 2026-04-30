@@ -40,6 +40,10 @@ public struct LiveParseRemotePluginItem: Codable, Equatable, Sendable {
     public let sha256: String
     public let signature: String?
     public let signingKeyId: String?
+    /// 索引层面的 auth 元数据。其中 `auth.required` 在索引语义里表示
+    /// "是否带登录入口"(由发布器把 manifest.auth.required 与 manifest.loginFlow
+    /// 合并写入),客户端在订阅列表里据此渲染"需登录"标签。
+    public let auth: ManifestAuth?
 
     public init(
         pluginId: String,
@@ -60,7 +64,8 @@ public struct LiveParseRemotePluginItem: Codable, Equatable, Sendable {
         zipURLs: [String]? = nil,
         sha256: String,
         signature: String? = nil,
-        signingKeyId: String? = nil
+        signingKeyId: String? = nil,
+        auth: ManifestAuth? = nil
     ) {
         self.pluginId = pluginId
         self.version = version
@@ -81,6 +86,7 @@ public struct LiveParseRemotePluginItem: Codable, Equatable, Sendable {
         self.sha256 = sha256
         self.signature = signature
         self.signingKeyId = signingKeyId
+        self.auth = auth
     }
 
     /// Ordered, de-duplicated candidate download URLs.
@@ -127,6 +133,7 @@ public struct LiveParseRemotePluginItem: Codable, Equatable, Sendable {
         case sha256
         case signature
         case signingKeyId
+        case auth
     }
 
     public init(from decoder: Decoder) throws {
@@ -150,6 +157,7 @@ public struct LiveParseRemotePluginItem: Codable, Equatable, Sendable {
         sha256 = try container.decode(String.self, forKey: .sha256)
         signature = try container.decodeIfPresent(String.self, forKey: .signature)
         signingKeyId = try container.decodeIfPresent(String.self, forKey: .signingKeyId)
+        auth = try container.decodeIfPresent(ManifestAuth.self, forKey: .auth)
 
         if downloadURLs.isEmpty {
             throw DecodingError.dataCorruptedError(
