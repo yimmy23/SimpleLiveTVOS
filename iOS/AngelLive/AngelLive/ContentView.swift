@@ -165,6 +165,10 @@ struct ContentView: View {
         } message: {
             Text(consentService.alertMessage)
         }
+        .onOpenURL { url in
+            guard let link = AngelLiveDeepLink.parse(url) else { return }
+            Task { await handleDeepLink(link) }
+        }
         .overlay {
             if pluginSourceSyncService.isInstalling {
                 cloudInstallProgressOverlay
@@ -181,6 +185,42 @@ struct ContentView: View {
             }
             if newIds.isEmpty, selectedTab == .search {
                 selectedTab = .favorite
+            }
+        }
+    }
+
+    // MARK: - Deep Link Handling
+
+    @MainActor
+    private func handleDeepLink(_ link: AngelLiveDeepLink) async {
+        switch link {
+        case .installSource(let input):
+            presentToast(ToastValue(
+                icon: Image(systemName: "icloud.and.arrow.down"),
+                message: "正在添加订阅源..."
+            ))
+            let added = await pluginSourceManager.addSourceFromInput(input)
+            guard !added.isEmpty else {
+                let detail = pluginSourceManager.errorMessage ?? "无法识别的订阅源"
+                presentToast(ToastValue(
+                    icon: Image(systemName: "exclamationmark.triangle.fill"),
+                    message: "添加失败:\(detail)"
+                ))
+                return
+            }
+            await pluginSourceManager.fetchAllSourceIndexes()
+            let count = await pluginSourceManager.installAll()
+            if count > 0 {
+                await pluginAvailability.refresh()
+                presentToast(ToastValue(
+                    icon: Image(systemName: "checkmark.circle.fill"),
+                    message: "已通过 URL 安装 \(count) 个插件"
+                ))
+            } else {
+                presentToast(ToastValue(
+                    icon: Image(systemName: "info.circle"),
+                    message: "订阅源已添加,未安装新插件"
+                ))
             }
         }
     }
