@@ -144,6 +144,33 @@ public final class LiveParsePluginUpdater: @unchecked Sendable {
                 }
             }
 
+            try await activateInstalled(
+                manifest: manifest,
+                smokeFunction: smokeFunction,
+                smokePayload: smokePayload,
+                manager: manager
+            )
+            return manifest
+        } catch {
+            if let manifest = installedManifest {
+                rollbackInstalled(manifest: manifest, manager: manager)
+            } else {
+                manager?.evict(pluginId: item.pluginId)
+            }
+            throw error
+        }
+    }
+
+    /// 完成已落盘插件的 smoke test 并写入 `lastGoodVersion`。
+    /// 用于"先批量下载、再统一确认、最后激活"的两阶段安装流程。
+    /// smoke test 失败时会自动回滚该版本并抛出错误。
+    public func activateInstalled(
+        manifest: LiveParsePluginManifest,
+        smokeFunction: String = "",
+        smokePayload: [String: Any] = [:],
+        manager: LiveParsePluginManager? = nil
+    ) async throws {
+        do {
             try await smokeTestInstalledPlugin(
                 manifest: manifest,
                 function: smokeFunction,
@@ -157,14 +184,19 @@ public final class LiveParsePluginUpdater: @unchecked Sendable {
             } else {
                 try persistLastGoodVersion(pluginId: manifest.pluginId, version: manifest.version)
             }
-            return manifest
         } catch {
-            if let manifest = installedManifest {
-                try? removeInstalledVersion(pluginId: manifest.pluginId, version: manifest.version)
-            }
-            manager?.evict(pluginId: item.pluginId)
+            rollbackInstalled(manifest: manifest, manager: manager)
             throw error
         }
+    }
+
+    /// 回滚已落盘但尚未激活的插件版本(删除版本目录并清除运行时缓存)。
+    public func rollbackInstalled(
+        manifest: LiveParsePluginManifest,
+        manager: LiveParsePluginManager? = nil
+    ) {
+        try? removeInstalledVersion(pluginId: manifest.pluginId, version: manifest.version)
+        manager?.evict(pluginId: manifest.pluginId)
     }
 
     func downloadVerifiedZip(item: LiveParseRemotePluginItem) async throws -> Data {

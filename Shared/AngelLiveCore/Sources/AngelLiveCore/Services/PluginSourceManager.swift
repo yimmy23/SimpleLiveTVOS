@@ -365,23 +365,98 @@ public final class PluginSourceManager: @unchecked Sendable {
         }
     }
 
-    /// 安装所有未安装的插件
+    /// 安装所有未安装的插件。
+    ///
+    /// 三阶段:
+    /// 1. 下载 + 解压所有插件,拿到 manifest(此时未 smoke、未写 last-good);
+    /// 2. 把所有需要登录的插件汇总,统一弹一次确认弹窗;
+    /// 3. 对用户同意的插件做 smoke test 并写 last-good;若用户在第二步取消,则把
+    ///    所有登录类插件回滚,非登录类插件继续激活。
+    ///
+    /// 这样把原来"每个登录插件弹一次"的串行确认收敛为单次批量确认。
     public func installAll() async -> Int {
         let toInstall = remotePlugins.filter { $0.installState == .notInstalled }
         installTotalCount = toInstall.count
         installCompletedCount = 0
+        defer {
+            installTotalCount = 0
+            installCompletedCount = 0
+        }
 
-        var successCount = 0
+        struct Staged {
+            let displayItem: RemotePluginDisplayItem
+            let manifest: LiveParsePluginManifest
+        }
+
+        // Phase 1: 下载 + 解压
+        var staged: [Staged] = []
         for plugin in toInstall {
-            if await installPlugin(plugin) {
+            plugin.installState = .installing
+            do {
+                let manifest = try await updater.install(item: plugin.item)
+                staged.append(Staged(displayItem: plugin, manifest: manifest))
+            } catch {
+                Logger.error(
+                    error,
+                    message: "下载插件失败: \(plugin.id)@\(plugin.item.version)",
+                    category: .general
+                )
+                plugin.installState = .failed(error.localizedDescription)
+                installCompletedCount += 1
+            }
+        }
+
+        // Phase 2: 批量确认
+        let loginEntries = staged.filter { $0.manifest.requiresLogin }
+        var declinedIds: Set<String> = []
+        if !loginEntries.isEmpty, let requester = consentRequester {
+            let payload = loginEntries.map {
+                LoginPluginEntry(
+                    pluginId: $0.manifest.pluginId,
+                    displayName: $0.displayItem.displayName
+                )
+            }
+            let approved = await requester.requestConsent(
+                reason: .installingLoginPluginsBatch(plugins: payload)
+            )
+            if !approved {
+                Logger.info(
+                    "User declined batch login plugin install: \(loginEntries.count) plugins",
+                    category: .plugin
+                )
+                for entry in loginEntries {
+                    updater.rollbackInstalled(
+                        manifest: entry.manifest,
+                        manager: LiveParsePlugins.shared
+                    )
+                    entry.displayItem.installState = .notInstalled
+                    declinedIds.insert(entry.manifest.pluginId)
+                    installCompletedCount += 1
+                }
+            }
+        }
+
+        // Phase 3: 激活剩余插件
+        var successCount = 0
+        for entry in staged where !declinedIds.contains(entry.manifest.pluginId) {
+            do {
+                try await updater.activateInstalled(
+                    manifest: entry.manifest,
+                    manager: LiveParsePlugins.shared
+                )
+                entry.displayItem.installState = .installed
                 successCount += 1
+            } catch {
+                Logger.error(
+                    error,
+                    message: "激活插件失败: \(entry.manifest.pluginId)@\(entry.manifest.version)",
+                    category: .general
+                )
+                entry.displayItem.installState = .failed(error.localizedDescription)
             }
             installCompletedCount += 1
         }
 
-        // 安装完成后重置进度
-        installTotalCount = 0
-        installCompletedCount = 0
         return successCount
     }
 

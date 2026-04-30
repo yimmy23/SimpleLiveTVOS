@@ -48,7 +48,7 @@ final class PluginInstallConsentService: PluginInstallConsentRequesting {
         switch pendingReason {
         case .addingSubscriptionSource:
             return "订阅源安装确认"
-        case .installingLoginPlugin:
+        case .installingLoginPlugin, .installingLoginPluginsBatch:
             return "插件登录权限确认"
         case .cloudKitAutoInstall:
             return "iCloud 同步插件确认"
@@ -63,6 +63,9 @@ final class PluginInstallConsentService: PluginInstallConsentRequesting {
             return "订阅源「\(url)」可能包含需要登录的插件。登录类插件会处理您的账号密码或 Cookie，存在凭证泄露风险。请确认该订阅源来自可信来源后再继续。"
         case .installingLoginPlugin(_, let displayName):
             return "插件「\(displayName)」需要您登录对应平台。该过程由插件代码处理您的凭证，存在信息泄露风险。请确认插件来自可信来源后再安装。"
+        case .installingLoginPluginsBatch(let plugins):
+            let bullets = plugins.map { "• \($0.displayName)" }.joined(separator: "\n")
+            return "以下 \(plugins.count) 个插件需要您登录对应平台：\n\(bullets)\n\n登录类插件会处理您的账号密码或 Cookie，存在凭证泄露风险。请确认这些插件来自可信来源后再继续。"
         case .cloudKitAutoInstall(let urls):
             return "iCloud 检测到您在其他设备保存的 \(urls.count) 个订阅源，其中可能包含需要登录的插件。请确认这些订阅来自可信来源后再继续自动安装。"
         case .none:
@@ -74,7 +77,7 @@ final class PluginInstallConsentService: PluginInstallConsentRequesting {
         switch pendingReason {
         case .addingSubscriptionSource:
             return "继续添加"
-        case .installingLoginPlugin, .cloudKitAutoInstall:
+        case .installingLoginPlugin, .installingLoginPluginsBatch, .cloudKitAutoInstall:
             return "继续安装"
         case .none:
             return "继续"
