@@ -55,6 +55,8 @@ struct SettingsButton: View {
                     .offset(y: -18)
             }
         }
+        // 用 .primary 覆盖默认主题色，dialog/sheet 按钮文字按浅/深色模式呈黑/白
+        .tint(.primary)
         .confirmationDialog("播放器设置", isPresented: $showActionSheet, titleVisibility: .visible) {
             if viewModel.supportsDanmu {
                 Button("弹幕设置") {
@@ -96,6 +98,7 @@ struct SettingsButton: View {
             AirPlayPickerSheet()
                 .presentationDetents([.height(200)])
                 .presentationDragIndicator(.visible)
+                .tint(.primary)
         }
         .sheet(isPresented: $showTimerPicker) {
             TimerPickerView { minutes in
@@ -103,12 +106,13 @@ struct SettingsButton: View {
                     onDismiss()
                 }
             }
+            .tint(.primary)
         }
         .sheet(isPresented: $showPlayerSettings) {
             PlayerSettingsSheet(playerSettingModel: $playerSettingModel)
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
-                .tint(AppConstants.Colors.accent)
+                .tint(.primary)
         }
         .onChange(of: isAnyPopupOpen) { _, isOpen in
             onPopupStateChanged?(isOpen)
@@ -154,7 +158,6 @@ private struct PlayerSettingsSheet: View {
 
                             settingRow {
                                 Toggle("后台播放", isOn: $playerSettingModel.enableBackgroundAudio)
-                                    .tint(AppConstants.Colors.accent)
                                     .onChange(of: playerSettingModel.enableBackgroundAudio) { _, newValue in
                                         KSOptions.canBackgroundPlay = newValue
                                     }
@@ -165,7 +168,6 @@ private struct PlayerSettingsSheet: View {
 
                             settingRow {
                                 Toggle("自动画中画", isOn: $playerSettingModel.enableAutoPiPOnBackground)
-                                    .tint(AppConstants.Colors.accent)
                                     .onChange(of: playerSettingModel.enableAutoPiPOnBackground) { _, newValue in
                                         if newValue && !playerSettingModel.enableBackgroundAudio {
                                             playerSettingModel.enableBackgroundAudio = true

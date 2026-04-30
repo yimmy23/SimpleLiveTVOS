@@ -232,7 +232,6 @@ struct UnifiedPlayerControlOverlay: View {
             }
         }
         .animation(.easeInOut(duration: 0.3), value: showQualityPanel)
-        .tint(.white)
         // 双向同步 bridge.isMaskShow ↔ isMaskVisible
         .onChange(of: bridge.isMaskShow.wrappedValue) { _, newValue in
             if isMaskVisible != newValue {
