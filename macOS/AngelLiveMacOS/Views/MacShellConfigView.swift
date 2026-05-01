@@ -113,9 +113,12 @@ private struct MacSubscriptionContentSheet: View {
     let pluginSourceManager: PluginSourceManager
     let pluginAvailability: PluginAvailabilityService
     @Environment(\.dismiss) private var dismiss
+    @Environment(PluginInstallConsentService.self) private var consentService
     private let rowInsets = EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16)
 
     var body: some View {
+        @Bindable var consent = consentService
+
         NavigationStack {
             List {
                 if let error = pluginSourceManager.errorMessage {
@@ -175,6 +178,12 @@ private struct MacSubscriptionContentSheet: View {
         }
         .task {
             await pluginSourceManager.refreshAvailableUpdates()
+        }
+        .alert(consent.alertTitle, isPresented: $consent.isPresenting) {
+            Button(consent.continueButtonTitle) { consent.resolve(true) }
+            Button("取消", role: .cancel) { consent.resolve(false) }
+        } message: {
+            Text(consent.alertMessage)
         }
     }
 

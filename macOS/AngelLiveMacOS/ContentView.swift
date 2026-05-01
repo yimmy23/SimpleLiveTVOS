@@ -128,6 +128,7 @@ struct ContentView: View {
         .environment(pluginAvailability)
         .environment(bookmarkService)
         .environment(pluginSourceManager)
+        .environment(consentService)
         .environment(toastManager)
         .environment(fullscreenPlayerManager)
         .task {
