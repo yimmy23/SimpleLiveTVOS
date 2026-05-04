@@ -20,8 +20,11 @@ struct AccountManagementView: View {
     // iCloud 确认弹窗
     @State private var showUploadConfirm = false
     @State private var showDownloadConfirm = false
+    @State private var showClearCloudConfirm = false
     @State private var iCloudConfirmMessage = ""
     @State private var isFetchingPreview = false
+    @State private var isClearingCloudLoginInfo = false
+    @State private var clearResultMessage: String?
 
     enum AccountPage: Equatable {
         case main
@@ -136,6 +139,30 @@ struct AccountManagementView: View {
                     }
                 }
                 .disabled(isFetchingPreview)
+
+                Button(role: .destructive) {
+                    showClearCloudConfirm = true
+                } label: {
+                    HStack(spacing: 15) {
+                        Text(isClearingCloudLoginInfo ? "正在清理..." : "清理云端登录信息")
+                            .foregroundColor(.red)
+                        Spacer()
+                        if isClearingCloudLoginInfo {
+                            ProgressView()
+                        }
+                    }
+                }
+                .disabled(isClearingCloudLoginInfo)
+
+                if let result = clearResultMessage {
+                    HStack(spacing: 15) {
+                        Text(result)
+                            .font(.system(size: 28))
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                    }
+                    .padding(.vertical, 5)
+                }
             }
 
             // 平台列表
@@ -181,6 +208,24 @@ struct AccountManagementView: View {
             }
         } message: {
             Text(iCloudConfirmMessage)
+        }
+        .alert("清理云端登录信息", isPresented: $showClearCloudConfirm) {
+            Button("取消", role: .cancel) {}
+            Button("确定清理", role: .destructive) {
+                Task { await clearCloudLoginInfo() }
+            }
+        } message: {
+            Text("确定要清理 iCloud 中保存的所有平台登录信息吗？此操作不会退出本机账号，但其他设备将无法再从 iCloud 下载这些登录信息。")
+        }
+    }
+
+    private func clearCloudLoginInfo() async {
+        isClearingCloudLoginInfo = true
+        clearResultMessage = nil
+        let deletedCount = await syncService.clearAllICloudSessions()
+        await MainActor.run {
+            clearResultMessage = deletedCount > 0 ? "已清理云端登录信息" : "云端没有可清理的登录信息"
+            isClearingCloudLoginInfo = false
         }
     }
 
