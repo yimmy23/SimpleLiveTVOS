@@ -20,6 +20,10 @@ struct ContentView: View {
     var favoriteLiveViewModel: LiveViewModel
 
     @State private var showPluginSyncPrompt = false
+    @State private var showUpdateToast = false
+    @State private var updateToastTitle = ""
+    @State private var updateToastSuccess = true
+    private let updateToastOptions = SimpleToastOptions(alignment: .topLeading, hideAfter: 2.0)
 
     init(appViewModel: AppState) {
         self.appViewModel = appViewModel
@@ -89,23 +93,33 @@ struct ContentView: View {
 
             }
         }
+        .environment(appViewModel.consentService)
         .onAppear {
             Task {
                 // 启动时拉取 key 映射（后台静默，不阻塞 UI）
                 Task { await PluginSourceKeyService.shared.fetchKeys() }
                 await appViewModel.pluginAvailability.checkAvailability()
 
-                // 自动检查插件更新（静默更新）
+                // 自动检查插件更新
                 if appViewModel.pluginAvailability.hasAvailablePlugins && !appViewModel.pluginSourceManager.sourceURLs.isEmpty {
                     await appViewModel.pluginSourceManager.refreshAvailableUpdates()
                     let updatableIds = appViewModel.pluginAvailability.installedPluginIds.filter {
                         appViewModel.pluginSourceManager.hasUpdate(for: $0)
                     }
                     if !updatableIds.isEmpty {
+                        presentUpdateToast(success: true, title: "有 \(updatableIds.count) 个插件需要更新，正在更新...")
+                        var successCount = 0
                         for id in updatableIds {
-                            await appViewModel.pluginSourceManager.updatePlugin(pluginId: id)
+                            if await appViewModel.pluginSourceManager.updatePlugin(pluginId: id) {
+                                successCount += 1
+                            }
                         }
                         await appViewModel.pluginAvailability.refresh()
+                        if successCount > 0 {
+                            presentUpdateToast(success: true, title: "\(successCount) 个插件已更新完成")
+                        } else {
+                            presentUpdateToast(success: false, title: "插件更新失败")
+                        }
                     }
                 }
 
@@ -145,6 +159,17 @@ struct ContentView: View {
                 cloudInstallProgressOverlay
             }
         }
+        .simpleToast(isPresented: $showUpdateToast, options: updateToastOptions) {
+            VStack(alignment: .leading) {
+                Label("提示", systemImage: updateToastSuccess ? "checkmark.circle" : "xmark.circle")
+                    .font(.headline.bold())
+                Text(updateToastTitle)
+            }
+            .padding()
+            .background(.black.opacity(0.6))
+            .foregroundColor(.white)
+            .cornerRadius(10)
+        }
         .onPlayPauseCommand(perform: {
             if contentVM.selection == 0 {
                 NotificationCenter.default.post(name: SimpleLiveNotificationNames.favoriteRefresh, object: nil)
@@ -176,6 +201,13 @@ struct ContentView: View {
 //            .foregroundColor(Color.white)
 //            .cornerRadius(10)
 //        }
+    }
+
+    @MainActor
+    private func presentUpdateToast(success: Bool, title: String) {
+        updateToastSuccess = success
+        updateToastTitle = title
+        showUpdateToast = true
     }
 
     // MARK: - 云端一键安装进度

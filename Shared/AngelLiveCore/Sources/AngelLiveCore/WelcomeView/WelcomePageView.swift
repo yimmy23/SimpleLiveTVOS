@@ -23,12 +23,17 @@ struct WelcomeCardResultBuilder {
 
 struct WelcomePageView<Icon: View, Footer: View>: View {
 
-    var tint: Color
-    var title: String
-    var icon: Icon
-    var cards: [WelcomeCard]
-    var footer: Footer
-    var onContinue: () -> Void
+    let tint: Color
+    let title: String
+    let icon: Icon
+    let cards: [WelcomeCard]
+    let footer: Footer
+    let onContinue: () -> Void
+
+    @State private var animateIcon: Bool = false
+    @State private var animateTitle: Bool = false
+    @State private var animateCards: [Bool]
+    @State private var animateFooter: Bool = false
 
     init(
         tint: Color,
@@ -47,113 +52,100 @@ struct WelcomePageView<Icon: View, Footer: View>: View {
         self._animateCards = .init(initialValue: Array(repeating: false, count: self.cards.count))
     }
 
-    @State private var animateIcon: Bool = false
-    @State private var animateTitle: Bool = false
-    @State private var animateCards: [Bool]
-    @State private var animateFooter: Bool = false
-
-
     var body: some View {
-        VStack(spacing: 0) {
-            ScrollView(.vertical) {
-                VStack(alignment: .leading, spacing: 20) {
+        VStack(spacing: 16) {
+            scrollContent
 
-                    icon
-                        .frame(maxWidth: .infinity)
-                        .blurSlide(animateIcon)
-
-                    Text(title)
-                        .font(.title2)
-                        .fontWeight(.bold)
-                        .blurSlide(animateTitle)
-
-                    CardsView()
-                }
-            }
-            .scrollIndicators(.hidden)
-            .scrollBounceBehavior(.basedOnSize)
-
-            VStack(spacing: 0) {
-                footer
-
-                Button(action: onContinue) {
-                    Text("开始使用")
-                        .font(.title3)
-                        .frame(maxWidth: .infinity)
-                    #if os(macOS)
-                        .padding(.vertical, 8)
-                    #else
-                        .padding(.vertical, 4)
-                    #endif
-                }
-                .tint(tint)
-                .buttonStyle(.borderedProminent)
-                .buttonBorderShape(.capsule)
-                .padding(.bottom, 10)
-            }
-            .blurSlide(animateFooter)
+            actionFooter
         }
         .interactiveDismissDisabled()
-        .allowsHitTesting(animateFooter)
-        .task {
-            guard !animateIcon else { return }
-
-            await delayedAnimation(0.35) {
-                animateIcon = true
-            }
-
-            await delayedAnimation(0.2) {
-                animateTitle = true
-            }
-
-            try? await Task.sleep(for: .seconds(0.2))
-
-            for index in animateCards.indices {
-                let delay = Double(index) * 0.1
-                await delayedAnimation(delay) {
-                    animateCards[index] = true
-                }
-            }
-
-            await delayedAnimation(0.2) {
-                animateFooter = true
-            }
-        }
+        .task { await runAnimations() }
         .setUpOnBoarding()
     }
-    
 
-    @ViewBuilder
-    func CardsView() -> some View {
-        Group {
+    // MARK: - Subviews
+
+    private var scrollContent: some View {
+        ScrollView(.vertical) {
+            VStack(alignment: .leading, spacing: 24) {
+                icon
+                    .frame(maxWidth: .infinity)
+                    .blurSlide(animateIcon)
+
+                Text(title)
+                    .font(.title2)
+                    .fontWeight(.bold)
+                    .blurSlide(animateTitle)
+
+                cardList
+            }
+            .padding(.top, 8)
+        }
+        .scrollIndicators(.hidden)
+        .scrollBounceBehavior(.basedOnSize)
+    }
+
+    private var cardList: some View {
+        VStack(alignment: .leading, spacing: 18) {
             ForEach(cards.indices, id: \.self) { index in
-                let card = cards[index]
-
-                HStack(alignment: .top, spacing: 12) {
-                    Image(systemName: card.symbol)
-                        .font(.title2)
-                        .foregroundStyle(tint)
-                        .symbolVariant(.fill)
-                        .frame(width: 45)
-                        .offset(y: 10)
-
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(card.title)
-                            .font(.title3)
-                            .lineLimit(1)
-
-                        Text(card.subTitle)
-                            .font(.caption)
-                            .lineLimit(2)
-
-                    }
-                }
-                .blurSlide(animateCards[index])
+                WelcomeCardRow(card: cards[index], tint: tint)
+                    .blurSlide(animateCards[index])
             }
         }
     }
 
-    func delayedAnimation(_ delay: Double, action: @escaping () -> Void) async {
+    private var actionFooter: some View {
+        VStack(spacing: 12) {
+            footer
+
+            Button(action: onContinue) {
+                Text("开始使用")
+                    .font(.title3)
+                    .fontWeight(.semibold)
+                    .frame(maxWidth: .infinity)
+                #if os(macOS)
+                    .padding(.vertical, 8)
+                #else
+                    .padding(.vertical, 6)
+                #endif
+            }
+            .tint(tint)
+            .buttonStyle(.borderedProminent)
+            .buttonBorderShape(.capsule)
+        }
+        .blurSlide(animateFooter)
+        // 仅 footer/按钮 受动画门控,scroll 区域始终可滚动
+        .allowsHitTesting(animateFooter)
+    }
+
+    // MARK: - Actions
+
+    private func runAnimations() async {
+        guard !animateIcon else { return }
+
+        await delayedAnimation(0.35) {
+            animateIcon = true
+        }
+
+        await delayedAnimation(0.2) {
+            animateTitle = true
+        }
+
+        try? await Task.sleep(for: .seconds(0.2))
+
+        for index in animateCards.indices {
+            let delay = Double(index) * 0.1
+            await delayedAnimation(delay) {
+                animateCards[index] = true
+            }
+        }
+
+        await delayedAnimation(0.2) {
+            animateFooter = true
+        }
+    }
+
+    private func delayedAnimation(_ delay: Double, action: @escaping () -> Void) async {
         try? await Task.sleep(for: .seconds(delay))
 
         withAnimation(.smooth) {
@@ -162,37 +154,69 @@ struct WelcomePageView<Icon: View, Footer: View>: View {
     }
 }
 
+// MARK: - Card Row
+
+private struct WelcomeCardRow: View {
+    let card: WelcomeCard
+    let tint: Color
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 14) {
+            Image(systemName: card.symbol)
+                .font(.title2)
+                .foregroundStyle(tint)
+                .symbolVariant(.fill)
+                .frame(width: 40, alignment: .center)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(card.title)
+                    .font(.title3)
+                    .fontWeight(.semibold)
+                    .lineLimit(1)
+
+                Text(card.subTitle)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+}
+
+// MARK: - Modifiers
+
 extension View {
     @ViewBuilder
     func blurSlide(_ show: Bool) -> some View {
         self
             .compositingGroup()
             .blur(radius: show ? 0 : 10)
-            .opacity(show ? 1: 0)
+            .opacity(show ? 1 : 0)
             .offset(y: show ? 0 : 100)
     }
-    
+
     @ViewBuilder
     fileprivate func setUpOnBoarding() -> some View {
         #if os(macOS)
         self
-            .padding(.horizontal, 20)
-            .padding(.vertical, 15)
-            .frame(minHeight: 500)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 16)
+            .frame(minHeight: 520)
         #else
         if UIDevice.current.userInterfaceIdiom == .pad {
-            if #available(iOS 18.0, *) {
-                self
-                    .padding(.horizontal, 25)
-                    .presentationDetents([.height(650)])
-            }else {
-                self
-                   
-            }
-        }else {
             self
-                .padding(16)
-                .presentationDetents([.height(650)])
+                .padding(.horizontal, 28)
+                .padding(.vertical, 12)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.hidden)
+        } else {
+            self
+                .padding(.horizontal, 20)
+                .padding(.top, 12)
+                .padding(.bottom, 8)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.hidden)
         }
         #endif
     }

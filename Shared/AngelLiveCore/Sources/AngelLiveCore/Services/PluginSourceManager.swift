@@ -72,6 +72,9 @@ public final class PluginSourceManager: @unchecked Sendable {
     private let sourceURLsKey = "AngelLive.PluginSource.URLs"
 
     @ObservationIgnored
+    private let sourcePluginIdsKey = "AngelLive.PluginSource.PluginIds"
+
+    @ObservationIgnored
     private let updater: LiveParsePluginUpdater
 
     /// 网络请求超时时间（秒）
@@ -89,6 +92,7 @@ public final class PluginSourceManager: @unchecked Sendable {
             session: LiveParsePlugins.shared.session
         )
         loadSourceURLs()
+        loadSourcePluginIds()
     }
 
     // MARK: - 插件源管理
@@ -104,6 +108,17 @@ public final class PluginSourceManager: @unchecked Sendable {
         Task {
             await PluginSourceSyncService.syncToCloudStatic(sourceURLs: urls)
         }
+    }
+
+    /// 从 UserDefaults 恢复 source→pluginId 映射,用于源不可达时仍能联动卸载插件。
+    private func loadSourcePluginIds() {
+        let raw = UserDefaults.standard.dictionary(forKey: sourcePluginIdsKey) as? [String: [String]] ?? [:]
+        sourcePluginIds = raw.mapValues { Set($0) }
+    }
+
+    private func saveSourcePluginIds() {
+        let serialized = sourcePluginIds.mapValues { Array($0) }
+        UserDefaults.standard.set(serialized, forKey: sourcePluginIdsKey)
     }
 
     public func addSource(_ urlString: String) {
@@ -185,11 +200,13 @@ public final class PluginSourceManager: @unchecked Sendable {
         sourceURLs.append(trimmed)
         sourcePluginIds[trimmed] = sourcePluginIds[trimmed] ?? Set<String>()
         saveSourceURLs()
+        saveSourcePluginIds()
     }
 
     private func applyFetchedIndex(_ index: LiveParseRemotePluginIndex, sourceURL: String) {
         let trimmed = sourceURL.trimmingCharacters(in: .whitespacesAndNewlines)
         sourcePluginIds[trimmed] = Set(index.plugins.map(\.pluginId))
+        saveSourcePluginIds()
         remotePlugins = index.plugins.map(makeRemoteDisplayItem)
         mergeLatestRemoteItems(index.plugins)
     }
@@ -207,6 +224,7 @@ public final class PluginSourceManager: @unchecked Sendable {
         sourceURLs.removeAll { $0 == trimmed }
         sourcePluginIds.removeValue(forKey: trimmed)
         saveSourceURLs()
+        saveSourcePluginIds()
     }
 
     /// 删除订阅源并移除该源对应的已安装插件
@@ -220,13 +238,24 @@ public final class PluginSourceManager: @unchecked Sendable {
                 let index = try await fetchIndexWithTimeout(url: url)
                 pluginIds = Set(index.plugins.map(\.pluginId))
             } catch {
-                // 删除订阅源时仍然继续，避免卡住 UI
+                // 源不可达时仍然继续,后续会用其它源覆盖关系兜底
+                Logger.warning(
+                    "Source unreachable while removing, fallback to cached mapping: \(trimmed)",
+                    category: .plugin
+                )
             }
         }
 
+        // 兜底:其它源也声明过同一个 pluginId 时,这些插件不应被卸载。
+        let coveredByOtherSources = sourcePluginIds
+            .filter { $0.key != trimmed }
+            .values
+            .reduce(into: Set<String>()) { $0.formUnion($1) }
+        let pluginsToUninstall = pluginIds.subtracting(coveredByOtherSources)
+
         removeSource(trimmed)
 
-        for pluginId in pluginIds {
+        for pluginId in pluginsToUninstall {
             _ = uninstallPlugin(pluginId: pluginId)
         }
     }
@@ -257,6 +286,7 @@ public final class PluginSourceManager: @unchecked Sendable {
         guard !sourceURLs.isEmpty else {
             latestRemoteItemsByPluginId = [:]
             sourcePluginIds = [:]
+            saveSourcePluginIds()
             return
         }
 
@@ -289,6 +319,7 @@ public final class PluginSourceManager: @unchecked Sendable {
 
         latestRemoteItemsByPluginId = latest
         sourcePluginIds = pluginIdsBySource
+        saveSourcePluginIds()
     }
 
     // MARK: - 安装插件
@@ -319,6 +350,7 @@ public final class PluginSourceManager: @unchecked Sendable {
             }
         }
 
+        saveSourcePluginIds()
         remotePlugins = allItems.map(makeRemoteDisplayItem)
     }
 

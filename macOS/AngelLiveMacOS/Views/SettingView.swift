@@ -10,7 +10,6 @@ import SwiftUI
 import AngelLiveCore
 
 struct SettingView: View {
-    @ObservedObject private var syncService = PlatformCredentialSyncService.shared
     @EnvironmentObject private var updaterViewModel: UpdaterViewModel
     @Environment(PluginAvailabilityService.self) private var pluginAvailability
     @Environment(HistoryModel.self) private var historyModel
@@ -19,95 +18,24 @@ struct SettingView: View {
     @State private var showPluginManagement = false
     @State private var showHistory = false
     @State private var showDanmuSetting = false
-    @State private var selectedLoginPluginId: String?
-    @State private var platforms: [LoginPlatformEntry] = []
-
-    // iCloud 同步确认弹窗
-    @State private var showUploadConfirm = false
-    @State private var showDownloadConfirm = false
-    @State private var iCloudConfirmMessage = ""
-    @State private var isFetchingPreview = false
-    @State private var iCloudSyncResult: String?
-    @State private var iCloudSyncSuccess = false
+    @State private var showAccountManagement = false
+    @State private var showSyncManagement = false
 
     var body: some View {
         Form {
-            if pluginAvailability.hasAvailablePlugins && !platforms.isEmpty {
-                Section("账号管理") {
-                    ForEach(platforms) { entry in
-                        platformAccountRow(entry)
-                    }
+            if pluginAvailability.hasAvailablePlugins {
+                Section("账号") {
+                    accountManagementRow
                 }
             }
 
-            Section("iCloud 同步") {
-                Toggle(isOn: $syncService.iCloudSyncEnabled) {
-                    HStack(spacing: 12) {
-                        Image(systemName: "icloud.fill")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(Color.cyan.gradient)
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("iCloud 自动同步")
-                                .font(.body.weight(.medium))
-                            Text("登录后 Cookie 自动同步到其他设备")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-                .tint(AppConstants.Colors.accent)
-
-                if syncService.iCloudSyncEnabled {
-                    if let lastSync = syncService.lastICloudSyncTime {
-                        HStack(spacing: 8) {
-                            Image(systemName: "clock")
-                                .foregroundStyle(.secondary)
-                            Text("上次同步: \(PlatformCredentialSyncService.formatSyncTime(lastSync))")
-                                .font(.callout)
-                                .foregroundStyle(.secondary)
-                            Spacer()
-                        }
-                    }
-
-                    Button {
-                        Task { await prepareUploadConfirm() }
-                    } label: {
-                        PanelNavigationRow(
-                            title: "同步到 iCloud",
-                            subtitle: "上传本地登录信息到云端"
-                        ) {
-                            Image(systemName: "icloud.and.arrow.up")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(Color.cyan.gradient)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(isFetchingPreview)
-
-                    Button {
-                        Task { await prepareDownloadConfirm() }
-                    } label: {
-                        PanelNavigationRow(
-                            title: "从 iCloud 同步",
-                            subtitle: "下载云端登录信息到本地"
-                        ) {
-                            Image(systemName: "icloud.and.arrow.down")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(Color.cyan.gradient)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(isFetchingPreview)
-
-                    if let result = iCloudSyncResult {
-                        HStack(spacing: 6) {
-                            Image(systemName: iCloudSyncSuccess ? "checkmark.circle.fill" : "xmark.circle.fill")
-                                .foregroundStyle(iCloudSyncSuccess ? AppConstants.Colors.success : .red)
-                            Text(result)
-                                .font(.caption)
-                                .foregroundStyle(iCloudSyncSuccess ? AppConstants.Colors.success : .red)
-                        }
-                    }
+            if pluginAvailability.hasAvailablePlugins {
+                Section {
+                    syncManagementRow
+                } header: {
+                    Text("同步")
+                } footer: {
+                    Text("使用 iCloud 同步收藏与平台账号登录信息。")
                 }
             }
 
@@ -140,15 +68,31 @@ struct SettingView: View {
         }
         .formStyle(.grouped)
         .navigationTitle("设置")
-        .task {
-            await loadPlatforms()
-            await syncService.refreshAllLoginStatus()
+        .sheet(isPresented: $showAccountManagement) {
+            NavigationStack {
+                MacAccountManagementView()
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("关闭") {
+                                showAccountManagement = false
+                            }
+                        }
+                    }
+            }
+            .frame(minWidth: 600, minHeight: 480)
         }
-        .sheet(item: selectedPlatformBinding, onDismiss: {
-            Task { await syncService.refreshAllLoginStatus() }
-        }) { entry in
-            MacPlatformLoginWebSheet(pluginId: entry.pluginId)
-                .frame(minWidth: 800, minHeight: 600)
+        .sheet(isPresented: $showSyncManagement) {
+            NavigationStack {
+                MacSyncManagementView()
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("关闭") {
+                                showSyncManagement = false
+                            }
+                        }
+                    }
+            }
+            .frame(minWidth: 600, minHeight: 520)
         }
         .sheet(isPresented: $showPluginManagement) {
             NavigationStack {
@@ -202,142 +146,38 @@ struct SettingView: View {
             }
             .frame(minWidth: 640, minHeight: 560)
         }
-        .alert("同步到 iCloud", isPresented: $showUploadConfirm) {
-            Button("取消", role: .cancel) {}
-            Button("确定上传") {
-                Task {
-                    await syncService.syncAllToICloud()
-                    await MainActor.run {
-                        iCloudSyncResult = "已同步到 iCloud"
-                        iCloudSyncSuccess = true
-                    }
-                }
-            }
-        } message: {
-            Text(iCloudConfirmMessage)
-        }
-        .alert("从 iCloud 同步", isPresented: $showDownloadConfirm) {
-            Button("取消", role: .cancel) {}
-            Button("确定下载") {
-                Task {
-                    await syncService.syncAllFromICloud()
-                    await MainActor.run {
-                        iCloudSyncResult = "已从 iCloud 同步到本地"
-                        iCloudSyncSuccess = true
-                    }
-                }
-            }
-        } message: {
-            Text(iCloudConfirmMessage)
-        }
     }
 
-    // MARK: - iCloud 确认逻辑
-
-    private func prepareUploadConfirm() async {
-        isFetchingPreview = true
-        defer { isFetchingPreview = false }
-
-        let preview = await syncService.fetchCloudSyncPreview()
-        let localNames = await syncService.getLocalAuthenticatedPlatformNames()
-
-        var msg = ""
-        if let lastSync = syncService.lastICloudSyncTime {
-            msg += "上次同步: \(PlatformCredentialSyncService.formatSyncTime(lastSync))\n"
-        }
-        if !localNames.isEmpty {
-            msg += "本地已登录: \(localNames.joined(separator: "、"))\n"
-        } else {
-            msg += "本地无已登录平台\n"
-        }
-        msg += "\n"
-        if let cloudTime = preview.latestTime {
-            msg += "云端同步时间: \(PlatformCredentialSyncService.formatSyncTime(cloudTime))\n"
-            msg += "云端已有平台: \(preview.platformNames.joined(separator: "、"))\n"
-            msg += "\n上传后云端数据将被覆盖"
-        } else {
-            msg += "云端暂无数据"
-        }
-
-        iCloudConfirmMessage = msg
-        showUploadConfirm = true
-    }
-
-    private func prepareDownloadConfirm() async {
-        isFetchingPreview = true
-        defer { isFetchingPreview = false }
-
-        let preview = await syncService.fetchCloudSyncPreview()
-
-        guard preview.latestTime != nil else {
-            iCloudSyncResult = "iCloud 中没有同步数据"
-            iCloudSyncSuccess = false
-            return
-        }
-
-        let localNames = await syncService.getLocalAuthenticatedPlatformNames()
-
-        var msg = ""
-        if let lastSync = syncService.lastICloudSyncTime {
-            msg += "上次同步: \(PlatformCredentialSyncService.formatSyncTime(lastSync))\n"
-        }
-        if !localNames.isEmpty {
-            msg += "本地已登录: \(localNames.joined(separator: "、"))\n"
-        }
-        msg += "\n"
-        if let cloudTime = preview.latestTime {
-            msg += "云端同步时间: \(PlatformCredentialSyncService.formatSyncTime(cloudTime))\n"
-        }
-        if !preview.platformNames.isEmpty {
-            msg += "云端平台: \(preview.platformNames.joined(separator: "、"))\n"
-        }
-        msg += "\n下载后本地数据将被覆盖"
-
-        iCloudConfirmMessage = msg
-        showDownloadConfirm = true
-    }
-
-    private func platformAccountRow(_ entry: LoginPlatformEntry) -> some View {
+    private var accountManagementRow: some View {
         Button {
-            selectedLoginPluginId = entry.pluginId
+            showAccountManagement = true
         } label: {
             PanelNavigationRow(
-                title: entry.displayName,
-                subtitle: "网页登录 Cookie 同步"
+                title: "账号管理",
+                subtitle: "登录、查看与切换平台账号"
             ) {
-                if let liveType = LiveType(rawValue: entry.liveType),
-                   let icon = MacPlatformIconProvider.tabImage(for: liveType) {
-                    Image(nsImage: icon)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 20, height: 20)
-                } else {
-                    Image(systemName: "globe")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                }
-            } trailing: {
-                loginStatusBadge(syncService.isLoggedIn(pluginId: entry.pluginId))
+                Image(systemName: "person.crop.circle.badge.checkmark")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Color.blue.gradient)
             }
         }
         .buttonStyle(.plain)
     }
 
-    private var selectedPlatformBinding: Binding<LoginPlatformEntry?> {
-        Binding(
-            get: {
-                guard let id = selectedLoginPluginId else { return nil }
-                return platforms.first { $0.pluginId == id }
-            },
-            set: { newValue in
-                selectedLoginPluginId = newValue?.pluginId
+    private var syncManagementRow: some View {
+        Button {
+            showSyncManagement = true
+        } label: {
+            PanelNavigationRow(
+                title: "同步管理",
+                subtitle: "iCloud 自动同步、手动上传/下载"
+            ) {
+                Image(systemName: "icloud.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Color.cyan.gradient)
             }
-        )
-    }
-
-    private func loadPlatforms() async {
-        let all = await PlatformLoginRegistry.shared.availablePlatforms()
-        platforms = all.filter { pluginAvailability.isPluginInstalled(for: $0.pluginId) }
+        }
+        .buttonStyle(.plain)
     }
 
     private var pluginManagementRow: some View {
@@ -450,25 +290,6 @@ struct SettingView: View {
         .buttonStyle(.plain)
     }
 
-    private func accountIconView(image: NSImage?, fallbackImageName: String) -> some View {
-        Group {
-            if let image {
-                Image(nsImage: image)
-                    .resizable()
-                    .scaledToFit()
-            } else {
-                Image(fallbackImageName)
-                    .resizable()
-                    .scaledToFit()
-            }
-        }
-        .frame(width: 20, height: 20)
-        .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
-    }
-
-    private func loginStatusBadge(_ isLoggedIn: Bool) -> some View {
-        PanelStatusBadge(isLoggedIn ? "已登录" : "未登录", tint: isLoggedIn ? AppConstants.Colors.success : .secondary)
-    }
 }
 
 private struct MacHistoryView: View {

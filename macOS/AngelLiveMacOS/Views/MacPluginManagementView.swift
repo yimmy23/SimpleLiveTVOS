@@ -11,11 +11,14 @@ import AngelLiveCore
 struct MacPluginManagementView: View {
     @Environment(PluginAvailabilityService.self) private var pluginAvailability
     @Environment(PluginSourceManager.self) private var pluginSourceManager
+    @Environment(PluginInstallConsentService.self) private var consentService
 
     @State private var inputURL = ""
     @State private var isProcessing = false
 
     var body: some View {
+        @Bindable var consent = consentService
+
         Form {
             Section {
                 PanelHintCard(
@@ -50,6 +53,12 @@ struct MacPluginManagementView: View {
             Task {
                 await pluginSourceManager.refreshAvailableUpdates()
             }
+        }
+        .alert(consent.alertTitle, isPresented: $consent.isPresenting) {
+            Button(consent.continueButtonTitle) { consent.resolve(true) }
+            Button("取消", role: .cancel) { consent.resolve(false) }
+        } message: {
+            Text(consent.alertMessage)
         }
     }
 

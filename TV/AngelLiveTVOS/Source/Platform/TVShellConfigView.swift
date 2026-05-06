@@ -188,11 +188,14 @@ struct TVShellConfigView: View {
 struct TVPluginManagementView: View {
     let pluginSourceManager: PluginSourceManager
     let pluginAvailability: PluginAvailabilityService
+    @Environment(PluginInstallConsentService.self) private var consentService
     @State private var pluginIdToUninstall: String?
     @State private var sourceToRemove: String?
 
     var body: some View {
-        ZStack {
+        @Bindable var consent = consentService
+
+        return ZStack {
             Color.clear
                 .background(.thinMaterial)
                 .ignoresSafeArea()
@@ -258,6 +261,12 @@ struct TVPluginManagementView: View {
             Button("取消", role: .cancel) {}
         } message: {
             Text("删除订阅源后，该源安装的插件也会一起移除。")
+        }
+        .alert(consent.alertTitle, isPresented: $consent.isPresenting) {
+            Button(consent.continueButtonTitle) { consent.resolve(true) }
+            Button("取消", role: .cancel) { consent.resolve(false) }
+        } message: {
+            Text(consent.alertMessage)
         }
     }
 
