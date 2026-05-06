@@ -7,6 +7,7 @@
 
 import SwiftUI
 import TipKit
+import AVFoundation
 import AngelLiveCore
 import AngelLiveDependencies
 
@@ -40,6 +41,9 @@ struct PlayerControlView: View {
     @State private var showQualityPanel = false
     @State private var suppressHiddenFocusActivation = false
     @State private var pendingVisibleFocusAfterReveal: PlayControlFocusableField?
+    @State private var showVolumeHUD = false
+    @State private var volumeHUDHideTask: Task<Void, Never>?
+    @StateObject private var systemVolumeObserver = TVSystemVolumeObserver()
 
     @FocusState var state: PlayControlFocusableField?
     @FocusState var topState: PlayControlTopField?
@@ -243,7 +247,19 @@ struct PlayerControlView: View {
                     hiddenControlAnchorOverlay
                         .zIndex(1)
                 }
-                
+
+                if showVolumeHUD {
+                    VStack {
+                        Spacer().frame(height: 90)
+                        volumeHUDView
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity)
+                    .allowsHitTesting(false)
+                    .zIndex(6)
+                }
+
                 if roomInfoViewModel.showControl {
                     VStack {
                         ZStack {
@@ -451,8 +467,19 @@ struct PlayerControlView: View {
             }
         }
         .onAppear {
+            print("[VolumeHUD] PlayerControlView appeared, initial volume=\(systemVolumeObserver.volume)")
             roomInfoViewModel.showControl = true
             restoreControlFocus()
+        }
+        .onDisappear {
+            volumeHUDHideTask?.cancel()
+            volumeHUDHideTask = nil
+        }
+        // 订阅 TVSystemVolumeObserver:tick 每次音量回调 +1,触发 HUD
+        // 触发条件:音频路由经 Apple TV 控制(HomePod / AirPods / AirPlay 2)。
+        // HDMI-CEC 让电视自管音量时,系统不会回传给 App,这是平台限制。
+        .onChange(of: systemVolumeObserver.changeTick) { _, _ in
+            presentVolumeHUD()
         }
         .onChange(of: roomInfoViewModel.showControl) { oldValue, isVisible in
             if isVisible {
@@ -803,6 +830,68 @@ struct PlayerControlView: View {
             return false
         }
         return true
+    }
+
+    private func presentVolumeHUD() {
+        volumeHUDHideTask?.cancel()
+        withAnimation(.easeInOut(duration: 0.18)) {
+            showVolumeHUD = true
+        }
+        volumeHUDHideTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_300_000_000)
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeInOut(duration: 0.25)) {
+                showVolumeHUD = false
+            }
+        }
+    }
+
+
+    private func volumeIconName(for value: Float) -> String {
+        if value <= 0.001 {
+            return "speaker.slash.fill"
+        } else if value < 0.34 {
+            return "speaker.wave.1.fill"
+        } else if value < 0.67 {
+            return "speaker.wave.2.fill"
+        } else {
+            return "speaker.wave.3.fill"
+        }
+    }
+
+    private func volumeIcon(for value: Float) -> some View {
+        Image(systemName: volumeIconName(for: value))
+            .font(.system(size: 26, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(width: 36)
+            .contentTransition(.symbolEffect(.replace))
+    }
+
+    private var volumeHUDView: some View {
+        let raw = systemVolumeObserver.volume
+        let value = CGFloat(max(0.0, min(1.0, raw)))
+        return HStack(spacing: 14) {
+            volumeIcon(for: raw)
+
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(.white.opacity(0.25))
+                    Capsule()
+                        .fill(.white)
+                        .frame(width: max(2, geo.size.width * value))
+                }
+            }
+            .frame(width: 280, height: 8)
+
+            Text("\(Int((value * 100).rounded()))")
+                .font(.system(size: 20, weight: .semibold).monospacedDigit())
+                .foregroundStyle(.white)
+                .frame(width: 44, alignment: .trailing)
+        }
+        .padding(.horizontal, 22)
+        .padding(.vertical, 14)
+        .adaptiveGlassEffectCapsule()
     }
 
     @ViewBuilder
