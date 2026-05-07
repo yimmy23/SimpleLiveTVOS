@@ -23,7 +23,8 @@ struct SettingView: View {
 
     var body: some View {
         Form {
-            if pluginAvailability.hasAvailablePlugins {
+            if pluginAvailability.hasAvailablePlugins,
+               !pluginAvailability.loginRequiredInstalledPluginIds.isEmpty {
                 Section("账号") {
                     accountManagementRow
                 }
@@ -272,7 +273,7 @@ struct SettingView: View {
     }
 
     private var githubRow: some View {
-        Link(destination: URL(string: "https://github.com/pcccccc/SimpleLiveTVOS")!) {
+        Link(destination: URL(string: "https://github.com/pcccccc/AngelLive")!) {
             PanelNavigationRow(
                 title: "访问 GitHub",
                 subtitle: "项目主页、问题反馈与更新记录",

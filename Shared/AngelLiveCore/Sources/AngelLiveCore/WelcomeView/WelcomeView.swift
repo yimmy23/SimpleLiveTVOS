@@ -41,9 +41,9 @@ public struct WelcomeView: View {
             
         } cards: {
             WelcomeCard(
-                symbol: "rectangle.stack.fill",
-                title: "聚合观看",
-                subTitle: "一个应用，畅享直播内容"
+                symbol: "tv.fill",
+                title: "随心观看",
+                subTitle: "观看自己喜欢的直播内容"
             )
             WelcomeCard(
                 symbol: "play.circle.fill",

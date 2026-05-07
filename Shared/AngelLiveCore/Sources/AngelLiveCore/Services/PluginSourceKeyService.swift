@@ -32,8 +32,7 @@ public actor PluginSourceKeyService {
 
     /// 远程 keys.json 的备用地址（依次尝试）
     private let remoteURLs: [URL] = [
-        URL(string: "https://ghfast.top/https://raw.githubusercontent.com/pcccccc/LiveParse/main/Dist/PluginRelease/keys.json")!,
-        URL(string: "https://raw.githubusercontent.com/pcccccc/LiveParse/main/Dist/PluginRelease/keys.json")!,
+        
     ]
 
     private init() {}

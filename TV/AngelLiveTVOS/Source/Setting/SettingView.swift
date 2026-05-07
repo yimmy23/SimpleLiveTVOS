@@ -88,6 +88,12 @@ struct SettingView: View {
                 fullScreenIndex = nil
             }
         }
+        .onChange(of: appViewModel.pluginAvailability.loginRequiredInstalledPluginIds.isEmpty) { _, isEmpty in
+            // 已安装插件全部不需要登录时,关闭已打开的账号管理
+            if isEmpty, selectedIndex == 0 {
+                selectedIndex = nil
+            }
+        }
     }
 
     // MARK: - 菜单列表
@@ -127,6 +133,10 @@ struct SettingView: View {
 
     private func shouldShowMenuItem(_ index: Int) -> Bool {
         if appViewModel.pluginAvailability.hasAvailablePlugins {
+            // 已安装插件均无登录入口时,隐藏账号管理(0)
+            if index == 0 {
+                return !appViewModel.pluginAvailability.loginRequiredInstalledPluginIds.isEmpty
+            }
             return true
         }
         if index == 1 {

@@ -164,8 +164,10 @@ public final class PluginSourceManager: @unchecked Sendable {
             do {
                 let index = try await fetchIndexWithTimeout(url: url)
 
-                // 添加订阅源前向用户确认凭证泄露风险(索引不携带 requiresLogin,保守一律警告)
-                if let requester = consentRequester {
+                // 索引里至少有一个 auth.required == true 的插件,才弹凭证泄露风险确认。
+                // 发布器约定:只要 manifest 含 loginFlow,索引会把 auth.required 标为 true。
+                let containsLoginPlugin = index.plugins.contains { $0.auth?.required == true }
+                if containsLoginPlugin, let requester = consentRequester {
                     let approved = await requester.requestConsent(
                         reason: .addingSubscriptionSource(url: candidate)
                     )

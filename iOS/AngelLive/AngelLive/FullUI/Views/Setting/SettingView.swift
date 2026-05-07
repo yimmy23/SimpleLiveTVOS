@@ -20,7 +20,8 @@ struct SettingView: View {
         NavigationStack {
             List {
                 // 账号设置
-                if pluginAvailability.hasAvailablePlugins {
+                if pluginAvailability.hasAvailablePlugins,
+                   !pluginAvailability.loginRequiredInstalledPluginIds.isEmpty {
                     Section {
                         NavigationLink {
                             PlatformAccountLoginView()
